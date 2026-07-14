@@ -1,0 +1,50 @@
+# Environment
+.env*
+!.env.example
+
+# Flutter / Dart / Pub
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+.pub-cache/
+build/
+coverage/
+
+# Legacy web artifacts from the pre-Flutter prototype
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# Android local files and generated build state
+android/.gradle/
+android/local.properties
+android/key.properties
+android/app/upload-keystore.jks
+android/captures/
+
+# Editor and operating-system files
+.DS_Store
+*.iml
+.idea/
+.vscode/
+*.swp
+*.log
+
+# Impeccable ephemeral state
+.agents/skills/impeccable/
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+.impeccable/hook.pending.json
+.impeccable/*.png
+.impeccable/live/server.json
+.impeccable/live/sessions/
+.impeccable/live/previews/
+.impeccable/live/annotations/
+.impeccable/live/cache/
+.impeccable/live/manual-edit-apply-transaction.json
+.impeccable/live/manual-edit-events.jsonl
+.impeccable/live/manual-edit-evidence/
+.impeccable/live/pending-manual-edits.json
