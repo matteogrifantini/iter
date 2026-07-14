@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../app/iter_theme.dart';
 import '../models/trip_models.dart';
-import 'iter_ui.dart';
+import 'journey_media.dart';
 
 class TripCard extends StatelessWidget {
   const TripCard({super.key, required this.trip, required this.onTap});
@@ -13,92 +14,98 @@ class TripCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final destination = trip.destination;
     final colors = Theme.of(context).colorScheme;
-    final days = trip.days.length;
+    final posters = DemoMedia.postersForDestination(destination?.id ?? '');
+    final image = posters[trip.id.hashCode.abs() % posters.length];
     final stage = switch (trip.stage) {
-      TripStage.destinationDiscovery => 'Stiamo scegliendo la meta',
-      TripStage.placeCuration => '${trip.selectedPlaceCount} idee salvate',
-      TripStage.transportSelection => 'Scegli volo o treno',
-      TripStage.staySelection => 'Scegli dove dormire',
-      TripStage.itinerary =>
-        '$days ${days == 1 ? 'giorno pronto' : 'giorni pronti'}',
-      TripStage.ready => 'Viaggio archiviato',
+      TripStage.destinationDiscovery => 'Trova la direzione',
+      TripStage.placeCuration => '${trip.selectedPlaceCount} luoghi scelti',
+      TripStage.transportSelection => 'Scegli come arrivare',
+      TripStage.staySelection => 'Scegli la zona',
+      TripStage.itinerary => '${trip.days.length} giorni pronti',
+      TripStage.ready => 'Viaggio completo',
     };
+    final route =
+        trip.journey?.stops.join('  →  ') ?? destination?.name ?? 'Nuova idea';
 
-    return SurfacePanel(
-      onTap: onTap,
-      padding: EdgeInsets.zero,
-      child: Semantics(
-        label: '${trip.title}, $stage',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 92,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: colors.primaryContainer,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(13),
-                ),
-              ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    right: 18,
-                    top: 16,
-                    child: Icon(
-                      Icons.route_outlined,
-                      color: colors.onPrimaryContainer,
-                      size: 32,
-                    ),
-                  ),
-                  Positioned(
-                    left: 16,
-                    right: 58,
-                    bottom: 14,
-                    child: Text(
-                      trip.journey?.stops.join(' → ') ??
-                          destination?.name ??
-                          'Nuova idea',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: colors.onPrimaryContainer,
-                        fontWeight: FontWeight.w800,
+    return Semantics(
+      button: true,
+      label: '${trip.title}, $stage',
+      child: Material(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: 154,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset(image, fit: BoxFit.cover),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: ColoredBox(
+                        color: context.iterColors.videoScrim,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 11, 14, 13),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                trip.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(color: Colors.white),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                route,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: Colors.white70),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          trip.title,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          stage,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: colors.onSurfaceVariant),
-                        ),
-                      ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 11, 10, 11),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: trip.status == TripStatus.completed
+                            ? colors.tertiary
+                            : colors.secondary,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                  const Icon(Icons.chevron_right),
-                ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        stage,
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward, size: 20),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

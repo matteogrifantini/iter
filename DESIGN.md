@@ -33,23 +33,23 @@ Open with a personal greeting, a single proposition — **Partiamo da come vuoi 
 
 ### Destination discovery
 
-Use one prompt at a time, a visible five-stop route for progress, grouped plain-language answers and a persistent open response. Never label information as “parameters”, “configuration” or “brief”. Do not reveal candidate destinations early. The result is a horizontal collection of complete routes, possibly multi-city or village-based, with duration, movement and stops visible before commitment.
+Use one prompt at a time, a visible five-stop route for progress, grouped plain-language answers and a persistent open response. Never label information as “parameters”, “configuration” or “brief”. Do not reveal candidate destinations early. The result is a portrait video reel mixing single cities with complete routes. Only title, duration and movement stay on the reel; useful detail opens on request.
 
 ### Place curation
 
-The current place owns the screen. Its name, neighbourhood, reason and useful time are the hierarchy; the personal-fit score stays supporting evidence, never a hero metric. A horizontal swipe may accelerate the choice, but **Passa**, **Salva** and **Irrinunciabile** remain visible 48 dp controls. Show progress as context, not as a test.
+The current place owns a portrait video surface. Its name, neighbourhood and useful time stay visible; the personal-fit score remains supporting evidence. A horizontal swipe accelerates the choice while **Info**, **Passa**, **Salva** and **Must** remain 48 dp controls in a right-hand reel rail. Show progress as context, not as a test.
 
 ### Transport choice
 
-Use the native segmented control to switch between flight and train. Each option is a comparable entity with origin, first stop, broad timing, duration, changes and indicative cost in the same order. Selection is explicit and reversible. Keep the trust line next to the commitment: values are demo estimates and no ticket is purchased.
+Show flight, train, bus and car together. Each compact row uses the real company mark and keeps timing, duration, changes and indicative cost in the same order. Selection is explicit and reversible. Keep the trust line next to the commitment: values are demo estimates and no ticket is purchased.
 
 ### Stay choice
 
-Treat a neighbourhood as a base, not a hotel result. A restrained spatial diagram shows the relationship to accepted places; atmosphere, average walking time and the reason it fits stay textual. **Scegli base** is the commitment, while **Vedi alloggi** opens an external service and remains secondary.
+Treat a neighbourhood as a base, not a hotel result. The map is the primary surface: accepted places are pins and possible zones are translucent coloured areas. One compact summary shows atmosphere and walking time. **Scegli base** is the commitment, while external accommodation search remains secondary.
 
 ### Itinerary workspace
 
-The day plan is the primary object. Arrival and base form one compact trip foundation, then days and stops read as a continuous timeline without a card around every item. Locked state is visible in the route marker and label. The conversation composer is anchored to the bottom of the current plan and applies a visible, undoable patch; it is not a floating chatbot screen.
+The day plan is a visual travel strip. A short video hero contains arrival and base, then image-led stops follow a continuous timeline without a card around every item. Locked state is visible in the route marker. The compact conversation composer is anchored to the bottom and applies a visible, undoable patch; it is not a floating chatbot screen.
 
 ## Component Language
 

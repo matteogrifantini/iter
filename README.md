@@ -11,7 +11,7 @@ Non è un questionario tecnico e non è un chatbot isolato. L'itinerario resta s
 - Proposte di viaggio complete e video-led: città, borghi e tratte possono convivere nello stesso percorso.
 - Tab **Scopri**, **Viaggi** e **Profilo** con tendenze, archivio, preferenze apprese e selezione Chiaro/Scuro.
 - Curation di luoghi lungo tutte le tappe con swipe opzionale e pulsanti accessibili: non fa per me, mi incuriosisce, irrinunciabile.
-- Scelta progressiva tra volo e treno con alternative mock dichiarate come stime, senza acquisto o falsa disponibilità live.
+- Confronto compatto tra volo, treno, bus e auto con prezzi mock dichiarati come stime, senza acquisto o falsa disponibilità live.
 - Zone consigliate dove dormire, con soli link esterni configurabili.
 - Giorni, tappe e modifiche conversazionali visibili; l'AI propone una bozza o una modifica locale, la persona decide se accettarla.
 - Un segnale di disponibilità/turni per idee future, senza import di file o calendario nel MVP.

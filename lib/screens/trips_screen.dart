@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../models/trip_models.dart';
-import '../widgets/iter_ui.dart';
 import '../widgets/trip_card.dart';
 
 class TripsScreen extends StatelessWidget {
@@ -20,69 +19,92 @@ class TripsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return ListView(
       padding: const EdgeInsets.only(bottom: 28),
       children: [
-        ScreenHeader(
-          eyebrow: 'I tuoi viaggi',
-          title: resumableTrips.isEmpty
-              ? 'Il prossimo comincia da qui.'
-              : 'I viaggi che stanno prendendo forma.',
-          subtitle:
-              'Ogni piano conserva le tue scelte, non solo una lista di posti.',
-          trailing: IconButton.filledTonal(
-            tooltip: 'Nuovo viaggio',
-            onPressed: onNewTrip,
-            icon: const Icon(Icons.add),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 22, 16, 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Viaggi',
+                      style: Theme.of(context).textTheme.headlineLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${resumableTrips.length} in corso · ${completedTrips.length} passati',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton.filled(
+                tooltip: 'Nuovo viaggio',
+                onPressed: onNewTrip,
+                icon: const Icon(Icons.add),
+              ),
+            ],
           ),
         ),
-        if (resumableTrips.isEmpty)
+        if (resumableTrips.isEmpty && completedTrips.isEmpty)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: SurfacePanel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.luggage_outlined),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Nessun viaggio in corso',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  const Text(
-                    'Un’idea libera è tutto quello che serve per iniziare.',
-                  ),
-                  const SizedBox(height: 14),
-                  ElevatedButton(
-                    onPressed: onNewTrip,
-                    child: const Text('Nuovo viaggio'),
-                  ),
-                ],
-              ),
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              children: [
+                Icon(Icons.route, size: 46, color: colors.primary),
+                const SizedBox(height: 18),
+                Text(
+                  'Qui prenderanno forma i tuoi viaggi.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 20),
+                FilledButton(onPressed: onNewTrip, child: const Text('Inizia')),
+              ],
             ),
           )
         else ...[
-          const SectionTitle(title: 'Da continuare'),
-          ...resumableTrips.map(
-            (trip) => Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: TripCard(trip: trip, onTap: () => onOpenTrip(trip)),
+          if (resumableTrips.isNotEmpty) ...[
+            _Label(title: 'In corso'),
+            ...resumableTrips.map(
+              (trip) => Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+                child: TripCard(trip: trip, onTap: () => onOpenTrip(trip)),
+              ),
             ),
-          ),
-        ],
-        if (completedTrips.isNotEmpty) ...[
-          const SectionTitle(title: 'Viaggi passati'),
-          ...completedTrips.map(
-            (trip) => Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: TripCard(trip: trip, onTap: () => onOpenTrip(trip)),
+          ],
+          if (completedTrips.isNotEmpty) ...[
+            _Label(title: 'Ricordi'),
+            ...completedTrips.map(
+              (trip) => Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+                child: TripCard(trip: trip, onTap: () => onOpenTrip(trip)),
+              ),
             ),
-          ),
+          ],
         ],
       ],
+    );
+  }
+}
+
+class _Label extends StatelessWidget {
+  const _Label({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
+      child: Text(title, style: Theme.of(context).textTheme.titleLarge),
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../models/trip_models.dart';
@@ -28,11 +30,32 @@ class StaySelectionScreen extends StatefulWidget {
 }
 
 class _StaySelectionScreenState extends State<StaySelectionScreen> {
-  var _page = 0;
+  var _selectedIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    if (widget.zones.isEmpty) {
+      return const Scaffold(
+        body: Center(child: Text('Nessuna zona disponibile.')),
+      );
+    }
+    if (_selectedIndex >= widget.zones.length) _selectedIndex = 0;
+    final selected = widget.zones[_selectedIndex];
+    final city =
+        widget.destinationNames[selected.destinationId] ??
+        widget.destination.name;
+    final cityZones = widget.zones
+        .where((zone) => zone.destinationId == selected.destinationId)
+        .toList(growable: false);
+    final cityPlaces = widget.savedPlaces
+        .where((place) => place.destinationId == selected.destinationId)
+        .toList(growable: false);
+    final selectedCityIndex = cityZones.indexWhere(
+      (zone) => zone.id == selected.id,
+    );
+    final zoneColors = _zoneColors(colors, cityZones.length);
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -40,87 +63,103 @@ class _StaySelectionScreenState extends State<StaySelectionScreen> {
           onPressed: () => Navigator.of(context).maybePop(),
           icon: const Icon(Icons.arrow_back),
         ),
-        title: Text(widget.journeyTitle ?? widget.destination.name),
+        title: const Text('Dove dormire'),
       ),
       body: SafeArea(
         top: false,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const PlanningProgress(currentStep: 2),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Dove vuoi svegliarti?',
-                          style: Theme.of(context).textTheme.headlineLarge,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Prima scegli la base. La stanza viene dopo.',
-                          style: Theme.of(context).textTheme.bodyLarge
-                              ?.copyWith(color: colors.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    widget.zones.isEmpty
-                        ? '—'
-                        : '${_page + 1} / ${widget.zones.length}',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelLarge?.copyWith(color: colors.primary),
-                  ),
-                ],
-              ),
+            const PlanningProgress(
+              currentStep: 2,
+              padding: EdgeInsets.fromLTRB(16, 2, 16, 10),
             ),
             Expanded(
-              child: widget.zones.isEmpty
-                  ? const Center(child: Text('Nessuna zona disponibile.'))
-                  : PageView.builder(
-                      controller: PageController(viewportFraction: .92),
-                      itemCount: widget.zones.length,
-                      onPageChanged: (value) => setState(() => _page = value),
-                      itemBuilder: (context, index) {
-                        final zone = widget.zones[index];
-                        final city =
-                            widget.destinationNames[zone.destinationId] ??
-                            widget.destination.name;
-                        final nearbyPlaces = widget.savedPlaces
-                            .where(
-                              (place) =>
-                                  place.destinationId == zone.destinationId,
-                            )
-                            .length;
-                        return Padding(
-                          padding: const EdgeInsets.fromLTRB(0, 0, 12, 16),
-                          child: _StayZonePage(
-                            zone: zone,
-                            city: city,
-                            nearbyPlaces: nearbyPlaces,
-                            active: index == _page,
-                            onSelect: () => widget.onSelect(zone),
-                            onOpenHotelSearch: () =>
-                                widget.onOpenHotelSearch(zone.hotelSearchUrl),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CustomPaint(
+                        painter: _NeighborhoodMapPainter(
+                          background: colors.surfaceContainer,
+                          street: colors.outlineVariant,
+                          river: colors.primaryContainer,
+                          zoneColors: zoneColors,
+                          zoneNames: cityZones
+                              .map((zone) => zone.name)
+                              .toList(),
+                          selectedZone: selectedCityIndex,
+                          placeCount: cityPlaces.length,
+                          pin: colors.onSurface,
+                        ),
+                      ),
+                      Positioned(
+                        left: 14,
+                        top: 14,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: colors.surface,
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                        );
-                      },
-                    ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 11,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.location_on,
+                                  size: 18,
+                                  color: colors.secondary,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '$city · ${cityPlaces.length} luoghi',
+                                  style: Theme.of(context).textTheme.labelLarge,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(
+              height: 46,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                scrollDirection: Axis.horizontal,
+                itemCount: widget.zones.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final zone = widget.zones[index];
+                  final zoneCity =
+                      widget.destinationNames[zone.destinationId] ??
+                      widget.destination.name;
+                  return ChoiceChip(
+                    label: Text('${zone.name} · $zoneCity'),
+                    selected: index == _selectedIndex,
+                    onSelected: (_) => setState(() => _selectedIndex = index),
+                  );
+                },
+              ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: Text(
-                'Gli alloggi si aprono fuori da Iter. Prezzi e disponibilità non sono verificati nel prototipo.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: _ZoneSummary(
+                zone: selected,
+                city: city,
+                placeCount: cityPlaces.length,
+                onSelect: () => widget.onSelect(selected),
+                onOpenHotelSearch: () =>
+                    widget.onOpenHotelSearch(selected.hotelSearchUrl),
               ),
             ),
           ],
@@ -130,253 +169,233 @@ class _StaySelectionScreenState extends State<StaySelectionScreen> {
   }
 }
 
-class _StayZonePage extends StatelessWidget {
-  const _StayZonePage({
+class _ZoneSummary extends StatelessWidget {
+  const _ZoneSummary({
     required this.zone,
     required this.city,
-    required this.nearbyPlaces,
-    required this.active,
+    required this.placeCount,
     required this.onSelect,
     required this.onOpenHotelSearch,
   });
 
   final StayZone zone;
   final String city;
-  final int nearbyPlaces;
-  final bool active;
+  final int placeCount;
   final VoidCallback onSelect;
   final VoidCallback onOpenHotelSearch;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxHeight < 500;
-        return Material(
-          color: colors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: colors.outlineVariant),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: compact ? 3 : 5,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CustomPaint(
-                      painter: _ZoneMapPainter(
-                        route: colors.primary,
-                        signal: colors.secondary,
-                        background: colors.surfaceContainer,
-                        line: colors.outlineVariant,
-                        active: active,
-                      ),
-                    ),
-                    Positioned(
-                      left: 20,
-                      right: 20,
-                      bottom: 18,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            city,
-                            style: Theme.of(context).textTheme.labelLarge
-                                ?.copyWith(color: colors.primary),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            zone.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.headlineMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                flex: compact ? 8 : 6,
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        zone.summary,
-                        maxLines: compact ? 2 : 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _ZoneFact(
-                              icon: Icons.directions_walk,
-                              value: '~${zone.averageWalkMinutes} min',
-                              label: 'spostamento medio',
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: _ZoneFact(
-                              icon: Icons.bookmark_outline,
-                              value: '$nearbyPlaces luoghi',
-                              label: 'già scelti qui',
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (!compact) ...[
-                        const SizedBox(height: 14),
-                        Text(
-                          zone.whyItFits,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: colors.onSurfaceVariant),
-                        ),
-                      ],
-                      const Spacer(),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: onOpenHotelSearch,
-                              child: const Text('Vedi alloggi'),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: FilledButton(
-                              onPressed: onSelect,
-                              child: const Text('Scegli base'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _ZoneFact extends StatelessWidget {
-  const _ZoneFact({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: colors.primary, size: 20),
-        const SizedBox(width: 7),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(value, style: Theme.of(context).textTheme.labelLarge),
-              Text(
-                label,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                zone.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-            ],
-          ),
+            ),
+            Text(
+              '~${zone.averageWalkMinutes} min a piedi',
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(color: colors.primary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          zone.summary,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            IconButton.outlined(
+              tooltip: 'Cerca alloggi a $city',
+              onPressed: onOpenHotelSearch,
+              icon: const Icon(Icons.open_in_new),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                onPressed: onSelect,
+                child: Text('Scegli ${zone.name}'),
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 }
 
-class _ZoneMapPainter extends CustomPainter {
-  const _ZoneMapPainter({
-    required this.route,
-    required this.signal,
+List<Color> _zoneColors(ColorScheme colors, int count) {
+  final candidates = <Color>[colors.primary, colors.secondary, colors.tertiary];
+  return List<Color>.generate(
+    count,
+    (index) => candidates[index % candidates.length],
+  );
+}
+
+class _NeighborhoodMapPainter extends CustomPainter {
+  const _NeighborhoodMapPainter({
     required this.background,
-    required this.line,
-    required this.active,
+    required this.street,
+    required this.river,
+    required this.zoneColors,
+    required this.zoneNames,
+    required this.selectedZone,
+    required this.placeCount,
+    required this.pin,
   });
 
-  final Color route;
-  final Color signal;
   final Color background;
-  final Color line;
-  final bool active;
+  final Color street;
+  final Color river;
+  final List<Color> zoneColors;
+  final List<String> zoneNames;
+  final int selectedZone;
+  final int placeCount;
+  final Color pin;
 
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRect(Offset.zero & size, Paint()..color = background);
     final streetPaint = Paint()
-      ..color = line
+      ..color = street
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    for (var index = 0; index < 5; index++) {
-      final y = size.height * (.16 + index * .16);
+      ..strokeWidth = 1.4;
+    for (var index = 0; index < 8; index++) {
+      final y = size.height * (.1 + index * .12);
       canvas.drawLine(
-        Offset(-12, y),
-        Offset(size.width + 12, y - 22),
+        Offset(-20, y),
+        Offset(size.width + 20, y - 34),
         streetPaint,
       );
     }
-    final path = Path()
-      ..moveTo(size.width * .08, size.height * .62)
+    for (var index = 0; index < 6; index++) {
+      final x = size.width * (.08 + index * .18);
+      canvas.drawLine(
+        Offset(x, -10),
+        Offset(x + 50, size.height + 10),
+        streetPaint,
+      );
+    }
+
+    final riverPath = Path()
+      ..moveTo(-10, size.height * .72)
       ..cubicTo(
         size.width * .28,
-        size.height * .12,
-        size.width * .57,
-        size.height * .82,
-        size.width * .92,
-        size.height * .28,
+        size.height * .55,
+        size.width * .58,
+        size.height * .96,
+        size.width + 10,
+        size.height * .68,
       );
     canvas.drawPath(
-      path,
+      riverPath,
       Paint()
-        ..color = route
+        ..color = river
         ..style = PaintingStyle.stroke
-        ..strokeWidth = active ? 4 : 3
-        ..strokeCap = StrokeCap.round,
+        ..strokeWidth = 22,
     );
-    for (final point in <Offset>[
-      Offset(size.width * .18, size.height * .45),
-      Offset(size.width * .48, size.height * .52),
-      Offset(size.width * .78, size.height * .36),
-    ]) {
-      canvas.drawCircle(point, 7, Paint()..color = signal);
-      canvas.drawCircle(point, 3, Paint()..color = background);
+
+    final zoneRects = <Rect>[
+      Rect.fromLTWH(
+        size.width * .08,
+        size.height * .18,
+        size.width * .38,
+        size.height * .31,
+      ),
+      Rect.fromLTWH(
+        size.width * .45,
+        size.height * .11,
+        size.width * .43,
+        size.height * .34,
+      ),
+      Rect.fromLTWH(
+        size.width * .28,
+        size.height * .46,
+        size.width * .45,
+        size.height * .29,
+      ),
+    ];
+    for (var index = 0; index < zoneNames.length; index++) {
+      final rect = zoneRects[index % zoneRects.length];
+      final color = zoneColors[index];
+      final selected = index == selectedZone;
+      final path = Path()
+        ..moveTo(rect.left + rect.width * .08, rect.top + rect.height * .22)
+        ..lineTo(rect.left + rect.width * .72, rect.top)
+        ..lineTo(rect.right, rect.top + rect.height * .58)
+        ..lineTo(rect.left + rect.width * .58, rect.bottom)
+        ..lineTo(rect.left, rect.top + rect.height * .74)
+        ..close();
+      canvas.drawPath(
+        path,
+        Paint()..color = color.withValues(alpha: selected ? .36 : .19),
+      );
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = selected ? 3 : 1.5,
+      );
+      final text = TextPainter(
+        text: TextSpan(
+          text: zoneNames[index],
+          style: TextStyle(
+            color: pin,
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+        ellipsis: '…',
+      )..layout(maxWidth: rect.width * .82);
+      text.paint(
+        canvas,
+        Offset(rect.left + rect.width * .1, rect.center.dy - text.height / 2),
+      );
+    }
+
+    final shownPlaces = math.min(math.max(placeCount, 1), 6);
+    const points = <Offset>[
+      Offset(.22, .36),
+      Offset(.59, .26),
+      Offset(.48, .58),
+      Offset(.76, .52),
+      Offset(.34, .68),
+      Offset(.67, .41),
+    ];
+    for (var index = 0; index < shownPlaces; index++) {
+      final point = Offset(
+        size.width * points[index].dx,
+        size.height * points[index].dy,
+      );
+      canvas.drawCircle(point, 9, Paint()..color = background);
+      canvas.drawCircle(point, 6, Paint()..color = pin);
+      canvas.drawCircle(point, 2, Paint()..color = background);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _ZoneMapPainter oldDelegate) {
-    return oldDelegate.route != route ||
-        oldDelegate.signal != signal ||
-        oldDelegate.background != background ||
-        oldDelegate.line != line ||
-        oldDelegate.active != active;
-  }
+  bool shouldRepaint(covariant _NeighborhoodMapPainter oldDelegate) =>
+      oldDelegate.background != background ||
+      oldDelegate.street != street ||
+      oldDelegate.selectedZone != selectedZone ||
+      oldDelegate.placeCount != placeCount ||
+      oldDelegate.zoneNames != zoneNames;
 }

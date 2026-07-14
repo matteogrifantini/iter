@@ -19,6 +19,27 @@ void main() {
     }
   });
 
+  test('the demo mixes city ideas and routes with every arrival mode', () {
+    final singleCities = MockData.journeys
+        .where((journey) => journey.stops.length == 1)
+        .map((journey) => journey.stops.single)
+        .toSet();
+    expect(singleCities, containsAll(<String>{'Roma', 'Parigi', 'Barcellona'}));
+    expect(
+      MockData.journeys.every(
+        (journey) => journey.videoAssets.single.endsWith('_sequence.mp4'),
+      ),
+      isTrue,
+    );
+
+    final options = MockData.transportOptionsFor('Parigi');
+    expect(
+      options.map((option) => option.kind).toSet(),
+      equals(TransportKind.values.toSet()),
+    );
+    expect(options.every((option) => option.logoAsset.isNotEmpty), isTrue);
+  });
+
   test(
     'a destination can become a visible itinerary through explicit choices',
     () {
@@ -31,7 +52,9 @@ void main() {
         isTrue,
       );
 
-      final places = store.activeDestinationPlaces.take(10).toList();
+      final places = store.activeDestinationPlaces
+          .take(IterStore.placesTarget)
+          .toList();
       for (final place in places) {
         expect(
           store.reactToPlace(PlaceReaction.save, placeId: place.id),
@@ -39,7 +62,7 @@ void main() {
         );
       }
 
-      expect(store.currentDraft!.selectedPlaceCount, 10);
+      expect(store.currentDraft!.selectedPlaceCount, IterStore.placesTarget);
       expect(store.currentDraft!.stage, TripStage.transportSelection);
       final transport = store.suggestedTransportOptions.first;
       expect(store.selectTransportOption(transport), isTrue);
@@ -71,10 +94,10 @@ void main() {
     final selected = <Place>[
       ...store.activeDestinationPlaces
           .where((place) => place.destinationId == 'lisbona')
-          .take(5),
+          .take(2),
       ...store.activeDestinationPlaces
           .where((place) => place.destinationId == 'porto')
-          .take(5),
+          .take(2),
     ];
     for (final place in selected) {
       expect(store.reactToPlace(PlaceReaction.save, placeId: place.id), isTrue);

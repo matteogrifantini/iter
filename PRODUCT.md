@@ -43,15 +43,15 @@ The result is a short set of complete journey ideas, which may connect cities, t
 
 ### Curate places
 
-Once a journey is chosen, Iter presents museums, streets, piazzas, events and local places along all its stops. A swipeable deck makes the decision quick, while visible buttons always offer the equivalent choices: skip, curious, or essential. Each recommendation says why it may suit the traveller, based on explicit choices and previous accepted trips. About ten meaningful signals are enough to move on; this is guidance, not a technical setup screen.
+Once a journey is chosen, Iter presents museums, streets, piazzas, events and local places along all its stops. A portrait reel makes the decision quick, while visible side controls always offer the equivalent choices: skip, save, or essential. Each recommendation says why it may suit the traveller, based on explicit choices and previous accepted trips. The prototype stops after four meaningful signals so the complete flow can be tested quickly.
 
 ### Choose how to arrive
 
-Iter compares a small number of flight and train shapes for reaching the first stop. The choice is a planning preference — morning arrival, after-work departure or slow rail journey — not a ticket. Mock prices and duration ranges are visibly labelled as estimates, external search remains optional, and no selection books or purchases anything.
+Iter compares flight, train, bus and car on one compact screen for reaching the first stop. The choice is a planning preference, not a ticket. Mock prices and duration ranges are visibly labelled as estimates, external search remains optional, and no selection books or purchases anything.
 
 ### Choose where to stay
 
-Iter groups the chosen places into a few understandable areas and explains the trade-off: atmosphere, walking time and fit with the trip. Booking is an optional outbound link only. Iter does not show availability, prices, affiliate results or checkout in the MVP.
+Iter places the chosen POIs on a demo map and colours the possible bases so the spatial trade-off is visible before reading details. Booking is an optional outbound link only. Iter does not show availability, prices, affiliate results or checkout in the MVP.
 
 ### Shape the itinerary
 
@@ -72,11 +72,11 @@ The profile exposes the preferences Iter has learned from accepted choices, not 
 ## MVP Boundaries
 
 - Launch language: Italian.
-- Initial coverage: three locally seeded route concepts, including a multi-city rail journey, backed by a curated POI catalogue for Roma, Parigi, Barcellona, Lisbona, Porto, Amsterdam, Berlino e Praga.
-- Bundled short travel videos are demonstration content with source attribution; no live video feed or remote media service is required.
+- Initial discovery demo: three single-city ideas plus three wider routes, backed by a curated POI catalogue for Roma, Parigi, Barcellona, Lisbona, Porto, Amsterdam, Berlino e Praga.
+- Bundled portrait travel clips play as short local sequences and keep source attribution; no live video feed or remote media service is required.
 - Mock planning is the default developer and automated-test mode; a free-tier Gemini model is reserved for deliberate manual demos.
 - No live public-transit data, live opening hours, prices, reviews, GPS tracking, offline mode, social features, collaborative editing, payments or in-app booking.
-- Flight and train options in the mock backend are indicative planning shapes, not live fares, schedules or availability.
+- Flight, train, bus and car options in the mock backend are indicative planning shapes, not live fares, schedules or availability.
 - No photos, documents, PNRs, payment data, private addresses or work-shift files are sent to an AI provider.
 
 ## Accessibility & Inclusion

@@ -25,35 +25,19 @@ class TransportSelectionScreen extends StatefulWidget {
 }
 
 class _TransportSelectionScreenState extends State<TransportSelectionScreen> {
-  late TransportKind _kind;
   String? _selectedId;
 
   @override
   void initState() {
     super.initState();
-    _kind = widget.initialSelection?.kind ?? TransportKind.flight;
     _selectedId = widget.initialSelection?.id;
   }
-
-  List<TransportOption> get _visibleOptions => widget.options
-      .where((option) => option.kind == _kind)
-      .toList(growable: false);
 
   TransportOption? get _selectedOption {
     for (final option in widget.options) {
       if (option.id == _selectedId) return option;
     }
     return null;
-  }
-
-  void _changeKind(TransportKind kind) {
-    final firstForKind = widget.options
-        .where((option) => option.kind == kind)
-        .firstOrNull;
-    setState(() {
-      _kind = kind;
-      _selectedId = firstForKind?.id;
-    });
   }
 
   @override
@@ -66,74 +50,53 @@ class _TransportSelectionScreenState extends State<TransportSelectionScreen> {
           onPressed: () => Navigator.of(context).maybePop(),
           icon: const Icon(Icons.arrow_back),
         ),
-        title: Text(widget.journeyTitle),
+        title: const Text('Come arrivare'),
       ),
       body: SafeArea(
         top: false,
         child: Column(
           children: [
-            const PlanningProgress(currentStep: 1),
+            const PlanningProgress(
+              currentStep: 1,
+              padding: EdgeInsets.fromLTRB(16, 2, 16, 10),
+            ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.fromLTRB(16, 2, 16, 12),
+              child: Row(
                 children: [
-                  Text(
-                    'Come comincia il viaggio?',
-                    style: Theme.of(context).textTheme.headlineLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Partenza da Milano. Scegli l’incastro, non il biglietto.',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: colors.onSurfaceVariant,
+                  Expanded(
+                    child: Text(
+                      'Da Milano',
+                      style: Theme.of(context).textTheme.headlineMedium,
                     ),
                   ),
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    width: double.infinity,
-                    child: SegmentedButton<TransportKind>(
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment(
-                          value: TransportKind.flight,
-                          icon: Icon(Icons.flight_outlined),
-                          label: Text('Volo'),
-                        ),
-                        ButtonSegment(
-                          value: TransportKind.train,
-                          icon: Icon(Icons.train_outlined),
-                          label: Text('Treno'),
-                        ),
-                      ],
-                      selected: <TransportKind>{_kind},
-                      onSelectionChanged: (selection) =>
-                          _changeKind(selection.first),
+                  const Icon(Icons.arrow_forward, size: 20),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      widget.options.firstOrNull?.destination ?? 'Destinazione',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
                 ],
               ),
             ),
             Expanded(
-              child: AnimatedSwitcher(
-                duration: MediaQuery.disableAnimationsOf(context)
-                    ? Duration.zero
-                    : const Duration(milliseconds: 200),
-                child: ListView.separated(
-                  key: ValueKey(_kind),
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-                  itemCount: _visibleOptions.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final option = _visibleOptions[index];
-                    return _TransportOptionTile(
-                      option: option,
-                      selected: option.id == _selectedId,
-                      onSelect: () => setState(() => _selectedId = option.id),
-                      onOpenSearch: () => widget.onOpenSearch(option.searchUrl),
-                    );
-                  },
-                ),
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                itemCount: widget.options.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 9),
+                itemBuilder: (context, index) {
+                  final option = widget.options[index];
+                  return _TransportOptionTile(
+                    option: option,
+                    selected: option.id == _selectedId,
+                    onSelect: () => setState(() => _selectedId = option.id),
+                    onOpenSearch: () => widget.onOpenSearch(option.searchUrl),
+                  );
+                },
               ),
             ),
             Material(
@@ -141,17 +104,16 @@ class _TransportSelectionScreenState extends State<TransportSelectionScreen> {
               child: SafeArea(
                 top: false,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                   child: Row(
                     children: [
                       Expanded(
                         child: Text(
-                          'Stime demo · nessun acquisto',
-                          style: Theme.of(context).textTheme.bodySmall
+                          'Prezzi demo',
+                          style: Theme.of(context).textTheme.labelMedium
                               ?.copyWith(color: colors.onSurfaceVariant),
                         ),
                       ),
-                      const SizedBox(width: 12),
                       FilledButton(
                         onPressed: _selectedOption == null
                             ? null
@@ -186,10 +148,11 @@ class _TransportOptionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final kindLabel = option.kind == TransportKind.flight ? 'Volo' : 'Treno';
     return Semantics(
       button: true,
       selected: selected,
+      label:
+          '${_kindLabel(option.kind)}, ${option.company}, ${option.priceLabel}',
       child: Material(
         color: selected ? colors.primaryContainer : colors.surface,
         shape: RoundedRectangleBorder(
@@ -203,85 +166,100 @@ class _TransportOptionTile extends StatelessWidget {
         child: InkWell(
           onTap: onSelect,
           child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.fromLTRB(12, 11, 8, 11),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Icon(
-                      option.kind == TransportKind.flight
-                          ? Icons.flight_takeoff
-                          : Icons.train,
-                      color: colors.primary,
-                    ),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: Text(
-                        option.isRecommended
-                            ? '$kindLabel · il più semplice'
-                            : kindLabel,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.labelLarge?.copyWith(color: colors.primary),
-                      ),
-                    ),
-                    Icon(
-                      selected
-                          ? Icons.check_circle
-                          : Icons.radio_button_unchecked,
-                      color: selected ? colors.primary : colors.outline,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  option.title,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 16),
-                _RouteEndpoints(option: option),
-                const SizedBox(height: 14),
-                Text(
-                  option.timingLabel,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colors.onSurfaceVariant,
+                Container(
+                  width: 68,
+                  height: 48,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Image.asset(
+                    option.logoAsset,
+                    fit: BoxFit.contain,
+                    semanticLabel: 'Logo ${option.company}',
                   ),
                 ),
-                const SizedBox(height: 16),
-                Divider(color: colors.outlineVariant),
-                const SizedBox(height: 10),
-                Row(
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _kindIcon(option.kind),
+                            size: 17,
+                            color: colors.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _kindLabel(option.kind),
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(color: colors.primary),
+                          ),
+                          if (selected) ...[
+                            const SizedBox(width: 6),
+                            Icon(
+                              Icons.check_circle,
+                              size: 16,
+                              color: colors.primary,
+                            ),
+                          ] else if (option.isRecommended) ...[
+                            const SizedBox(width: 6),
+                            Icon(
+                              Icons.auto_awesome,
+                              size: 15,
+                              color: colors.secondary,
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        option.timingLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${option.durationLabel} · ${option.changesLabel}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Expanded(
-                      child: _TransportFact(
-                        label: 'Durata',
-                        value: option.durationLabel,
-                      ),
+                    Text(
+                      option.priceLabel,
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    Expanded(
-                      child: _TransportFact(
-                        label: 'Cambi',
-                        value: option.changesLabel,
-                      ),
-                    ),
-                    Expanded(
-                      child: _TransportFact(
-                        label: 'Stima',
-                        value: option.priceLabel,
+                    const SizedBox(height: 3),
+                    SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: IconButton(
+                        tooltip: 'Apri ${option.company}',
+                        onPressed: onOpenSearch,
+                        icon: Icon(
+                          Icons.open_in_new,
+                          color: colors.onSurfaceVariant,
+                          size: 21,
+                        ),
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 14),
-                Text(option.whyItFits),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: onOpenSearch,
-                    icon: const Icon(Icons.open_in_new, size: 18),
-                    label: const Text('Controlla fuori da Iter'),
-                  ),
                 ),
               ],
             ),
@@ -292,87 +270,19 @@ class _TransportOptionTile extends StatelessWidget {
   }
 }
 
-class _RouteEndpoints extends StatelessWidget {
-  const _RouteEndpoints({required this.option});
+String _kindLabel(TransportKind kind) => switch (kind) {
+  TransportKind.flight => 'Volo',
+  TransportKind.train => 'Treno',
+  TransportKind.bus => 'Bus',
+  TransportKind.car => 'Auto',
+};
 
-  final TransportOption option;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            option.origin,
-            maxLines: 2,
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: SizedBox(
-            width: 54,
-            child: Row(
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: colors.secondary,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                Expanded(child: Divider(color: colors.primary, thickness: 2)),
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: colors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            option.destination,
-            textAlign: TextAlign.end,
-            maxLines: 2,
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TransportFact extends StatelessWidget {
-  const _TransportFact({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: colors.onSurfaceVariant),
-        ),
-        const SizedBox(height: 3),
-        Text(value, maxLines: 2, style: Theme.of(context).textTheme.labelLarge),
-      ],
-    );
-  }
-}
+IconData _kindIcon(TransportKind kind) => switch (kind) {
+  TransportKind.flight => Icons.flight_takeoff,
+  TransportKind.train => Icons.train,
+  TransportKind.bus => Icons.directions_bus,
+  TransportKind.car => Icons.directions_car,
+};
 
 extension<T> on Iterable<T> {
   T? get firstOrNull {

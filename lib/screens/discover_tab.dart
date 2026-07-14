@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../app/iter_theme.dart';
 import '../models/trip_models.dart';
 import '../widgets/journey_media.dart';
 
@@ -25,12 +24,11 @@ class _DiscoverTabState extends State<DiscoverTab> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+          padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -39,15 +37,8 @@ class _DiscoverTabState extends State<DiscoverTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Viaggi che stanno prendendo forma',
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Percorsi da usare come scintilla, mai come pacchetti chiusi.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      ),
+                      'Scopri',
+                      style: Theme.of(context).textTheme.headlineLarge,
                     ),
                   ],
                 ),
@@ -64,13 +55,13 @@ class _DiscoverTabState extends State<DiscoverTab> {
         Expanded(
           child: PageView.builder(
             key: const PageStorageKey('journey-reel'),
-            controller: PageController(viewportFraction: .91),
+            controller: PageController(viewportFraction: .88),
             onPageChanged: (value) => setState(() => _currentPage = value),
             itemCount: widget.journeys.length,
             itemBuilder: (context, index) {
               final journey = widget.journeys[index];
               return Padding(
-                padding: const EdgeInsets.fromLTRB(0, 0, 12, 16),
+                padding: const EdgeInsets.fromLTRB(0, 0, 12, 12),
                 child: _TrendJourney(
                   journey: journey,
                   active: index == _currentPage,
@@ -100,93 +91,111 @@ class _TrendJourney extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Material(
-      color: colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: colors.outlineVariant),
-      ),
+      color: colors.surfaceContainer,
+      borderRadius: BorderRadius.circular(14),
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          Expanded(
-            flex: 7,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                JourneyVideo(
-                  asset: journey.videoAsset,
-                  autoplay: active,
-                  borderRadius: BorderRadius.zero,
-                ),
-                Positioned(
-                  left: 16,
-                  top: 16,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: context.iterColors.videoScrim,
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 7,
-                      ),
-                      child: Text(
-                        journey.season,
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+          JourneyVideoSequence(
+            assets: journey.videoAssets,
+            active: active,
+            borderRadius: BorderRadius.zero,
+          ),
+          Positioned(
+            right: 10,
+            top: 74,
+            child: IconButton.filledTonal(
+              tooltip: 'Informazioni su ${journey.title}',
+              onPressed: () => _showInfo(context),
+              icon: const Icon(Icons.info_outline),
             ),
           ),
-          Expanded(
-            flex: 6,
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${journey.durationLabel} · ${journey.travelMode}',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelLarge?.copyWith(color: colors.secondary),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    journey.title,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 7),
-                  Text(
-                    journey.stops.join('  →  '),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colors.onSurfaceVariant,
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ColoredBox(
+              color: const Color(0xB8000000),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      journey.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.headlineMedium?.copyWith(color: Colors.white),
                     ),
-                  ),
-                  const Spacer(),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.tonalIcon(
-                      onPressed: onStart,
-                      icon: const Icon(Icons.arrow_forward),
-                      label: const Text('Usalo come punto di partenza'),
+                    const SizedBox(height: 5),
+                    Text(
+                      '${journey.durationLabel} · ${journey.stops.join(' → ')}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: onStart,
+                        child: const Text('Scegli'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showInfo(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                journey.title,
+                style: Theme.of(sheetContext).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 12),
+              Text(journey.summary),
+              const SizedBox(height: 12),
+              Text(
+                journey.stops.join('  →  '),
+                style: Theme.of(sheetContext).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(journey.whyItFits),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () {
+                    Navigator.of(sheetContext).pop();
+                    onStart();
+                  },
+                  child: const Text('Inizia da qui'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

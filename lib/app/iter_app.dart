@@ -193,7 +193,7 @@ class _IterAppState extends State<IterApp> {
     }
     final destinationOrder =
         trip.journey?.destinationIds ?? <String>[destination.id];
-    final allPlaces = _store.activeDestinationPlaces.toList()
+    final rankedPlaces = _store.activeDestinationPlaces.toList()
       ..sort((left, right) {
         final byDestination = destinationOrder
             .indexOf(left.destinationId)
@@ -201,6 +201,7 @@ class _IterAppState extends State<IterApp> {
         if (byDestination != 0) return byDestination;
         return right.matchScore.compareTo(left.matchScore);
       });
+    final allPlaces = rankedPlaces.take(4).toList(growable: false);
     final remainingPlaces = allPlaces
         .where((place) => !trip.reactions.containsKey(place.id))
         .toList();

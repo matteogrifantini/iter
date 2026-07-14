@@ -20,6 +20,7 @@ out/
 
 # Android local files and generated build state
 android/.gradle/
+android/.kotlin/
 android/local.properties
 android/key.properties
 android/app/upload-keystore.jks

@@ -82,7 +82,6 @@ class _DestinationDiscoveryScreenState
 
   late final Map<String, String> _answers;
   var _step = 0;
-  String? _lastChatNote;
 
   bool get _isComplete => _step >= _questions.length;
 
@@ -107,7 +106,6 @@ class _DestinationDiscoveryScreenState
     final key = _isComplete ? 'refinement' : _questions[_step].keyName;
     setState(() {
       _answers[key] = value;
-      _lastChatNote = value;
     });
     widget.onChatAnswer(key, value);
     if (!_isComplete) _advance();
@@ -216,31 +214,11 @@ class _DestinationDiscoveryScreenState
                 ],
               ),
             ),
-            if (_lastChatNote != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      'Iter ha tenuto questa nota: “$_lastChatNote”',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: PersistentAiComposer(
                 onSend: _sendChat,
-                hint: _isComplete
-                    ? 'Chiedi un’alternativa'
-                    : 'Rispondi liberamente a Iter',
+                hint: _isComplete ? 'Chiedi un’altra idea' : 'Scrivi a Iter',
               ),
             ),
           ],
@@ -380,38 +358,25 @@ class _JourneyResultsState extends State<_JourneyResults> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(8, 18, 20, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Tre viaggi, non tre città.',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Scorri: ogni percorso nasce dalle risposte che hai dato.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-            ],
+          padding: const EdgeInsets.fromLTRB(8, 12, 20, 10),
+          child: Text(
+            'Scorri e scegli',
+            style: Theme.of(context).textTheme.titleLarge,
           ),
         ),
         Expanded(
           child: PageView.builder(
             onPageChanged: (value) => setState(() => _page = value),
-            controller: PageController(viewportFraction: .92),
+            controller: PageController(viewportFraction: .88),
             itemCount: widget.journeys.length,
             itemBuilder: (context, index) {
               final journey = widget.journeys[index];
               return Padding(
-                padding: const EdgeInsets.fromLTRB(0, 0, 12, 10),
+                padding: const EdgeInsets.fromLTRB(0, 0, 12, 8),
                 child: _JourneyResultCard(
                   journey: journey,
                   active: index == _page,
@@ -440,100 +405,168 @@ class _JourneyResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxHeight < 520;
-        return Material(
-          color: colors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: colors.outlineVariant),
+    final isCity = journey.stops.length == 1;
+    return Material(
+      color: colors.surfaceContainer,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          JourneyVideoSequence(
+            assets: journey.videoAssets,
+            active: active,
+            borderRadius: BorderRadius.zero,
           ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: compact ? 4 : 5,
-                child: Stack(
-                  fit: StackFit.expand,
+          Positioned(
+            left: 12,
+            top: 24,
+            child: _VideoLabel(label: isCity ? 'Città' : 'Itinerario'),
+          ),
+          Positioned(
+            right: 10,
+            top: 74,
+            child: IconButton.filledTonal(
+              tooltip: 'Informazioni su ${journey.title}',
+              onPressed: () => _showJourneyInfo(context),
+              icon: const Icon(Icons.info_outline),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ColoredBox(
+              color: context.iterColors.videoScrim,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    JourneyVideo(
-                      asset: journey.videoAsset,
-                      autoplay: active,
-                      borderRadius: BorderRadius.zero,
+                    Text(
+                      journey.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.headlineMedium?.copyWith(color: Colors.white),
                     ),
-                    Positioned(
-                      left: 12,
-                      bottom: 12,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: context.iterColors.videoScrim,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          child: Text(
-                            '${journey.durationLabel} · ${journey.travelMode}',
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(color: Colors.white),
-                          ),
-                        ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${journey.durationLabel}  ·  ${journey.travelMode}',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: Colors.white.withValues(alpha: .88),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: onChoose,
+                        child: const Text('Scegli'),
                       ),
                     ),
                   ],
                 ),
               ),
-              Expanded(
-                flex: compact ? 6 : 6,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        journey.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        journey.stops.join('  →  '),
-                        maxLines: compact ? 1 : 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                      const Spacer(),
-                      if (!compact) ...[
-                        Text(
-                          journey.whyItFits,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: onChoose,
-                          child: const Text('Parti da questo viaggio'),
-                        ),
-                      ),
-                    ],
-                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showJourneyInfo(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                journey.title,
+                style: Theme.of(sheetContext).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 10),
+              Text(journey.summary),
+              const SizedBox(height: 18),
+              _InfoLine(
+                icon: Icons.route_outlined,
+                text: journey.stops.join('  →  '),
+              ),
+              _InfoLine(
+                icon: Icons.calendar_today_outlined,
+                text: '${journey.durationLabel} · ${journey.season}',
+              ),
+              _InfoLine(icon: Icons.auto_awesome, text: journey.whyItFits),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () {
+                    Navigator.of(sheetContext).pop();
+                    onChoose();
+                  },
+                  child: const Text('Scegli questo viaggio'),
                 ),
               ),
             ],
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+}
+
+class _VideoLabel extends StatelessWidget {
+  const _VideoLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: context.iterColors.videoScrim,
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoLine extends StatelessWidget {
+  const _InfoLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 21, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 11),
+          Expanded(child: Text(text)),
+        ],
+      ),
     );
   }
 }

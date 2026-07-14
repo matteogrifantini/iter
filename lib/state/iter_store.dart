@@ -39,7 +39,7 @@ class IterStore extends ChangeNotifier {
     );
   }
 
-  static const int placesTarget = 10;
+  static const int placesTarget = 4;
 
   final DateTime Function() _clock;
   final List<Trip> _trips;
@@ -417,7 +417,12 @@ class IterStore extends ChangeNotifier {
     if (!allowed) return false;
     _discardAiUndo(trip.id);
     final now = _clock();
-    final kindLabel = option.kind == TransportKind.flight ? 'Volo' : 'Treno';
+    final kindLabel = switch (option.kind) {
+      TransportKind.flight => 'Volo',
+      TransportKind.train => 'Treno',
+      TransportKind.bus => 'Bus',
+      TransportKind.car => 'Auto',
+    };
     _replaceTrip(
       trip.copyWith(
         transportOption: option,

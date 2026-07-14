@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../app/iter_theme.dart';
 import '../models/trip_models.dart';
 import '../widgets/iter_ui.dart';
+import '../widgets/journey_media.dart';
 
 class ItineraryScreen extends StatefulWidget {
   const ItineraryScreen({
@@ -37,8 +39,8 @@ class _ItineraryScreenState extends State<ItineraryScreen> {
     super.dispose();
   }
 
-  void _send([String? preset]) {
-    final text = (preset ?? _composer.text).trim();
+  void _send() {
+    final text = _composer.text.trim();
     if (text.isEmpty) return;
     widget.onSendAiMessage(text);
     _composer.clear();
@@ -49,9 +51,7 @@ class _ItineraryScreenState extends State<ItineraryScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          removed
-              ? '$title rimosso dal piano.'
-              : '$title è bloccato: sbloccalo prima di rimuoverlo.',
+          removed ? '$title rimosso.' : 'Sblocca $title prima di rimuoverlo.',
         ),
       ),
     );
@@ -61,7 +61,7 @@ class _ItineraryScreenState extends State<ItineraryScreen> {
     if (!widget.onUndoAiChange()) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Ultima modifica annullata.')));
+    ).showSnackBar(const SnackBar(content: Text('Modifica annullata.')));
   }
 
   @override
@@ -77,7 +77,9 @@ class _ItineraryScreenState extends State<ItineraryScreen> {
     if (_dayIndex >= days.length) _dayIndex = 0;
     final day = days.isEmpty ? null : days[_dayIndex];
     final lastChange = trip.messages.lastPlanChange;
-    final colors = Theme.of(context).colorScheme;
+    final posters = DemoMedia.postersForDestination(destination.id);
+    final videos =
+        trip.journey?.videoAssets ?? DemoMedia.forDestination(destination.id);
 
     return Scaffold(
       appBar: AppBar(
@@ -86,12 +88,12 @@ class _ItineraryScreenState extends State<ItineraryScreen> {
           onPressed: () => Navigator.of(context).maybePop(),
           icon: const Icon(Icons.arrow_back),
         ),
-        title: const Text('Il tuo viaggio'),
+        title: const Text('Piano'),
         actions: [
-          TextButton.icon(
+          IconButton(
+            tooltip: 'Salva il viaggio',
             onPressed: days.isEmpty ? null : widget.onFinish,
-            icon: const Icon(Icons.check),
-            label: const Text('Salva'),
+            icon: const Icon(Icons.check_circle_outline),
           ),
           const SizedBox(width: 8),
         ],
@@ -100,60 +102,35 @@ class _ItineraryScreenState extends State<ItineraryScreen> {
         top: false,
         child: Column(
           children: [
-            const PlanningProgress(currentStep: 3),
+            const PlanningProgress(
+              currentStep: 3,
+              padding: EdgeInsets.fromLTRB(16, 2, 16, 10),
+            ),
             Expanded(
               child: CustomScrollView(
                 slivers: [
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-                    sliver: SliverList.list(
-                      children: [
-                        Text(
-                          trip.title,
-                          style: Theme.of(context).textTheme.headlineLarge,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          trip.journey?.stops.join('  →  ') ??
-                              '${destination.name}, ${destination.country}',
-                          style: Theme.of(context).textTheme.bodyLarge
-                              ?.copyWith(color: colors.onSurfaceVariant),
-                        ),
-                        const SizedBox(height: 22),
-                        _TripFoundation(trip: trip),
-                        if (lastChange != null) ...[
-                          const SizedBox(height: 14),
-                          _PlanChangeNotice(
-                            message: lastChange,
-                            onUndo: widget.canUndoAiChange ? _undo : null,
-                          ),
-                        ],
-                        const SizedBox(height: 26),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Giorno per giorno',
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                            ),
-                            Text(
-                              '${days.length} ${days.length == 1 ? 'giorno' : 'giorni'}',
-                              style: Theme.of(context).textTheme.labelLarge
-                                  ?.copyWith(color: colors.primary),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                      ],
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+                    sliver: SliverToBoxAdapter(
+                      child: _TripHero(trip: trip, videos: videos),
                     ),
                   ),
+                  if (lastChange != null)
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      sliver: SliverToBoxAdapter(
+                        child: _PlanChangeNotice(
+                          message: lastChange,
+                          onUndo: widget.canUndoAiChange ? _undo : null,
+                        ),
+                      ),
+                    ),
                   if (days.isNotEmpty)
                     SliverToBoxAdapter(
                       child: SizedBox(
-                        height: 48,
+                        height: 44,
                         child: ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           scrollDirection: Axis.horizontal,
                           itemCount: days.length,
                           separatorBuilder: (_, _) => const SizedBox(width: 8),
@@ -168,44 +145,37 @@ class _ItineraryScreenState extends State<ItineraryScreen> {
                     ),
                   if (day != null) ...[
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 5),
                       sliver: SliverToBoxAdapter(
                         child: Text(
                           day.theme,
-                          style: Theme.of(context).textTheme.titleMedium,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
                       ),
                     ),
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
                       sliver: SliverList.builder(
                         itemCount: day.items.length,
                         itemBuilder: (context, index) {
                           final item = day.items[index];
-                          return AnimatedSwitcher(
-                            duration: MediaQuery.disableAnimationsOf(context)
-                                ? Duration.zero
-                                : const Duration(milliseconds: 180),
-                            child: _TimelineItem(
-                              key: ValueKey(item.id),
-                              item: item,
-                              isLast: index == day.items.length - 1,
-                              onToggleLock: () => widget.onToggleLock(item.id),
-                              onRemove: () => _remove(item.id, item.title),
-                            ),
+                          return _VisualTimelineItem(
+                            key: ValueKey(item.id),
+                            item: item,
+                            imageAsset: posters[index % posters.length],
+                            isLast: index == day.items.length - 1,
+                            onToggleLock: () => widget.onToggleLock(item.id),
+                            onRemove: () => _remove(item.id, item.title),
                           );
                         },
                       ),
                     ),
                   ] else
-                    SliverPadding(
-                      padding: const EdgeInsets.all(20),
-                      sliver: SliverToBoxAdapter(
-                        child: Text(
-                          'Il primo giorno apparirà qui appena scegli una base.',
-                          style: Theme.of(context).textTheme.bodyLarge,
-                        ),
-                      ),
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(child: Text('Il piano apparirà qui.')),
                     ),
                 ],
               ),
@@ -218,53 +188,102 @@ class _ItineraryScreenState extends State<ItineraryScreen> {
   }
 }
 
-class _TripFoundation extends StatelessWidget {
-  const _TripFoundation({required this.trip});
+class _TripHero extends StatelessWidget {
+  const _TripHero({required this.trip, required this.videos});
 
   final Trip trip;
+  final List<String> videos;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final transport = trip.transportOption;
-    final stay = trip.stayZone;
-    return Material(
-      color: colors.surface,
-      shape: RoundedRectangleBorder(
+    final destination = trip.destination!;
+    return SizedBox(
+      height: 236,
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: colors.outlineVariant),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            JourneyVideoSequence(
+              assets: videos,
+              borderRadius: BorderRadius.zero,
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ColoredBox(
+                color: context.iterColors.videoScrim,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 13, 16, 15),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        trip.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(color: Colors.white),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        trip.journey?.stops.join('  →  ') ?? destination.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          _HeroFact(
+                            icon: _transportIcon(trip.transportOption?.kind),
+                            label:
+                                trip.transportOption?.company ??
+                                'Arrivo libero',
+                          ),
+                          _HeroFact(
+                            icon: Icons.bed_outlined,
+                            label: trip.stayZone?.name ?? 'Base libera',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          ListTile(
-            minTileHeight: 74,
-            leading: Icon(
-              transport?.kind == TransportKind.train
-                  ? Icons.train_outlined
-                  : Icons.flight_outlined,
-              color: colors.primary,
-            ),
-            title: Text(transport?.title ?? 'Arrivo da definire'),
-            subtitle: Text(
-              transport == null
-                  ? 'Aggiungi un volo o un treno.'
-                  : '${transport.durationLabel} · ${transport.changesLabel}',
-            ),
-          ),
-          Divider(height: 1, indent: 56, color: colors.outlineVariant),
-          ListTile(
-            minTileHeight: 74,
-            leading: Icon(Icons.bed_outlined, color: colors.primary),
-            title: Text(stay?.name ?? 'Base da definire'),
-            subtitle: Text(
-              stay == null
-                  ? 'Scegli dove svegliarti.'
-                  : '~${stay.averageWalkMinutes} min a piedi dalle tappe',
-            ),
-          ),
-        ],
-      ),
+    );
+  }
+}
+
+class _HeroFact extends StatelessWidget {
+  const _HeroFact({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 17, color: Colors.white),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.labelMedium?.copyWith(color: Colors.white),
+        ),
+      ],
     );
   }
 }
@@ -280,60 +299,39 @@ class _PlanChangeNotice extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Material(
       color: colors.secondaryContainer,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 13, 10, 13),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.auto_awesome, color: colors.onSecondaryContainer),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    message.planChange!,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: colors.onSecondaryContainer,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    message.text,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colors.onSecondaryContainer,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (onUndo != null)
-              IconButton(
-                tooltip: 'Annulla ultima modifica',
+      borderRadius: BorderRadius.circular(12),
+      child: ListTile(
+        dense: true,
+        leading: Icon(Icons.auto_awesome, color: colors.onSecondaryContainer),
+        title: Text(
+          message.planChange!,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: onUndo == null
+            ? null
+            : IconButton(
+                tooltip: 'Annulla modifica',
                 onPressed: onUndo,
                 icon: const Icon(Icons.undo),
-                color: colors.onSecondaryContainer,
               ),
-          ],
-        ),
       ),
     );
   }
 }
 
-class _TimelineItem extends StatelessWidget {
-  const _TimelineItem({
+class _VisualTimelineItem extends StatelessWidget {
+  const _VisualTimelineItem({
     super.key,
     required this.item,
+    required this.imageAsset,
     required this.isLast,
     required this.onToggleLock,
     required this.onRemove,
   });
 
   final ItineraryItem item;
+  final String imageAsset;
   final bool isLast;
   final VoidCallback onToggleLock;
   final VoidCallback onRemove;
@@ -342,121 +340,108 @@ class _TimelineItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return IntrinsicHeight(
-      child: Stack(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (!isLast)
-            Positioned(
-              left: 51,
-              top: 39,
-              bottom: 0,
-              child: Container(width: 2, color: colors.outlineVariant),
-            ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 76,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 15),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 43,
-                        child: Text(
-                          item.startTime,
-                          style: Theme.of(context).textTheme.labelLarge,
-                        ),
-                      ),
-                      Container(
-                        width: 12,
-                        height: 12,
-                        margin: const EdgeInsets.only(top: 3),
-                        decoration: BoxDecoration(
-                          color: item.isLocked
-                              ? colors.secondary
-                              : colors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ],
+          SizedBox(
+            width: 58,
+            child: Stack(
+              alignment: Alignment.topCenter,
+              children: [
+                if (!isLast)
+                  Positioned(
+                    top: 30,
+                    bottom: 0,
+                    child: Container(width: 2, color: colors.outlineVariant),
+                  ),
+                Positioned(
+                  top: 14,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: item.isLocked ? colors.secondary : colors.primary,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(0, 12, 0, 16),
-                  decoration: isLast
-                      ? null
-                      : BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: colors.outlineVariant),
-                          ),
-                        ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                Positioned(
+                  top: 34,
+                  child: Text(
+                    item.startTime,
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.asset(
+                      imageAsset,
+                      width: 92,
+                      height: 104,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    item.title,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleMedium,
-                                  ),
-                                ),
-                                if (item.isLocked)
-                                  Icon(
-                                    Icons.lock,
-                                    size: 17,
-                                    color: colors.secondary,
-                                  ),
-                              ],
+                            Expanded(
+                              child: Text(
+                                item.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${item.category} · ${item.durationMinutes} min',
-                              style: Theme.of(context).textTheme.labelMedium
-                                  ?.copyWith(color: colors.primary),
-                            ),
-                            const SizedBox(height: 7),
-                            Text(
-                              item.note,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: colors.onSurfaceVariant),
-                            ),
+                            if (item.isLocked)
+                              Icon(
+                                Icons.lock,
+                                size: 16,
+                                color: colors.secondary,
+                              ),
                           ],
                         ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${item.category} · ${item.durationMinutes} min',
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(color: colors.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  PopupMenuButton<_ItemAction>(
+                    tooltip: 'Azioni per ${item.title}',
+                    onSelected: (action) => switch (action) {
+                      _ItemAction.lock => onToggleLock(),
+                      _ItemAction.remove => onRemove(),
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: _ItemAction.lock,
+                        child: Text(item.isLocked ? 'Sblocca' : 'Blocca'),
                       ),
-                      PopupMenuButton<_ItemAction>(
-                        tooltip: 'Azioni per ${item.title}',
-                        onSelected: (action) => switch (action) {
-                          _ItemAction.lock => onToggleLock(),
-                          _ItemAction.remove => onRemove(),
-                        },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
-                            value: _ItemAction.lock,
-                            child: Text(
-                              item.isLocked ? 'Sblocca tappa' : 'Blocca tappa',
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: _ItemAction.remove,
-                            child: Text('Togli dal giorno'),
-                          ),
-                        ],
+                      const PopupMenuItem(
+                        value: _ItemAction.remove,
+                        child: Text('Rimuovi'),
                       ),
                     ],
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ],
       ),
@@ -470,7 +455,7 @@ class _PlanComposer extends StatelessWidget {
   const _PlanComposer({required this.controller, required this.onSend});
 
   final TextEditingController controller;
-  final void Function([String? preset]) onSend;
+  final VoidCallback onSend;
 
   @override
   Widget build(BuildContext context) {
@@ -480,57 +465,28 @@ class _PlanComposer extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.fromLTRB(12, 9, 12, 11),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              SizedBox(
-                height: 48,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    ActionChip(
-                      label: const Text('Rallenta il pomeriggio'),
-                      onPressed: () => onSend('Rallenta il pomeriggio'),
-                    ),
-                    const SizedBox(width: 8),
-                    ActionChip(
-                      label: const Text('Aggiungi una cena'),
-                      onPressed: () => onSend('Aggiungi una cena speciale'),
-                    ),
-                    const SizedBox(width: 8),
-                    ActionChip(
-                      label: const Text('Più arte'),
-                      onPressed: () => onSend('Vorrei più arte'),
-                    ),
-                  ],
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  minLines: 1,
+                  maxLines: 3,
+                  textCapitalization: TextCapitalization.sentences,
+                  onSubmitted: (_) => onSend(),
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.auto_awesome),
+                    hintText: 'Cambia il piano…',
+                  ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      minLines: 1,
-                      maxLines: 3,
-                      textCapitalization: TextCapitalization.sentences,
-                      onSubmitted: (_) => onSend(),
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.auto_awesome),
-                        hintText: 'Chiedi a Iter di cambiare il piano',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    tooltip: 'Applica al piano',
-                    onPressed: () => onSend(),
-                    icon: const Icon(Icons.arrow_upward),
-                  ),
-                ],
+              const SizedBox(width: 8),
+              IconButton.filled(
+                tooltip: 'Applica al piano',
+                onPressed: onSend,
+                icon: const Icon(Icons.arrow_upward),
               ),
             ],
           ),
@@ -539,6 +495,14 @@ class _PlanComposer extends StatelessWidget {
     );
   }
 }
+
+IconData _transportIcon(TransportKind? kind) => switch (kind) {
+  TransportKind.flight => Icons.flight_takeoff,
+  TransportKind.train => Icons.train,
+  TransportKind.bus => Icons.directions_bus,
+  TransportKind.car => Icons.directions_car,
+  null => Icons.route,
+};
 
 extension on Iterable<AiMessage> {
   AiMessage? get lastPlanChange {

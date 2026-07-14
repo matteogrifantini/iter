@@ -18,7 +18,7 @@ enum TripStatus { draft, active, completed }
 /// when the first itinerary is assembled.
 enum PlaceReaction { skip, save, mustSee }
 
-enum TransportKind { flight, train }
+enum TransportKind { flight, train, bus, car }
 
 enum AiMessageRole { traveler, assistant }
 
@@ -35,7 +35,7 @@ class JourneyRoute {
     required this.whyItFits,
     required this.season,
     required this.travelMode,
-    required this.videoAsset,
+    required this.videoAssets,
     required this.matchScore,
   });
 
@@ -48,7 +48,8 @@ class JourneyRoute {
   final String whyItFits;
   final String season;
   final String travelMode;
-  final String videoAsset;
+  final List<String> videoAssets;
+  String get videoAsset => videoAssets.first;
   final int matchScore;
 }
 
@@ -123,6 +124,8 @@ class TransportOption {
   const TransportOption({
     required this.id,
     required this.kind,
+    required this.company,
+    required this.logoAsset,
     required this.title,
     required this.origin,
     required this.destination,
@@ -137,6 +140,8 @@ class TransportOption {
 
   final String id;
   final TransportKind kind;
+  final String company;
+  final String logoAsset;
   final String title;
   final String origin;
   final String destination;

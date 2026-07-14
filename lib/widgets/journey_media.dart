@@ -1,18 +1,218 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../app/iter_theme.dart';
 
+abstract final class DemoMedia {
+  static const _byDestination = <String, List<String>>{
+    'porto': <String>['assets/videos/vertical/porto_sequence.mp4'],
+    'lisbona': <String>['assets/videos/vertical/lisbon_sequence.mp4'],
+    'roma': <String>['assets/videos/vertical/rome_sequence.mp4'],
+    'parigi': <String>['assets/videos/vertical/paris_sequence.mp4'],
+    'barcellona': <String>['assets/videos/vertical/barcelona_sequence.mp4'],
+  };
+
+  static List<String> forDestination(String id) =>
+      _byDestination[id] ??
+      const <String>['assets/videos/vertical/rail_sequence.mp4'];
+
+  static List<String> postersForDestination(String id) => switch (id) {
+    'porto' => const <String>[
+      'assets/images/travel/porto_river.jpg',
+      'assets/images/travel/porto_rooftops.jpg',
+    ],
+    'lisbona' => const <String>[
+      'assets/images/travel/lisbon_street.jpg',
+      'assets/images/travel/lisbon_evening.jpg',
+    ],
+    'roma' => const <String>[
+      'assets/images/travel/rome_city.jpg',
+      'assets/images/travel/rome_vespa.jpg',
+    ],
+    'parigi' => const <String>[
+      'assets/images/travel/paris_eiffel.jpg',
+      'assets/images/travel/paris_cloudy.jpg',
+    ],
+    'barcellona' => const <String>[
+      'assets/images/travel/barcelona_street.jpg',
+      'assets/images/travel/barcelona_square.jpg',
+    ],
+    _ => const <String>[
+      'assets/images/travel/rail_coast.jpg',
+      'assets/images/travel/rail_window.jpg',
+    ],
+  };
+}
+
+class JourneyVideoSequence extends StatefulWidget {
+  const JourneyVideoSequence({
+    super.key,
+    required this.assets,
+    this.active = true,
+    this.showControl = true,
+    this.showProgress = true,
+    this.borderRadius = const BorderRadius.all(Radius.circular(14)),
+  }) : assert(assets.length > 0);
+
+  final List<String> assets;
+  final bool active;
+  final bool showControl;
+  final bool showProgress;
+  final BorderRadius borderRadius;
+
+  @override
+  State<JourneyVideoSequence> createState() => _JourneyVideoSequenceState();
+}
+
+class _JourneyVideoSequenceState extends State<JourneyVideoSequence> {
+  Timer? _timer;
+  var _index = 0;
+  var _paused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncTimer());
+  }
+
+  @override
+  void didUpdateWidget(covariant JourneyVideoSequence oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.assets != widget.assets) _index = 0;
+    _syncTimer();
+  }
+
+  void _syncTimer() {
+    _timer?.cancel();
+    final reducedMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (!widget.active ||
+        _paused ||
+        reducedMotion ||
+        widget.assets.length < 2) {
+      return;
+    }
+    _timer = Timer.periodic(const Duration(milliseconds: 3800), (_) {
+      if (!mounted) return;
+      setState(() => _index = (_index + 1) % widget.assets.length);
+    });
+  }
+
+  void _toggle() {
+    setState(() => _paused = !_paused);
+    _syncTimer();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    final playing = widget.active && !_paused && !reducedMotion;
+    final asset = widget.assets[_index];
+    final poster = _posterFor(asset);
+    return ClipRRect(
+      borderRadius: widget.borderRadius,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          AnimatedSwitcher(
+            duration: reducedMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 220),
+            child: widget.active
+                ? JourneyVideo(
+                    key: ValueKey('video-$asset'),
+                    asset: asset,
+                    placeholderAsset: poster,
+                    autoplay: playing,
+                    showControl: false,
+                    borderRadius: BorderRadius.zero,
+                  )
+                : poster != null
+                ? Image.asset(
+                    poster,
+                    key: ValueKey('poster-$asset'),
+                    fit: BoxFit.cover,
+                  )
+                : JourneyVideo(
+                    key: ValueKey('inactive-$asset'),
+                    asset: asset,
+                    autoplay: false,
+                    showControl: false,
+                    borderRadius: BorderRadius.zero,
+                  ),
+          ),
+          if (widget.showProgress)
+            Positioned(
+              left: 10,
+              right: 10,
+              top: 10,
+              child: Row(
+                children: [
+                  for (
+                    var index = 0;
+                    index < widget.assets.length;
+                    index++
+                  ) ...[
+                    Expanded(
+                      child: Container(
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: index <= _index
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: .38),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                    ),
+                    if (index != widget.assets.length - 1)
+                      const SizedBox(width: 5),
+                  ],
+                ],
+              ),
+            ),
+          if (widget.showControl)
+            Positioned(
+              right: 10,
+              top: 20,
+              child: IconButton.filledTonal(
+                tooltip: playing ? 'Metti in pausa' : 'Riproduci i video',
+                onPressed: _toggle,
+                icon: Icon(playing ? Icons.pause : Icons.play_arrow),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String? _posterFor(String asset) {
+    const prefix = 'assets/videos/vertical/';
+    if (!asset.startsWith(prefix) || !asset.endsWith('.mp4')) return null;
+    final name = asset.substring(prefix.length, asset.length - 4);
+    return 'assets/images/travel/$name.jpg';
+  }
+}
+
 class JourneyVideo extends StatefulWidget {
   const JourneyVideo({
     super.key,
     required this.asset,
+    this.placeholderAsset,
     this.autoplay = true,
     this.showControl = true,
     this.borderRadius = const BorderRadius.all(Radius.circular(14)),
   });
 
   final String asset;
+  final String? placeholderAsset;
   final bool autoplay;
   final bool showControl;
   final BorderRadius borderRadius;
@@ -116,6 +316,8 @@ class _JourneyVideoState extends State<JourneyVideo> {
                 child: VideoPlayer(controller),
               ),
             )
+          else if (widget.placeholderAsset != null)
+            Image.asset(widget.placeholderAsset!, fit: BoxFit.cover)
           else
             CustomPaint(
               painter: _VideoFallbackPainter(

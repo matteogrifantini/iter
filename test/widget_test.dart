@@ -39,32 +39,32 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    expect(find.text('Tre viaggi, non tre città.'), findsOneWidget);
+    expect(find.text('Scorri e scegli'), findsOneWidget);
     expect(find.text('Atlantico in treno'), findsOneWidget);
 
-    await tester.tap(find.text('Parti da questo viaggio').first);
+    await tester.tap(find.text('Scegli').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('Segui il tuo istinto.'), findsOneWidget);
+    expect(find.text('Scegli i luoghi'), findsOneWidget);
 
-    for (var index = 0; index < 10; index++) {
-      await tester.tap(find.text('Salva'));
+    for (var index = 0; index < 4; index++) {
+      await tester.tap(find.byTooltip('Salva'));
       await tester.pumpAndSettle();
     }
 
-    await tester.tap(find.text('Avanti'));
+    await tester.tap(find.text('Come arrivare'));
     await tester.pumpAndSettle();
-    expect(find.text('Come comincia il viaggio?'), findsOneWidget);
+    expect(find.text('Da Milano'), findsOneWidget);
 
-    await tester.tap(find.text('Arriva con il giorno davanti'));
+    await tester.tap(find.text('Volo'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Continua'));
     await tester.pumpAndSettle();
-    expect(find.text('Dove vuoi svegliarti?'), findsOneWidget);
+    expect(find.text('Dove dormire'), findsOneWidget);
 
-    await tester.tap(find.text('Scegli base').first);
+    await tester.tap(find.textContaining('Scegli ').last);
     await tester.pumpAndSettle();
-    expect(find.text('Giorno per giorno'), findsOneWidget);
-    expect(find.text('Chiedi a Iter di cambiare il piano'), findsOneWidget);
+    expect(find.text('Piano'), findsWidgets);
+    expect(find.text('Cambia il piano…'), findsOneWidget);
   });
 }
