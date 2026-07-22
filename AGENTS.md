@@ -66,12 +66,23 @@ Il Git owner può committare e pushare senza una nuova conferma soltanto dopo:
 5. `git diff --cached --check` e review del diff staged;
 6. commit Conventional Commits conciso;
 7. ispezione del commit creato;
-8. push del solo branch corrente non protetto.
+8. immediatamente prima del push, eseguire `git fetch --prune <remote>` e
+   confrontare l'upstream aggiornato. Con un upstream, controllare
+   `git rev-list --left-right --count @{upstream}...HEAD`, la lista dei commit
+   (`git log --oneline @{upstream}..HEAD`), diff e stat
+   (`git diff @{upstream}..HEAD` e `git diff --stat @{upstream}..HEAD`), quindi
+   confermare esplicitamente che ogni commit appartiene allo scope revisionato;
+   se manca l'upstream, l'orchestratore deve indicare una base esplicitamente
+   revisionata e il Git owner deve eseguire gli stessi controlli su
+   `<base>..HEAD` prima di `git push -u`. Fermarsi per qualunque commit
+   aggiuntivo o non posseduto;
+9. push del solo branch corrente non protetto.
 
-Se il remote è avanzato, l'autenticazione fallisce, la verifica non passa o lo
-staging contiene file non posseduti, fermarsi e tornare all'orchestratore. Mai
-force push, `--force-with-lease`, amend di commit altrui, merge, rebase, reset
-distruttivi, tag o release senza una richiesta specifica.
+Se il remote è avanzato, l'autenticazione fallisce, la verifica non passa, lo
+staging contiene file non posseduti o il range uscente contiene un commit
+aggiuntivo/non posseduto, fermarsi e tornare all'orchestratore. Mai force push,
+`--force-with-lease`, amend di commit altrui, merge, rebase, reset distruttivi,
+tag o release senza una richiesta specifica.
 
 ## Vincoli prodotto e implementazione
 

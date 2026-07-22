@@ -258,19 +258,29 @@ Prima di creare il commit, il Git owner deve:
 5. aggiungere allo staging soltanto percorsi espliciti di cui è proprietario;
 6. eseguire `git diff --cached --check` e revisionare il diff staged;
 7. usare un messaggio Conventional Commits conciso e coerente col repository;
-8. ispezionare il commit appena creato prima del push.
+8. immediatamente prima del push, eseguire `git fetch --prune <remote>` e
+   confrontare l'upstream aggiornato. Con un upstream, controllare
+   `git rev-list --left-right --count @{upstream}...HEAD`, la lista dei commit
+   (`git log --oneline @{upstream}..HEAD`), diff e stat
+   (`git diff @{upstream}..HEAD` e `git diff --stat @{upstream}..HEAD`), quindi
+   confermare esplicitamente che ogni commit appartiene allo scope revisionato.
+   Senza upstream, l'orchestratore deve fornire una base esplicitamente
+   revisionata e il Git owner deve eseguire gli stessi controlli su
+   `<base>..HEAD` prima di `git push -u`. Qualunque commit aggiuntivo o non
+   posseduto blocca il push.
 
-Il push è consentito sul branch corrente soltanto quando il commit controllato
-è in scope e il branch non è `main` o un altro branch protetto. Se manca
-l'upstream, il Git owner può impostarlo sul remote già configurato usando lo
-stesso nome del branch corrente. Non può eseguire force push,
-`--force-with-lease`, amend di commit altrui, merge, rebase, reset distruttivi,
-tag o release senza una richiesta specifica ulteriore.
+Il push è consentito sul branch corrente soltanto quando l'intero range
+controllato è in scope e il branch non è `main` o un altro branch protetto. Se
+manca l'upstream, il Git owner può impostarlo sul remote già configurato usando
+lo stesso nome del branch corrente soltanto dopo il controllo della base
+esplicitamente revisionata. Non può eseguire force push, `--force-with-lease`,
+amend di commit altrui, merge, rebase, reset distruttivi, tag o release senza
+una richiesta specifica ulteriore.
 
 Se il branch remoto è avanzato, l'autenticazione fallisce, lo staging include
-file non posseduti o la verifica non passa, il Git owner non forza la
-procedura: restituisce il controllo all'orchestratore con l'evidenza del
-blocco.
+file non posseduti, la verifica non passa o il range uscente contiene un commit
+aggiuntivo/non posseduto, il Git owner non forza la procedura: restituisce il
+controllo all'orchestratore con l'evidenza del blocco.
 
 ## Gestione degli errori
 
@@ -297,7 +307,17 @@ L'implementazione viene verificata con:
 4. confronto di coerenza tra TOML e schede `agents/*.md`;
 5. controllo dei link e riferimenti in `AGENTS.md` e `agents/README.md`;
 6. revisione del diff per escludere modifiche applicative;
-7. prova di caricamento in una nuova task Codex.
+7. smoke test eseguibile di caricamento in una nuova task Codex, con spawn e
+   attesa sequenziali di tutti i ruoli.
+
+Lo smoke test usa la sintassi CLI corrente:
+
+```bash
+codex exec --ephemeral --strict-config -C /Users/matteo/iter -s read-only --json -o .superpowers/sdd/new-task-smoke-last.txt 'Load this repository configuration and, in strictly sequential order, spawn and wait for product_ux, flutter_engineer, platform_engineer, quality_reviewer, and worker. Give each only read-only identity-only work: inspect its loaded identity/configuration and return its corresponding required final line. Do not edit, stage, commit, or push. Wait for each agent before spawning the next, never exceed the configured maximum capacity, and finish with exactly these five lines: product_ux: loaded; flutter_engineer: loaded; platform_engineer: loaded; quality_reviewer: loaded; worker: loaded.' > .superpowers/sdd/new-task-smoke.jsonl
+```
+
+Il controllo passa solo se l'output finale contiene tutte e cinque le righe
+richieste, una per ruolo.
 
 Non sono richiesti `flutter analyze`, test o build quando cambiano soltanto
 configurazione e documentazione degli agenti.
@@ -311,5 +331,7 @@ configurazione e documentazione degli agenti.
 - La topologia supporta profondità e ampiezza entro tre thread secondari.
 - `AGENTS.md` rende obbligatori proprietà esclusiva dei file e handoff concisi.
 - Commit e push rispettano il gate Git e non includono modifiche non possedute.
+- Lo smoke test di una nuova task carica sequenzialmente tutti e cinque i ruoli
+  senza superare la capacità configurata.
 - La configurazione è TOML valido e pronta a essere caricata da una nuova task
   in un repository trusted.

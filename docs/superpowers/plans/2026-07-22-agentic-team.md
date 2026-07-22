@@ -427,12 +427,23 @@ Il Git owner può committare e pushare senza una nuova conferma soltanto dopo:
 5. `git diff --cached --check` e review del diff staged;
 6. commit Conventional Commits conciso;
 7. ispezione del commit creato;
-8. push del solo branch corrente non protetto.
+8. immediatamente prima del push, eseguire `git fetch --prune <remote>` e
+   confrontare l'upstream aggiornato. Con un upstream, controllare
+   `git rev-list --left-right --count @{upstream}...HEAD`, la lista dei commit
+   (`git log --oneline @{upstream}..HEAD`), diff e stat
+   (`git diff @{upstream}..HEAD` e `git diff --stat @{upstream}..HEAD`), quindi
+   confermare esplicitamente che ogni commit appartiene allo scope revisionato;
+   se manca l'upstream, l'orchestratore deve indicare una base esplicitamente
+   revisionata e il Git owner deve eseguire gli stessi controlli su
+   `<base>..HEAD` prima di `git push -u`. Fermarsi per qualunque commit
+   aggiuntivo o non posseduto;
+9. push del solo branch corrente non protetto.
 
-Se il remote è avanzato, l'autenticazione fallisce, la verifica non passa o lo
-staging contiene file non posseduti, fermarsi e tornare all'orchestratore. Mai
-force push, `--force-with-lease`, amend di commit altrui, merge, rebase, reset
-distruttivi, tag o release senza una richiesta specifica.
+Se il remote è avanzato, l'autenticazione fallisce, la verifica non passa, lo
+staging contiene file non posseduti o il range uscente contiene un commit
+aggiuntivo/non posseduto, fermarsi e tornare all'orchestratore. Mai force push,
+`--force-with-lease`, amend di commit altrui, merge, rebase, reset distruttivi,
+tag o release senza una richiesta specifica.
 
 ## Vincoli prodotto e implementazione
 
@@ -634,7 +645,7 @@ Create `agents/quality_reviewer.md` with:
 - **Model:** `gpt-5.6-terra`
 - **Reasoning:** `high`
 - **Owns:** review indipendente, regressioni, accessibilità, test, build e QA UI.
-- **May delegate:** esecuzione di test, build, ricerche e raccolta output a `worker`.
+- **May delegate:** esecuzione di test, build, ricerche e raccolta output a `worker`; i worker del reviewer restano read-only su sorgenti e documentazione revisionati e non correggono mai i finding.
 - **Must not:** modificare sorgenti o documenti revisionati e correggere i propri finding.
 - **Verification:** finding ordinati per severità con file, linee ed evidenze; oppure scope verificato senza finding.
 - **Git:** non è Git owner dei sorgenti revisionati.
@@ -754,7 +765,26 @@ git diff --check -- .codex AGENTS.md agents docs/superpowers/plans/2026-07-22-ag
 
 Expected: exit code 0.
 
-- [ ] **Step 3: Request independent review**
+- [ ] **Step 3: Run the new-task load smoke test**
+
+Run the current Codex CLI syntax below before independent review or any push:
+
+```bash
+codex exec --ephemeral --strict-config -C /Users/matteo/iter -s read-only --json -o .superpowers/sdd/new-task-smoke-last.txt 'Load this repository configuration and, in strictly sequential order, spawn and wait for product_ux, flutter_engineer, platform_engineer, quality_reviewer, and worker. Give each only read-only identity-only work: inspect its loaded identity/configuration and return its corresponding required final line. Do not edit, stage, commit, or push. Wait for each agent before spawning the next, never exceed the configured maximum capacity, and finish with exactly these five lines: product_ux: loaded; flutter_engineer: loaded; platform_engineer: loaded; quality_reviewer: loaded; worker: loaded.' > .superpowers/sdd/new-task-smoke.jsonl
+```
+
+Check all five required final lines:
+
+```bash
+for role in product_ux flutter_engineer platform_engineer quality_reviewer worker; do
+  rg -qx "$role: loaded" .superpowers/sdd/new-task-smoke-last.txt
+done
+```
+
+Expected: each role is spawned and awaited in order with read-only identity-only
+work, no capacity excess, and all five checks exit 0.
+
+- [ ] **Step 4: Request independent review**
 
 Dispatch `quality_reviewer` if the new custom role is available in the current
 task. Otherwise dispatch a read-only reviewer with this scope:
@@ -769,7 +799,7 @@ file references, or state that no findings remain.
 
 Expected: no unresolved correctness or safety findings.
 
-- [ ] **Step 4: Stage only the implementation plan**
+- [ ] **Step 5: Stage only the implementation plan**
 
 Run:
 
@@ -783,7 +813,7 @@ git diff --cached --name-status
 Expected: only the implementation plan is staged; Tasks 1–4 are already in
 their reviewed commits.
 
-- [ ] **Step 5: Commit the implementation**
+- [ ] **Step 6: Commit the implementation**
 
 Run:
 
@@ -794,7 +824,7 @@ git show --check --stat --oneline HEAD
 
 Expected: commit succeeds and contains only the implementation plan.
 
-- [ ] **Step 6: Hand the commit series back for final review**
+- [ ] **Step 7: Hand the commit series back for final review**
 
 Do not push from the Task 5 implementer. Report every commit SHA and validation
 result to the orchestrator. The orchestrator dispatches the required broad
