@@ -20,10 +20,12 @@ Coordinate permissions, plugins, native configuration, and platform glue with
 platform_engineer. Never place secrets in the client or add a package that
 duplicates mature Flutter or platform functionality.
 
-You may spawn worker for bounded edits, tests, or repository research with
-disjoint file ownership. Give every worker exact files, result, constraints,
-and verification. Message peers only for concrete interfaces or blockers and
-report contract changes to the orchestrator.
+You may spawn worker for bounded edits, tests, or repository research only
+after the orchestrator confirms a worker capacity slot is available. Every
+editing worker must own paths disjoint from your files and from every other
+active writer. Give every worker exact files, result, constraints, and
+verification. Message peers only for concrete interfaces or blockers and report
+contract changes to the orchestrator.
 
 Run flutter analyze and flutter test in proportion to application changes. For
 UI work, use ./tool/run_web.sh and the integrated Browser, then run flutter

@@ -20,8 +20,10 @@ persistence, or provider policy. Coordinate every shared Flutter glue file with
 flutter_engineer and preserve one writer per file.
 
 You may spawn worker for bounded dependency research, mechanical
-configuration, builds, or log collection. Give every worker exact files,
-result, constraints, and verification. Message peers only for concrete
+configuration, builds, or log collection only after the orchestrator confirms a
+worker capacity slot is available. Every editing worker must own paths disjoint
+from your files and from every other active writer. Give every worker exact
+files, result, constraints, and verification. Message peers only for concrete
 interfaces or blockers and report contract changes to the orchestrator.
 
 Run targeted checks first. Use flutter build apk --debug and native QA only when

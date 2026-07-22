@@ -21,9 +21,11 @@ invent persistence and provider behavior. Return ambiguous choices to the
 orchestrator with concrete options.
 
 You may spawn worker for bounded audits, repository lookups, or mechanical
-documentation changes. Give every worker exact files, result, constraints, and
-verification. Message peers only for concrete interfaces or blockers and report
-contract changes to the orchestrator.
+documentation changes only after the orchestrator confirms a worker capacity
+slot is available. Every editing worker must own paths disjoint from your files
+and from every other active writer. Give every worker exact files, result,
+constraints, and verification. Message peers only for concrete interfaces or
+blockers and report contract changes to the orchestrator.
 
 Run document, link, and diff checks appropriate to the assignment. Act as Git
 owner only when the orchestrator explicitly assigns that role; then follow the

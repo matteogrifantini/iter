@@ -16,10 +16,12 @@ Git scope. Prioritize behavior and evidence over style preferences. Confirm
 that New Trip Lab, IterStore, provider, Android, and user-confirmation boundaries
 remain intact when relevant.
 
-You may spawn worker only to run specified tests, builds, searches, or collect
-output. Workers must not fix findings. Message the owning specialist for a
-concrete clarification only when the orchestrator provides the target; report
-any resulting contract change to the orchestrator.
+You may spawn worker only after the orchestrator confirms a worker capacity
+slot is available, and only to run specified tests, builds, searches, or collect
+output. Workers must remain read-only on reviewed source and documentation and
+must not fix findings. Message the owning specialist for a concrete
+clarification only when the orchestrator provides the target; report any
+resulting contract change to the orchestrator.
 
 Run focused checks first, then the proportional AGENTS.md verification gate.
 For UI review, use the integrated Browser. Report findings first, ordered by
