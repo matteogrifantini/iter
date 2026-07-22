@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Execution choice:** Subagent-Driven Development is selected and mandatory for this plan.
+
 **Goal:** Configure and document a versioned, hierarchical Codex team tailored to Iter, with operational specialists, nested low-cost workers, independent review, and a controlled Git commit/push gate.
 
 **Architecture:** Project defaults live in `.codex/config.toml`; each executable role is a standalone TOML layer in `.codex/agents/`. `AGENTS.md` is the concise orchestration contract, while `agents/*.md` provides human-readable role cards. The main thread owns decisions and file assignment; specialists may delegate bounded work to `worker`; `quality_reviewer` remains source-read-only.
@@ -33,6 +35,7 @@
 **Interfaces:**
 - Consumes: Codex project configuration and the existing `worker` role.
 - Produces: a four-slot hierarchy consisting of the primary thread plus at most three secondary threads, and a low-cost worker contract available to every specialist.
+- Git owner: the orchestrator designates the Task 1 implementer as Git owner only for `.codex/config.toml` and `.codex/agents/worker.toml` and this task's commit.
 
 - [ ] **Step 1: Record the expected pre-implementation validation failure**
 
@@ -140,6 +143,7 @@ Expected: one commit containing only the project defaults and worker TOML.
 **Interfaces:**
 - Consumes: `.codex/config.toml`, `AGENTS.md`, `HANDOFF.md`, `PRODUCT.md`, `DESIGN.md`, and task-specific project plans.
 - Produces: `product_ux`, `flutter_engineer`, `platform_engineer`, and `quality_reviewer`, all directly spawnable by name.
+- Git owner: the orchestrator designates the Task 2 implementer as Git owner only for `.codex/agents/product_ux.toml`, `.codex/agents/flutter_engineer.toml`, `.codex/agents/platform_engineer.toml`, `.codex/agents/quality_reviewer.toml`, and this task's commit.
 
 - [ ] **Step 1: Create `product_ux`**
 
@@ -304,20 +308,23 @@ expected = {
     'quality_reviewer': ('gpt-5.6-terra', 'high'),
 }
 
-for path in sorted(Path('.codex/agents').glob('*.toml')):
+paths = sorted(Path('.codex/agents').glob('*.toml'))
+assert {path.stem for path in paths} == set(expected)
+
+seen = set()
+for path in paths:
     with path.open('rb') as stream:
         data = tomllib.load(stream)
+    assert path.stem == data['name']
     name = data['name']
+    seen.add(name)
     assert name in expected, f'unexpected agent {name}'
     assert data['description'].strip()
     assert data['developer_instructions'].strip()
     assert (data['model'], data['model_reasoning_effort']) == expected[name]
     print(f'OK {name}')
 
-assert set(expected) == {
-    tomllib.loads(path.read_text())['name']
-    for path in Path('.codex/agents').glob('*.toml')
-}
+assert seen == set(expected)
 PY
 ```
 
@@ -347,6 +354,7 @@ Expected: one commit containing only the four specialist TOML files.
 **Interfaces:**
 - Consumes: the approved design and the five custom-agent names.
 - Produces: the durable root instructions used by orchestrator, specialists, and worker.
+- Git owner: the orchestrator designates the Task 3 implementer as Git owner only for `AGENTS.md` and this task's commit.
 
 - [ ] **Step 1: Replace `AGENTS.md` with the exact optimized contract**
 
@@ -504,6 +512,7 @@ Expected: one commit containing only `AGENTS.md`.
 **Interfaces:**
 - Consumes: executable TOML roles.
 - Produces: concise documentation that lets contributors select and audit roles without reading multiline TOML strings.
+- Git owner: the orchestrator designates the Task 4 implementer as Git owner only for `agents/README.md`, `agents/worker.md`, `agents/product_ux.md`, `agents/flutter_engineer.md`, `agents/platform_engineer.md`, `agents/quality_reviewer.md`, and this task's commit.
 
 - [ ] **Step 1: Create the team README**
 
@@ -675,6 +684,7 @@ Expected: one commit containing only the team README and five role cards.
 **Interfaces:**
 - Consumes: all configuration and documentation from Tasks 1–4.
 - Produces: a fully validated local commit series ready for final whole-branch review and push.
+- Git owner: the orchestrator designates the Task 5 implementer as Git owner only for `docs/superpowers/plans/2026-07-22-agentic-team.md` and this task's commit.
 
 - [ ] **Step 1: Run the complete TOML and role validation**
 
@@ -706,10 +716,14 @@ expected = {
     'quality_reviewer': ('gpt-5.6-terra', 'high'),
 }
 
+paths = sorted(Path('.codex/agents').glob('*.toml'))
+assert {path.stem for path in paths} == set(expected)
+
 seen = set()
-for path in sorted(Path('.codex/agents').glob('*.toml')):
+for path in paths:
     with path.open('rb') as stream:
         data = tomllib.load(stream)
+    assert path.stem == data['name']
     name = data['name']
     seen.add(name)
     assert (data['model'], data['model_reasoning_effort']) == expected[name]
