@@ -773,21 +773,31 @@ Run the current Codex CLI syntax below before independent review or any push:
 codex exec --ephemeral --strict-config -C /Users/matteo/iter -s read-only --json -o .superpowers/sdd/new-task-smoke-last.txt 'Do not inspect the repository or run shell commands. Perform only this delegation smoke test. In this strict order, sequentially spawn product_ux with task_name="smoke_product_ux", flutter_engineer with task_name="smoke_flutter_engineer", platform_engineer with task_name="smoke_platform_engineer", quality_reviewer with task_name="smoke_quality_reviewer", and worker with task_name="smoke_worker". Every spawn MUST set fork_turns="none". Send only the respective child instruction: product_ux: "Do not use tools or make edits. Immediately reply exactly product_ux: loaded."; flutter_engineer: "Do not use tools or make edits. Immediately reply exactly flutter_engineer: loaded."; platform_engineer: "Do not use tools or make edits. Immediately reply exactly platform_engineer: loaded."; quality_reviewer: "Do not use tools or make edits. Immediately reply exactly quality_reviewer: loaded."; worker: "Do not use tools or make edits. Immediately reply exactly worker: loaded." Wait for that child to complete before the next spawn. If any spawn or wait errors, stop immediately and report the error explicitly; do not continue. Finish with exactly five separate lines and no other text: product_ux: loaded; flutter_engineer: loaded; platform_engineer: loaded; quality_reviewer: loaded; worker: loaded.' > .superpowers/sdd/new-task-smoke.jsonl
 ```
 
-Check all five required final lines:
+Inspect the structured event trace for this new task. Require all of the
+following before independent review or push:
 
-```bash
-for role in product_ux flutter_engineer platform_engineer quality_reviewer worker; do
-  rg -qx "$role: loaded" .superpowers/sdd/new-task-smoke-last.txt
-done
-```
+- one `subAgentActivity` `started` event for each role, with a non-empty
+  `agentThreadId` and its expected unique smoke task path;
+- completion of every child with that child's own role response;
+- identical `git status --short` output before and after the smoke run.
 
-Expected: each role is spawned and awaited in order with read-only identity-only
-work, no capacity excess, and all five checks exit 0.
+The parent's five final `role: loaded` lines are not sufficient evidence on
+their own: do not use `rg -qx` against parent output as a spawn gate.
 
-Verification note: the corrected flow with `fork_turns="none"` passed on 2026-07-22
-with `codex-cli 0.145.0-alpha.30`; all five `rg -qx` checks passed on the v2
-output. The earlier attempt without the explicit fork requirement failed and is
-not evidence of a successful load.
+Verification note: the real new Codex task
+`019f8be2-e321-7882-b5e3-93b98c75f3f5`, turn
+`019f8be2-e413-76e1-ab33-f0e763051317`, has `subAgentActivity` `started`
+events with non-empty IDs for `product_ux`
+(`019f8be3-4c63-7ec2-b1c2-d48b99384563`, `/root/smoke_product_ux`),
+`flutter_engineer` (`019f8be3-70be-7390-a4be-60f64fd69a6e`,
+`/root/smoke_flutter_engineer`), `platform_engineer`
+(`019f8be3-9750-7041-8ca6-ec89ad0e0ec4`, `/root/smoke_platform_engineer`),
+`quality_reviewer` (`019f8be3-b807-7b41-9940-e3d946bb7236`,
+`/root/smoke_quality_reviewer`) and `worker`
+(`019f8be3-d6df-7960-b573-9988c4fd3350`, `/root/smoke_worker`). All children
+completed with their own role response, and `git status --short` was identical
+before and after. The previous `rg -qx` v2 parent-output attestation was a
+false positive, not spawn evidence.
 
 - [ ] **Step 4: Request independent review**
 

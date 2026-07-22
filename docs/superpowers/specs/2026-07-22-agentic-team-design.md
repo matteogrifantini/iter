@@ -316,13 +316,24 @@ Lo smoke test usa la sintassi CLI corrente:
 codex exec --ephemeral --strict-config -C /Users/matteo/iter -s read-only --json -o .superpowers/sdd/new-task-smoke-last.txt 'Do not inspect the repository or run shell commands. Perform only this delegation smoke test. In this strict order, sequentially spawn product_ux with task_name="smoke_product_ux", flutter_engineer with task_name="smoke_flutter_engineer", platform_engineer with task_name="smoke_platform_engineer", quality_reviewer with task_name="smoke_quality_reviewer", and worker with task_name="smoke_worker". Every spawn MUST set fork_turns="none". Send only the respective child instruction: product_ux: "Do not use tools or make edits. Immediately reply exactly product_ux: loaded."; flutter_engineer: "Do not use tools or make edits. Immediately reply exactly flutter_engineer: loaded."; platform_engineer: "Do not use tools or make edits. Immediately reply exactly platform_engineer: loaded."; quality_reviewer: "Do not use tools or make edits. Immediately reply exactly quality_reviewer: loaded."; worker: "Do not use tools or make edits. Immediately reply exactly worker: loaded." Wait for that child to complete before the next spawn. If any spawn or wait errors, stop immediately and report the error explicitly; do not continue. Finish with exactly five separate lines and no other text: product_ux: loaded; flutter_engineer: loaded; platform_engineer: loaded; quality_reviewer: loaded; worker: loaded.' > .superpowers/sdd/new-task-smoke.jsonl
 ```
 
-Il controllo passa solo se l'output finale contiene tutte e cinque le righe
-richieste, una per ruolo.
+Il gate passa solo dopo l'ispezione della traccia strutturata della task: per
+ogni ruolo deve esistere un evento `subAgentActivity` `started` con
+`agentThreadId` non vuoto, ogni child deve completare con la propria risposta e
+`git status --short` deve essere identico prima e dopo. Le cinque righe finali
+del parent sono un riepilogo utile, ma non sono prova di spawn e non possono da
+sole superare il gate.
 
-Verifica eseguita: il flusso corretto con `fork_turns="none"` è passato il 22
-luglio 2026 con `codex-cli 0.145.0-alpha.30`; i cinque controlli `rg -qx` sul
-file di output v2 sono passati. Il tentativo precedente, privo del fork
-esplicito, è fallito e non costituisce evidenza di caricamento.
+Prova reale: la nuova task Codex
+`019f8be2-e321-7882-b5e3-93b98c75f3f5`, turn
+`019f8be2-e413-76e1-ab33-f0e763051317`, ha prodotto eventi `started` con ID
+non vuoti per `product_ux` (`019f8be3-4c63-7ec2-b1c2-d48b99384563`),
+`flutter_engineer` (`019f8be3-70be-7390-a4be-60f64fd69a6e`),
+`platform_engineer` (`019f8be3-9750-7041-8ca6-ec89ad0e0ec4`),
+`quality_reviewer` (`019f8be3-b807-7b41-9940-e3d946bb7236`) e `worker`
+(`019f8be3-d6df-7960-b573-9988c4fd3350`). Tutti hanno completato con la
+risposta del proprio ruolo e `git status --short` era identico prima e dopo.
+La precedente attestazione basata solo sui cinque `rg -qx` dell'output v2 era
+un falso positivo e non è evidenza di caricamento.
 
 Non sono richiesti `flutter analyze`, test o build quando cambiano soltanto
 configurazione e documentazione degli agenti.
