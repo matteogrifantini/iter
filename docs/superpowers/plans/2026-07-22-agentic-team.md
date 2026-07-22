@@ -770,7 +770,7 @@ Expected: exit code 0.
 Run the current Codex CLI syntax below before independent review or any push:
 
 ```bash
-codex exec --ephemeral --strict-config -C /Users/matteo/iter -s read-only --json -o .superpowers/sdd/new-task-smoke-last.txt 'Load this repository configuration and, in strictly sequential order, spawn and wait for product_ux, flutter_engineer, platform_engineer, quality_reviewer, and worker. Give each only read-only identity-only work: inspect its loaded identity/configuration and return its corresponding required final line. Do not edit, stage, commit, or push. Wait for each agent before spawning the next, never exceed the configured maximum capacity, and finish with exactly these five lines: product_ux: loaded; flutter_engineer: loaded; platform_engineer: loaded; quality_reviewer: loaded; worker: loaded.' > .superpowers/sdd/new-task-smoke.jsonl
+codex exec --ephemeral --strict-config -C /Users/matteo/iter -s read-only --json -o .superpowers/sdd/new-task-smoke-last.txt 'Do not inspect the repository or run shell commands. Perform only this delegation smoke test. In this strict order, sequentially spawn product_ux with task_name="smoke_product_ux", flutter_engineer with task_name="smoke_flutter_engineer", platform_engineer with task_name="smoke_platform_engineer", quality_reviewer with task_name="smoke_quality_reviewer", and worker with task_name="smoke_worker". Every spawn MUST set fork_turns="none". Send only the respective child instruction: product_ux: "Do not use tools or make edits. Immediately reply exactly product_ux: loaded."; flutter_engineer: "Do not use tools or make edits. Immediately reply exactly flutter_engineer: loaded."; platform_engineer: "Do not use tools or make edits. Immediately reply exactly platform_engineer: loaded."; quality_reviewer: "Do not use tools or make edits. Immediately reply exactly quality_reviewer: loaded."; worker: "Do not use tools or make edits. Immediately reply exactly worker: loaded." Wait for that child to complete before the next spawn. If any spawn or wait errors, stop immediately and report the error explicitly; do not continue. Finish with exactly five separate lines and no other text: product_ux: loaded; flutter_engineer: loaded; platform_engineer: loaded; quality_reviewer: loaded; worker: loaded.' > .superpowers/sdd/new-task-smoke.jsonl
 ```
 
 Check all five required final lines:
@@ -783,6 +783,11 @@ done
 
 Expected: each role is spawned and awaited in order with read-only identity-only
 work, no capacity excess, and all five checks exit 0.
+
+Verification note: the corrected flow with `fork_turns="none"` passed on 2026-07-22
+with `codex-cli 0.145.0-alpha.30`; all five `rg -qx` checks passed on the v2
+output. The earlier attempt without the explicit fork requirement failed and is
+not evidence of a successful load.
 
 - [ ] **Step 4: Request independent review**
 
