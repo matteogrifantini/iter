@@ -12,7 +12,9 @@ class HomeScreen extends StatelessWidget {
     required this.onAvailability,
     required this.onSeeAllTrips,
     required this.onProfile,
-  });
+    this.showNewTripLab = false,
+    this.onNewTripLab,
+  }) : assert(!showNewTripLab || onNewTripLab != null);
 
   final List<Trip> trips;
   final VoidCallback onNewTrip;
@@ -20,6 +22,8 @@ class HomeScreen extends StatelessWidget {
   final VoidCallback onAvailability;
   final VoidCallback onSeeAllTrips;
   final VoidCallback onProfile;
+  final bool showNewTripLab;
+  final VoidCallback? onNewTripLab;
 
   @override
   Widget build(BuildContext context) {
@@ -73,12 +77,20 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 18),
-              FilledButton.icon(
-                key: const ValueKey('new-trip'),
-                onPressed: onNewTrip,
-                icon: const Icon(Icons.arrow_forward),
-                label: const Text('Inizia un viaggio'),
-              ),
+              if (showNewTripLab)
+                FilledButton.icon(
+                  key: const Key('new-trip-lab'),
+                  onPressed: onNewTripLab,
+                  icon: const Icon(Icons.arrow_forward),
+                  label: const Text('Inizia un viaggio'),
+                )
+              else
+                FilledButton.icon(
+                  key: const ValueKey('new-trip'),
+                  onPressed: onNewTrip,
+                  icon: const Icon(Icons.arrow_forward),
+                  label: const Text('Inizia un viaggio'),
+                ),
               if (active != null) ...[
                 const SizedBox(height: 48),
                 Row(

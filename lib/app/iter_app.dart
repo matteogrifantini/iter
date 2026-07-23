@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/trip_models.dart';
+import '../features/new_trip_lab/new_trip_lab_screen.dart';
 import '../screens/availability_screen.dart';
 import '../screens/destination_discovery_screen.dart';
 import '../screens/discover_tab.dart';
@@ -86,12 +88,17 @@ class _IterAppState extends State<IterApp> {
           theme: IterTheme.light(),
           darkTheme: IterTheme.dark(),
           themeMode: _themeMode,
+          locale: const Locale('it'),
+          supportedLocales: const <Locale>[Locale('it')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
           home: _AppShell(
             tabIndex: _tabIndex,
             onTabChanged: (index) => setState(() => _tabIndex = index),
             home: HomeScreen(
               trips: _store.trips,
               onNewTrip: () => _startNewTrip(context),
+              showNewTripLab: widget.config.newTripLab,
+              onNewTripLab: _startNewTripLab,
               onOpenTrip: (trip) => _openTrip(context, trip),
               onAvailability: () => _openAvailability(context),
               onSeeAllTrips: () => setState(() => _tabIndex = 2),
@@ -122,6 +129,12 @@ class _IterAppState extends State<IterApp> {
   void _startNewTrip(BuildContext context) {
     _store.beginNewTrip();
     _push(context, _buildDiscovery);
+  }
+
+  void _startNewTripLab() {
+    _navigatorKey.currentState?.push(
+      MaterialPageRoute<void>(builder: (_) => const NewTripLabScreen()),
+    );
   }
 
   void _startFromTrend(BuildContext context, JourneyRoute journey) {

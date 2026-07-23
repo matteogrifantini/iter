@@ -7,8 +7,21 @@ Non è un questionario tecnico e non è un chatbot isolato. L'itinerario resta s
 ## Cosa copre questo MVP
 
 - Home minimale con **Inizia un viaggio**, un solo viaggio in corso e disponibilità opzionale.
-- Scoperta in cinque domande progressive, senza città mostrate in anticipo, con campo conversazionale sempre disponibile.
-- Proposte di viaggio complete e video-led: città, borghi e tratte possono convivere nello stesso percorso.
+- Laboratorio **Nuovo viaggio v2** con **Semplice** come unica presentazione,
+  in un flusso di otto domande progressive senza destinazioni mostrate in
+  anticipo. In debug il Lab è attivo per default tramite `kDebugMode` e
+  **Inizia un viaggio** nella Home lo apre direttamente;
+  `--dart-define=ITER_NEW_TRIP_LAB=false` lo disattiva esplicitamente e
+  conserva il percorso prodotto esistente. In release il Lab è disattivato per
+  default.
+- Semplice riduce il copy, usa una griglia emoji+testo su due colonne solo oltre
+  360 dp con testo normale, una colonna a 360 dp o meno e con testo grande, e
+  mostra dopo le opzioni il progresso con domanda corrente e residue.
+- Partenza approssimativa rilevata in primo piano e sempre modificabile, date
+  esatte/flessibili/aperte e supporto iniettabile ai giorni liberi salvati.
+- Sei proposte mock deterministiche con costi, compatibilità e compromessi,
+  shortlist da due a quattro elementi, confronto verticale e scelta finale.
+- Proposte di viaggio complete: città, borghi e tratte possono convivere nello stesso percorso.
 - Tab **Scopri**, **Viaggi** e **Profilo** con tendenze, archivio, preferenze apprese e selezione Chiaro/Scuro.
 - Curation di luoghi lungo tutte le tappe con swipe opzionale e pulsanti accessibili: non fa per me, mi incuriosisce, irrinunciabile.
 - Confronto compatto tra volo, treno, bus e auto con prezzi mock dichiarati come stime, senza acquisto o falsa disponibilità live.
@@ -17,7 +30,15 @@ Non è un questionario tecnico e non è un chatbot isolato. L'itinerario resta s
 - Un segnale di disponibilità/turni per idee future, senza import di file o calendario nel MVP.
 - Catalogo locale iniziale per Roma, Parigi, Barcellona, Lisbona, Porto, Amsterdam, Berlino e Praga.
 
-Restano fuori dal primo rilascio: costruzione multi-city libera, prezzi e disponibilità live, trasporti pubblici live, recensioni, GPS, offline, condivisione, pagamenti e prenotazioni in-app. I percorsi multi-tappa presenti sono contenuti dimostrativi curati localmente.
+Restano fuori dal primo rilascio: costruzione multi-city libera, prezzi e disponibilità live, trasporti pubblici live, recensioni, navigazione GPS e posizione in background, offline, condivisione, pagamenti e prenotazioni in-app. Il laboratorio `Nuovo viaggio` usa soltanto la posizione approssimativa in primo piano per precompilare la città di partenza, con fallback manuale. I percorsi multi-tappa presenti sono contenuti dimostrativi curati localmente.
+
+La Fase 1 del laboratorio cambia soltanto presentazione e intake: controller,
+date tipizzate e sorgente di proposte mock deterministica restano invariati. Il
+laboratorio è intenzionalmente isolato: non crea viaggi nello store e non chiama
+provider reali. Il redesign di risultati, shortlist e confronto, l'integrazione
+persistente dei giorni liberi e il rollout dell'intake Semplice nel flusso
+principale appartengono alle fasi successive descritte in
+`NEW_TRIP_MASTER_PLAN.md`.
 
 I tre brevi video dimostrativi sono inclusi in `assets/videos/`; provenienza e link originali sono elencati in `assets/videos/SOURCES.md`. Il playback usa il plugin Flutter ufficiale `video_player` e degrada a una visualizzazione del percorso se il video non è disponibile.
 
@@ -38,11 +59,33 @@ Vercel non ospita più l'app dopo il pivot mobile. Può eventualmente servire un
 
 ## Avvio locale
 
-È richiesto Flutter stable con Android SDK configurato.
+È richiesto Flutter stable. Per lo sviluppo dell'interfaccia non serve avviare
+un emulatore Android: il percorso predefinito è il Web locale nel Browser
+integrato di Codex.
 
 ```bash
 flutter pub get
-flutter run
+./tool/run_web.sh
+```
+
+Lo script serve Flutter Web su `http://127.0.0.1:7357`: apri quell'indirizzo nel
+Browser integrato di Codex e prova l'app in modo interattivo. Non usare Chrome
+esterno né un emulatore Android per le modifiche UI ordinarie, e non occorrono
+screenshot salvo una richiesta o una necessità concreta di review. Il Web è un
+harness locale di sviluppo e verifica, non un target distribuito del prodotto.
+Il QA Browser della Fase 1 per il solo intake Semplice è completato su Home,
+accesso diretto al Lab e modifica manuale dell'origine: 390 dp a due colonne,
+360 dp a una colonna, progresso dopo le opzioni, back e temi chiaro/scuro.
+
+Android rimane il target prodotto. Usa lo script Android solo per verificare
+back, inset, permessi, gesture/prestazioni e integrazioni native, oppure al
+gate finale pre-release. `flutter run` richiede sempre un device già connesso:
+lo script avvia `iter_android` con cold boot (evita snapshot instabili), attende
+Android e poi esegue `flutter run -d <emulatore>`. Per inoltrare opzioni a
+Flutter:
+
+```bash
+./tool/run_android.sh --dart-define=ITER_NEW_TRIP_LAB=true
 ```
 
 Senza configurazione esterna, Iter usa `ITER_BACKEND=mock`: nessuna chiamata a Gemini o a un provider di routing e nessun dato lascia il dispositivo.
@@ -79,10 +122,22 @@ La funzione deve validare il token utente, invocare `consume_ai_credit` con il J
 ```bash
 flutter analyze
 flutter test
+flutter build web --release
+```
+
+Per scope Android-native e prima della pubblicazione, esegui anche:
+
+```bash
 flutter build apk --debug
 ```
 
-Prima di pubblicare, prova i flussi Android su emulatori e dispositivi: discovery, swipe con controlli alternativi, modifica e annullamento dell'itinerario, accettazione di una versione, font-size elevato, dark mode e riduzione movimento.
+La verifica corrente ha completato `flutter analyze`, la suite Flutter completa
+di 49 test, `flutter build web --release` e `flutter build apk --debug`.
+
+Al gate pre-release prova i flussi Android su emulatori e dispositivi:
+discovery, swipe con controlli alternativi, modifica e annullamento
+dell'itinerario, accettazione di una versione, font-size elevato, dark mode e
+riduzione movimento.
 
 Per il rilascio serviranno account e firme che non sono nel repository:
 
@@ -91,6 +146,19 @@ flutter build appbundle --release
 ```
 
 Prima di uso commerciale, sostituisci le dipendenze free-tier con un piano di backend/AI adatto, backup verificati, monitoraggio e una policy privacy pubblicata.
+
+## Continuare il progetto in una nuova chat
+
+La fonte rapida per riprendere il lavoro è
+[`HANDOFF.md`](HANDOFF.md). Per la scatola “Nuovo viaggio” il documento
+canonico è [`NEW_TRIP_MASTER_PLAN.md`](NEW_TRIP_MASTER_PLAN.md); la semantica
+delle date è approfondita in
+[`NEW_TRIP_DATE_CARD_PLAN.md`](NEW_TRIP_DATE_CARD_PLAN.md).
+
+Gli agenti devono leggere anche [`AGENTS.md`](AGENTS.md), che definisce
+responsabilità, verifiche e delega. Il worker economico di progetto è
+configurato in `.codex/agents/worker.toml`; `agents/worker.md` ne contiene la
+scheda leggibile.
 
 ## Design workflow
 

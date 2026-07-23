@@ -37,9 +37,42 @@ Calm, curious and decisive. Iter feels like a well-prepared travel companion: it
 
 ### Discover a journey
 
-Discovery is its own flow, before itinerary construction. Iter asks five human questions, one at a time: desired feeling, available time, rhythm, company and openness to improvisation. A conversational field remains available at every step for answers that do not fit a preset choice. No destination appears before enough context exists.
+Discovery is its own flow, before itinerary construction. The current
+**New trip Lab v2** asks one human question at a time and collects origin,
+dates, company, accepted transport, all-in budget per person, travel style,
+pace, and walking/accessibility needs. A detected approximate origin is always
+editable. Single complete choices advance automatically; multiple choices and
+calendars use a contextual confirmation. Free text appears only where it adds
+meaning, rather than as a permanent chat composer. No destination appears
+before the editable summary is confirmed.
 
-The result is a short set of complete journey ideas, which may connect cities, towns and landscapes. Each proposal explains its duration, travel mode, stops and personal fit. Choosing a journey starts curation; it does not silently finalize a plan.
+**Semplice** is the selected and only presentation of the New trip Lab. In debug
+the Lab defaults on through `kDebugMode`, so Home's **Inizia un viaggio** opens
+it directly; `--dart-define=ITER_NEW_TRIP_LAB=false` explicitly disables it and
+preserves the existing product path. Release defaults the Lab off. Phase 1
+changes only presentation and intake: the shared controller, typed dates,
+deterministic mock proposal source, and no-persistence/provider contract remain
+unchanged. Semplice prioritises a
+dominant title and concise copy, with emoji-and-text options in two columns only
+above 360 dp at normal text size and one column at 360 dp or less or with large
+text. Its progress sits after the options and states the current and remaining
+questions, above a warm Material surface derived from `ColorScheme` roles,
+including `secondaryContainer`, over the existing canvas.
+
+Phase 1 integrated Browser QA is complete for Home, direct Lab entry and manual
+origin editing, including two columns at 390 dp, one at 360 dp, progress after
+the options, back navigation and both light and dark themes. The full Flutter
+suite has 49 tests; analyze, Web release and debug APK gates are complete.
+
+The existing result is a vertical, information-rich set of complete journey ideas,
+which may connect cities, towns and landscapes. Each proposal explains dates
+or best period, duration, arrival mode, all-in estimated cost, cost breakdown,
+travel complexity, personal fit, price confidence, and the main compromise.
+The traveller keeps two to four ideas in a shortlist, compares them by
+criteria, and explicitly confirms one. In the lab this final choice is isolated
+and does not silently create or persist a trip. A redesign of results, shortlist
+and comparison, followed by an app-wide rollout of the intake, is future work
+and is not part of Phase 1.
 
 ### Curate places
 
@@ -78,6 +111,11 @@ The profile exposes the preferences Iter has learned from accepted choices, not 
 - No live public-transit data, live opening hours, prices, reviews, GPS tracking, offline mode, social features, collaborative editing, payments or in-app booking.
 - Flight, train, bus and car options in the mock backend are indicative planning shapes, not live fares, schedules or availability.
 - No photos, documents, PNRs, payment data, private addresses or work-shift files are sent to an AI provider.
+- The New trip Lab uses deterministic mock proposals, performs no provider
+  search, and never writes to `IterStore`.
+- Saved free days are currently an injectable read-only input to the lab. Their
+  global persistence and snapshot lifecycle belong to the later domain/store
+  integration phase.
 
 ## Accessibility & Inclusion
 

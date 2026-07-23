@@ -33,7 +33,41 @@ Open with a personal greeting, a single proposition — **Partiamo da come vuoi 
 
 ### Destination discovery
 
-Use one prompt at a time, a visible five-stop route for progress, grouped plain-language answers and a persistent open response. Never label information as “parameters”, “configuration” or “brief”. Do not reveal candidate destinations early. The result is a portrait video reel mixing single cities with complete routes. Only title, duration and movement stay on the reel; useful detail opens on request.
+Use one prompt at a time and show honest progress through the eight shared
+decisions. **Semplice** is the selected and only Lab presentation. In debug the
+Lab defaults on through `kDebugMode`, so Home's **Inizia un viaggio** opens it
+directly; `--dart-define=ITER_NEW_TRIP_LAB=false` explicitly disables it and
+preserves the product's existing path. Release defaults the Lab off. Phase 1
+changes presentation and intake only: the shared controller, typed dates,
+deterministic mock proposal source and no-persistence/provider contract stay
+unchanged. Single complete answers
+advance after brief feedback; multiple choices, calendars and counters use only
+contextual confirmation. Do not keep a permanent open-response composer and
+never reveal candidate destinations before the editable summary.
+
+Semplice uses a dominant title and less copy. Answer options combine emoji and
+text in two columns only above 360 dp at normal text size; use one column at
+360 dp or less and with large text. Anchor progress immediately after the
+options and state both the current and remaining questions. Its warm background
+comes from Material `ColorScheme` roles — including `secondaryContainer` —
+layered above the existing canvas; do not introduce cream, raw colours,
+gradients or a parallel palette.
+
+Phase 1 integrated Browser QA is complete for Home, direct Lab entry and manual
+origin editing: two columns at 390 dp, one at 360 dp, progress after the
+options, back navigation and light/dark themes. The complete Flutter suite has
+49 tests; analyze, Web release and debug APK gates are complete.
+
+The existing results are a vertical comparison surface rather than a portrait reel. A
+proposal must keep date/period, duration, estimated all-in cost, breakdown,
+travel complexity, fit and compromise visible together. Shortlist state stays
+visible, enables comparison from two items and stops at four. The comparison
+is grouped vertically by cost, dates, arrival, contents and trade-offs; the
+destination is confirmed only after the person has enough information.
+
+The redesign of results, shortlist and comparison, and the app-wide rollout of
+the Semplice intake, are subsequent plans rather than Phase 1 work. Focus and
+Rotta are retained only as historical A5 research, not as product modes.
 
 ### Place curation
 

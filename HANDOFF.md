@@ -1,0 +1,414 @@
+# Iter — Handoff di progetto
+
+> Aggiornato il 23 luglio 2026. È il punto di ingresso consigliato per una
+> nuova chat; le decisioni dettagliate sulla scatola “Nuovo viaggio” restano in
+> `NEW_TRIP_MASTER_PLAN.md`.
+
+## Contesto
+
+Iter è un'app mobile Flutter AI-first per organizzare viaggi. Non è una web app e non deve sembrare un semplice chatbot: l'AI è la regia che aiuta a costruire il viaggio, mentre l'app resta sempre navigabile e modificabile anche manualmente.
+
+Lingua di lancio: italiano. Stato: prototipo/demo personale, non commerciale.
+
+## Stato corrente in breve
+
+- Il **Nuovo viaggio Lab v2** usa **Semplice** come unica presentazione.
+  Focus e Rotta restano soltanto nella storia esplicitamente etichettata della
+  riduzione A5; non sono modalità selezionabili.
+- In debug il Lab è attivo per default tramite `kDebugMode`: **Inizia un
+  viaggio** nella Home apre direttamente Semplice. Il define
+  `--dart-define=ITER_NEW_TRIP_LAB=false` lo disattiva esplicitamente e
+  conserva il percorso prodotto esistente; in release il Lab è disattivato per
+  default.
+- La Fase 1 cambia soltanto presentazione e raccolta iniziale: controller,
+  otto domande, date tipizzate, sorgente mock deterministica, riepilogo e
+  contratto senza persistenza restano invariati. Il Lab non interroga provider
+  reali e non scrive in `IterStore`.
+- Semplice usa una UI moderna e sobria: sfondo caldo dai ruoli semantici del
+  tema, titolo dominante, opzioni emoji più testo su due colonne solo con spazio
+  sufficiente e testo normale, una colonna a 360 dp o meno e con testo grande,
+  copy ridotto e progresso dopo le opzioni. Il progresso indica domanda corrente
+  e domande residue.
+- La partenza usa posizione approssimativa in primo piano, reverse geocoding e
+  fallback manuale; resta sempre modificabile.
+- Le scelte singole avanzano automaticamente. Multi-selezioni, calendari e
+  valori manuali usano soltanto conferme contestuali.
+- “Ho più possibilità” raccoglie possibili date di partenza anche isolate; la
+  durata è separata. Solo i giorni liberi salvati formano finestre consecutive.
+- Risultati, shortlist e confronto esistenti non vengono ridisegnati in Fase 1;
+  il loro redesign e il rollout dell'intake Semplice nel prodotto intero sono
+  piani successivi.
+- Il QA nel Browser integrato della Fase 1 è completato: Home, accesso diretto
+  al Lab e modifica manuale dell'origine; due colonne a 390 dp, una colonna a
+  360 dp, progresso dopo le opzioni, back e temi chiaro/scuro.
+- Verifica corrente: `flutter analyze` pulito, suite Flutter completa di 49
+  test, `flutter build web --release` e `flutter build apk --debug` riuscite.
+- Lo snapshot A5 del 16 luglio resta storico, precedente alla selezione finale
+  di Semplice.
+
+Il QA Browser dell'intake Semplice è chiuso. Il redesign di
+risultati/shortlist/confronto, il rollout nel flusso prodotto, persistenza,
+store e provider reali restano fasi successive.
+
+## Repository e ambiente
+
+- Repository locale: `/Users/matteo/iter`
+- Branch: `feat/mobile-ui-refresh`
+- Commit più recente: `96feb3a feat(ui): refresh mobile travel flows`
+- Remote: `https://github.com/matteogrifantini/itertravel`
+- Stack: Flutter, Dart, asset video locali e dati mock.
+
+Versioni note:
+
+- Flutter `3.44.6`, canale stable
+- Dart `3.12.2`
+- Emulatore Android: `emulator-5554`, AVD `iter_android`
+
+### QA UI rapido nel Browser integrato Codex
+
+```bash
+cd /Users/matteo/iter
+./tool/run_web.sh
+```
+
+Aprire quindi `http://127.0.0.1:7357` nel Browser integrato di Codex e
+percorrere l'app direttamente con mouse/tastiera. Questo è il percorso
+predefinito per provare il flusso Semplice, tema e responsive UI: non richiede un
+emulatore Android, né screenshot o video come prova ordinaria. Lasciare il
+processo dello script attivo durante l'ispezione; usa il device Flutter
+`web-server`, la porta locale `7357` e abilita il Nuovo viaggio Lab.
+
+Il browser web è soltanto un harness QA locale. Non cambia il target mobile di
+Iter, la distribuzione Android né le decisioni di piattaforma.
+
+### Gate Android mirato
+
+Usare l'emulatore Android soltanto quando la modifica o il gate finale richiede
+verifiche native: back, inset di sistema, permessi, gesture, prestazioni,
+comportamento del lifecycle o rendering specifico della piattaforma.
+
+Se necessario, avviarlo così:
+
+```bash
+export ANDROID_SDK_ROOT="/Users/matteo/Library/Android/sdk"
+export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+emulator -avd iter_android
+```
+
+Poi, in un secondo terminale:
+
+```bash
+cd /Users/matteo/iter
+flutter run -d emulator-5554
+```
+
+`flutter emulators --launch iter_android` in passato non ha sempre reso visibile il device; l'avvio diretto con `emulator -avd iter_android` è più affidabile.
+
+Verifiche da eseguire dopo modifiche:
+
+```bash
+flutter analyze
+flutter test
+flutter build web --release
+```
+
+Al gate Android aggiungere `flutter build apk --debug` e la prova nativa
+mirata descritta sopra.
+
+Nota ambiente: il checkout Flutter SDK contiene uno stash chiamato `before-flutter-upgrade-local-pubspec-lock`; non riguarda questa repository.
+
+## Visione del prodotto
+
+Iter accompagna una persona dall'ispirazione alla bozza di viaggio completa. Non parte con parametri freddi o un questionario tecnico: l'utente può iniziare da una frase libera, una disponibilità o un desiderio.
+
+Esempio:
+
+> Ho quattro giorni a fine settembre, voglio staccare, mangiare bene e vedere posti belli senza correre.
+
+Iter interpreta il desiderio, pone una domanda alla volta e propone possibilità esplorabili visivamente. L'AI deve sembrare una guida editoriale intelligente, non un modulo amministrativo.
+
+L'utente può iniziare un nuovo viaggio, riprendere viaggi precedenti, vedere ricordi, scoprire tendenze, ricevere proposte personalizzate e modificare il piano tramite azioni dirette o chat AI. L'AI può proporre e spiegare, ma non deve salvare, prenotare, rimuovere vincoli bloccati o modificare scelte importanti senza approvazione esplicita.
+
+## Flusso principale
+
+```text
+Ispirazione
+→ scelta o conferma della meta
+→ curation dei luoghi
+→ scelta del trasporto
+→ scelta della zona in cui dormire
+→ itinerario per giorni
+→ collegamenti esterni per prenotare
+```
+
+### Home
+
+La home non deve essere caotica, piena di testo o sembrare una dashboard SaaS. Deve avere personalità e far sentire che Iter conosce l'utente.
+
+Privilegiare:
+
+- invito immediato a iniziare un nuovo viaggio;
+- viaggi in corso;
+- idee e trend coerenti con i gusti;
+- memoria di viaggi passati;
+- presenza AI utile ma non invasiva.
+
+L'utente non deve vedere subito una lista di città preconfezionate. Deve poter partire da un momento, un desiderio, un budget o una disponibilità.
+
+Esempi di input:
+
+- “Vorrei un weekend al mare ma con cose da vedere.”
+- “Ho voglia di un viaggio lento in autunno.”
+- “Vorrei partire quando finisco questi turni.”
+- “Ho 500 euro e quattro giorni liberi.”
+
+### Esplorazione della meta
+
+La scoperta non deve essere limitata alle città. Iter può proporre una città singola, due città vicine, un itinerario ferroviario, borghi, una costa, un road trip o un tema di viaggio.
+
+La UI usa sequenze di video verticali, tipo reel/editorial travel feed, non un elenco turistico di card statiche.
+
+Ogni proposta deve avere:
+
+- video verticale;
+- titolo breve;
+- tag: città, percorso, ispirazione o itinerario;
+- frase evocativa breve;
+- pulsante Info;
+- scelta esplicita dell'utente.
+
+Il pulsante Info apre un bottom sheet leggero con: perché può piacere, tappe principali, durata ideale, periodo consigliato, ritmo, budget indicativo, tipo di esperienza e note utili.
+
+Demo attuale:
+
+- Roma;
+- Parigi;
+- Barcellona;
+- Lisbona;
+- Porto;
+- percorso ferroviario/costa atlantica.
+
+### Scelta dei luoghi
+
+Dopo la meta, l'utente costruisce prima il proprio gusto tramite monumenti, piazze, musei, quartieri, locali, mercati, panorami o eventi. Non riceve subito un itinerario rigido.
+
+L'interazione deve essere visiva e rapida:
+
+- video verticale a schermo pieno;
+- pochi elementi testuali;
+- una scelta alla volta;
+- controlli verticali a destra, ispirati alle azioni TikTok;
+- swipe possibile ma non obbligatorio.
+
+Azioni laterali: Info, Passa, Salva e Must/irrinunciabile.
+
+Info deve spiegare: cosa rende interessante il luogo, categoria, durata, momento migliore, coerenza con i gusti dell'utente ed eventuali note.
+
+La demo ha volutamente quattro luoghi: deve dimostrare il meccanismo, non creare una lista infinita. Nel prodotto reale, le proposte dovrebbero combinare preferenze esplicite, luoghi scelti/rifiutati, viaggi precedenti, ritmo, interessi, compagni di viaggio, disponibilità e budget.
+
+### Come arrivare
+
+Tutte le opzioni sono nella stessa schermata, senza tab inutili:
+
+- volo;
+- treno;
+- bus;
+- auto/noleggio.
+
+Ogni opzione mostra logo della compagnia, orario/fascia, durata, cambi, prezzo, stato di selezione e link esterno. I dati sono demo; provider mostrati: Ryanair, Trenitalia, FlixBus ed Europcar.
+
+In futuro i dati possono provenire da servizi esterni. Non costruire ancora checkout o prenotazione interna.
+
+### Dove dormire
+
+Questa fase parte da una mappa, non da una lista di hotel. Mostra luoghi selezionati, quartieri colorati, atmosfera della zona, tempi a piedi e coerenza con il viaggio. Offre un link esterno configurabile per cercare alloggi.
+
+Il copy deve essere umano, ad esempio: “Qui sei vicino a quello che hai salvato” oppure “È una zona più tranquilla, utile se vuoi rallentare”. Non promettere disponibilità o prezzi reali.
+
+### Itinerario
+
+L'itinerario deve essere editoriale e visivo, non una tabella fitta di testo.
+
+Elementi principali:
+
+- hero visuale/video della meta;
+- giorni navigabili con chip semplici;
+- timeline verticale pulita;
+- immagini dei luoghi;
+- titolo, categoria, durata e stato del vincolo;
+- trasporto e zona scelti;
+- presenza AI discreta.
+
+La chat/composer AI può ricevere richieste come “Spostiamo il museo a domani”, “Vorrei una mattina più lenta”, “Aggiungi un aperitivo vicino al tramonto” o “Piove sabato, cambia il piano”. L'AI non deve limitarsi a rispondere: propone una modifica concreta che l'utente può accettare o annullare.
+
+Vincoli bloccati: luoghi Must, prenotazioni future, appuntamenti, limiti temporali o preferenze esplicite importanti. Non devono essere spostati o rimossi automaticamente.
+
+### Viaggi e profilo
+
+La schermata Viaggi deve sembrare un archivio personale: card visuali, viaggi in corso, ricordi, immagini, route/stops e stato. Non una semplice lista.
+
+Il profilo deve supportare la personalizzazione: stile di viaggio, budget, interessi, ritmo, preferenze alimentari, alloggio, mezzi, città già viste, luoghi amati/rifiutati, tema e disponibilità da turni di lavoro.
+
+## Tema e design
+
+Tema di default: chiaro. L'utente può scegliere Sistema, Chiaro o Scuro. Il tema scuro non è una semplice inversione: le superfici usano ruoli semantici distinti.
+
+Direzione visuale:
+
+- editorial cartography;
+- travel magazine contemporaneo;
+- immagini e video come materia principale;
+- palette sobria e calda;
+- molto spazio e gerarchia chiara;
+- motion fluido e funzionale;
+- niente estetica SaaS generica;
+- niente eccesso di badge, card, bordi, testo descrittivo o gradienti casuali;
+- evitare una UI che sembri generata dall'AI.
+
+Per modifiche UI usare la skill Impeccable:
+
+```text
+/Users/matteo/iter/.agents/skills/impeccable/SKILL.md
+```
+
+Leggerla integralmente prima di fare refactor visivi. Preservare la direzione attuale, senza reintrodurre la vecchia UI.
+
+## Asset e contenuti demo
+
+```text
+assets/videos/vertical/
+assets/images/travel/
+assets/logos/
+assets/videos/SOURCES.md
+```
+
+I video sono reel verticali ottimizzati e concatenati per evitare loader finti e ridurre problemi del decoder Android. I loghi demo dei trasporti sono in `assets/logos/`. Le fonti/licenze sono in `assets/videos/SOURCES.md`.
+
+Non eliminare o sostituire asset senza aggiornare `pubspec.yaml` e il file delle fonti.
+
+## File rilevanti
+
+```text
+lib/app/iter_app.dart
+lib/data/mock_data.dart
+lib/models/trip_models.dart
+lib/state/iter_store.dart
+
+lib/screens/destination_discovery_screen.dart
+lib/screens/discover_tab.dart
+lib/screens/place_curation_screen.dart
+lib/screens/transport_selection_screen.dart
+lib/screens/stay_selection_screen.dart
+lib/screens/itinerary_screen.dart
+lib/screens/trips_screen.dart
+
+lib/widgets/journey_media.dart
+lib/widgets/trip_card.dart
+
+lib/features/new_trip_lab/new_trip_lab_models.dart
+lib/features/new_trip_lab/new_trip_lab_controller.dart
+lib/features/new_trip_lab/new_trip_origin_resolver.dart
+lib/features/new_trip_lab/new_trip_lab_steps.dart
+lib/features/new_trip_lab/new_trip_lab_shells.dart
+lib/features/new_trip_lab/new_trip_lab_proposals.dart
+lib/features/new_trip_lab/new_trip_lab_results.dart
+lib/features/new_trip_lab/new_trip_lab_screen.dart
+
+AGENTS.md
+agents/worker.md
+.codex/agents/worker.toml
+NEW_TRIP_MASTER_PLAN.md
+NEW_TRIP_DATE_CARD_PLAN.md
+PRODUCT.md
+DESIGN.md
+README.md
+```
+
+Quando cambia la direzione del prodotto, aggiornare documentazione e codice insieme.
+
+## Architettura attuale e roadmap tecnica
+
+L'app è oggi una demo Flutter locale basata su mock data e asset locali. Nel
+solo laboratorio “Nuovo viaggio” sono attivi geolocalizzazione approssimativa
+in primo piano e reverse geocoding del dispositivo. Non sono ancora attivi
+autenticazione, Supabase runtime, backend, AI reale, mappe reali, routing,
+disponibilità/prezzi reali o provider di prenotazione.
+
+Direzione tecnica prevista quando il prototipo evolverà:
+
+- Flutter per iOS/Android;
+- Supabase Free per Auth, Postgres e RLS;
+- magic link prima della prima generazione AI;
+- backend/Route Handlers per tenere segrete le chiavi;
+- Gemini Flash free tier solo per test manuali;
+- mock AI come default per preview/test;
+- Ollama opzionale in locale;
+- MapLibre/OpenFreeMap per mappe di prototipo;
+- openrouteservice con cache per routing;
+- Nominatim solo server-side, su invio esplicito e con cache;
+- cataloghi POI versionati e con fonti attribuite.
+
+Se viene implementata AI reale: output strutturato validato, nessun ragionamento grezzo esposto, streaming con eventi UI allowlisted, una generazione attiva per utente, massimo due al giorno, cap di quota, timeout e nessun fallback automatico a provider a pagamento. Gemini free tier non deve ricevere dati personali, indirizzi privati, prenotazioni o documenti.
+
+## Turni di lavoro — requisito futuro
+
+L'utente dovrebbe poter importare o inserire turni/disponibilità. Iter deve capire quando può partire, per quanti giorni, quali mete hanno senso e quali mezzi sono coerenti. Non implementare ancora import complessi da calendari o documenti senza definire privacy, permessi e formato dati.
+
+## Fuori scope del MVP/demo
+
+- multi-city illimitato;
+- trasporto pubblico live;
+- aperture/eventi live;
+- prezzi hotel live;
+- recensioni;
+- GPS e offline;
+- album/social;
+- collaborazione;
+- checkout, pagamenti e prenotazioni interne;
+- upload di documenti o storage di dati sensibili;
+- import automatico di turni;
+- integrazioni dirette Booking, Skyscanner o altri provider.
+
+Per ora usare link esterni configurabili e dichiarare sempre chiaramente quando un dato è demo.
+
+## Regole di lavoro
+
+- Non trasformare Iter in un chatbot puro.
+- Non reintrodurre questionari tecnici, form lunghi o parametri freddi.
+- Ridurre il testo: una frase buona vale più di cinque spiegazioni.
+- Privilegiare video, immagini, mappe e scelte progressive.
+- L'utente mantiene sempre il controllo.
+- Non inserire API key nel client.
+- Non fare commit o push senza richiesta esplicita.
+- Prima di modifiche importanti, controllare `git status`.
+- Dopo modifiche: almeno `flutter analyze` e `flutter test`.
+- Per modifiche UI: usare prima il Browser integrato Codex, tema chiaro/scuro e
+  Riduci movimento; richiedere l'emulatore Android solo per il gate nativo
+  mirato (back, inset, permessi, gesture, prestazioni o rendering piattaforma).
+- Aggiornare `PRODUCT.md` e `DESIGN.md` quando serve.
+
+## Orchestrazione Codex
+
+`AGENTS.md` contiene le istruzioni persistenti per le nuove chat. Il thread
+principale mantiene requisiti e decisioni e usa il custom agent `worker` per
+ricerche o modifiche routinarie completamente specificate.
+
+Configurazione operativa:
+
+```text
+.codex/agents/worker.toml
+model = gpt-5.6-terra
+model_reasoning_effort = low
+description = routine edits + lookups
+```
+
+La scheda umana richiesta è `agents/worker.md`. Il worker riferisce subito con
+un riepilogo breve; l'orchestratore verifica diff e test e conserva nel thread
+principale soltanto le decisioni importanti.
+
+## Prossimo passo
+
+Il QA del solo intake Semplice nel Browser integrato Codex è completato. Il
+redesign di risultati, shortlist e confronto, quindi il rollout app-wide,
+richiederanno un piano successivo. Eseguire il QA Android mirato soltanto prima
+di un gate nativo pertinente o del pre-release.
