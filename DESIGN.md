@@ -14,7 +14,7 @@ Do not recreate a website inside a phone. Brand is carried through content, a re
 
 The direction is **Atlante personale**: a quiet editorial travel object made native to Android. A route line is the recurring signature; real travel footage appears only when it helps a person imagine a journey. The interface is sparse enough to make the current decision unmistakable, but never sterile.
 
-The default light theme uses a cool daylight canvas, true white surfaces, graphite text and petrol actions. Vermilion marks a committed decision or the current route signal; mint is used sparingly for positive status. The dark theme has its own near-black petrol surface ramp instead of inverting the light palette. There are no cream backgrounds, gradients, glass panels, neon glows or oversized decorative radii.
+The default light theme uses a warm daylight canvas, ivory raised surfaces, warm-ink text and petrol actions. Vermilion marks a committed decision or the current route signal; mint is used sparingly for positive status. The dark theme has its own near-black petrol surface ramp instead of inverting the light palette. There are no gradients, glass panels, neon glows or oversized decorative radii.
 
 In Flutter, define these through `ColorScheme` semantic roles rather than scattering raw colours through widgets:
 

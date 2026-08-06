@@ -1,6 +1,6 @@
 # Iter — Handoff di progetto
 
-> Aggiornato il 23 luglio 2026. È il punto di ingresso consigliato per una
+> Aggiornato il 6 agosto 2026. È il punto di ingresso consigliato per una
 > nuova chat; le decisioni dettagliate sulla scatola “Nuovo viaggio” restano in
 > `NEW_TRIP_MASTER_PLAN.md`.
 
@@ -9,6 +9,49 @@
 Iter è un'app mobile Flutter AI-first per organizzare viaggi. Non è una web app e non deve sembrare un semplice chatbot: l'AI è la regia che aiuta a costruire il viaggio, mentre l'app resta sempre navigabile e modificabile anche manualmente.
 
 Lingua di lancio: italiano. Stato: prototipo/demo personale, non commerciale.
+
+## Prototipo chat-first (branch `codex/chat-first-prototype`)
+
+Sperimentazione isolata, senza toccare l'app esistente. Su questo branch:
+
+- Il prototipo si attiva in sostituzione totale al boot quando
+  `ITER_CHAT_FIRST_PROTOTYPE` è on; in debug è on per default via `kDebugMode`,
+  in release è off. La vecchia app resta compilabile e raggiungibile
+  disattivando il define e ricompilando (`--dart-define=ITER_CHAT_FIRST_PROTOTYPE=false`).
+- Home tipo Netflix: destinazioni trend in fasce orizzontali con video, anteprima
+  immersiva (bottom sheet), CTA **Parlane con Iter** e uscita non impegnativa
+  "Solo ispirazione".
+- Chat stile WhatsApp: lista conversazioni, nuova chat, ultimo messaggio, non
+  letti. Ogni viaggio è una conversazione; ogni conversazione possiede un
+  `TripSnapshot` read-only apribile dall'icona del piano nella AppBar del thread
+  (il titolo non è più tappabile).
+- Thread multimodale e deterministico: testo, scelte cliccabili, immagini,
+  video, vocali in arrivo e in uscita (mock), riepilogo viaggio e aggiornamento
+  operativo. Composer con invio testo, mic (vocale demo) e allegati foto/video
+  demo.
+- Due scenari demo: pianificazione (Porto/Douro) e viaggio attivo (Roma) con
+  aggiornamenti proattivi e non letti. La modifica del piano avviene dalla chat:
+  Iter propone una modifica concreta (`PlanProposal`), l'utente può
+  Accetta/Annulla; accettare aggiorna lo snapshot del thread (es. "mattina più
+  lenta" a Roma).
+- Profilo: tema Sistema/Chiaro/Scuro con persistenza locale, memoria appresa dal
+  contesto (niente sondaggi o profili iniziali), privacy descritta.
+- Tutto mock e isolato: nessuna scrittura in `IterStore`, nessun provider, GPS,
+  permesso, notifica o motivatore reale.
+- Codice: `lib/features/chat_first_prototype/` (models, data, controller, app,
+  shell, home, preview, list, thread, snapshot, profile). Verifica: analyze
+  pulito, 71 test totali (22 del prototipo chat-first), build web release
+  riuscite.
+- Audit UX completato (skill ui-ux-pro-max/impeccable) e miglioramento UI
+  applicato: Home decluttered a tre sezioni (saluto, hero con CTA unica,
+  Riprendi/"Ispirazioni per te" senza duplicati), niente gradienti/ombre, badge
+  petrol, radii normalizzati, pausa video in preview, stato positivo in mint.
+- Orchestrazione opencode: `opencode.json` + subagent in `.opencode/agent/`
+  (worker, flutter_engineer, product_ux, quality_reviewer, …); il runtime usa
+  come fallback il modello `opencode/*` di default perché il provider Copilot
+  non risolve.
+- Dopo il post-viaggio/portfolio (non in scope) verrà definita la sezione
+  successiva.
 
 ## Stato corrente in breve
 
@@ -41,8 +84,8 @@ Lingua di lancio: italiano. Stato: prototipo/demo personale, non commerciale.
 - Il QA nel Browser integrato della Fase 1 è completato: Home, accesso diretto
   al Lab e modifica manuale dell'origine; due colonne a 390 dp, una colonna a
   360 dp, progresso dopo le opzioni, back e temi chiaro/scuro.
-- Verifica corrente: `flutter analyze` pulito, suite Flutter completa di 49
-  test, `flutter build web --release` e `flutter build apk --debug` riuscite.
+- Verifica corrente: `flutter analyze` pulito, suite Flutter completa di 71
+  test, `flutter build web --release` riuscita.
 - Lo snapshot A5 del 16 luglio resta storico, precedente alla selezione finale
   di Semplice.
 
@@ -53,7 +96,7 @@ store e provider reali restano fasi successive.
 ## Repository e ambiente
 
 - Repository locale: `/Users/matteo/iter`
-- Branch: `feat/mobile-ui-refresh`
+- Branch: `codex/chat-first-prototype` (prototipo chat-first); `feat/mobile-ui-refresh` resta storicamente per il flusso prodotto esistente.
 - Commit più recente: `96feb3a feat(ui): refresh mobile travel flows`
 - Remote: `https://github.com/matteogrifantini/itertravel`
 - Stack: Flutter, Dart, asset video locali e dati mock.
@@ -80,6 +123,19 @@ processo dello script attivo durante l'ispezione; usa il device Flutter
 
 Il browser web è soltanto un harness QA locale. Non cambia il target mobile di
 Iter, la distribuzione Android né le decisioni di piattaforma.
+
+### Loop autonomo opencode
+
+`tool/opencode_loop.sh` esegue `opencode run` in iterazioni successive finché il
+task non viene dichiarato completo (protocollo `STATUS: DONE|CONTINUE`). Si usa
+dal terminale dell'utente, non da dentro una sessione agente:
+
+```bash
+tool/opencode_loop.sh --task TASK.md --max-loops 15
+```
+
+Template di task: `tool/TASK.example.md`. Il loop logga in
+`tool/.opencode_loop.log` e non fa commit a meno che il task non lo richieda.
 
 ### Gate Android mirato
 
@@ -319,6 +375,8 @@ agents/worker.md
 .codex/agents/worker.toml
 NEW_TRIP_MASTER_PLAN.md
 NEW_TRIP_DATE_CARD_PLAN.md
+ITER_APP_PLAN.md
+supabase/README.md
 PRODUCT.md
 DESIGN.md
 README.md
@@ -402,6 +460,10 @@ model_reasoning_effort = low
 description = routine edits + lookups
 ```
 
+In questo runtime opencode la configurazione è `opencode.json` con i subagent
+in `.opencode/agent/`; il provider Copilot non risolve, quindi come fallback si
+usa il modello `opencode/*` di default.
+
 La scheda umana richiesta è `agents/worker.md`. Il worker riferisce subito con
 un riepilogo breve; l'orchestratore verifica diff e test e conserva nel thread
 principale soltanto le decisioni importanti.
@@ -409,6 +471,10 @@ principale soltanto le decisioni importanti.
 ## Prossimo passo
 
 Il QA del solo intake Semplice nel Browser integrato Codex è completato. Il
-redesign di risultati, shortlist e confronto, quindi il rollout app-wide,
-richiederanno un piano successivo. Eseguire il QA Android mirato soltanto prima
-di un gate nativo pertinente o del pre-release.
+miglioramento UI del prototipo chat-first è applicato e verificato (analyze
+pulito, 71 test, build web OK); resta il QA visuale del prototipo su
+`http://127.0.0.1:7357` (scrim hero, "Ispirazioni per te" senza duplicati, pausa
+video in preview, badge in scuro) e l'eventuale commit del branch
+`codex/chat-first-prototype`. Il redesign di risultati, shortlist e confronto,
+quindi il rollout app-wide, richiederanno un piano successivo. Eseguire il QA
+Android mirato soltanto prima di un gate nativo pertinente o del pre-release.

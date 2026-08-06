@@ -37,6 +37,7 @@ android/captures/
 # Impeccable ephemeral state
 .agents/skills/impeccable/
 .impeccable/config.local.json
+.impeccable/critique/
 .impeccable/hook.cache.json
 .impeccable/hook.pending.json
 .impeccable/*.png
@@ -49,3 +50,7 @@ android/captures/
 .impeccable/live/manual-edit-events.jsonl
 .impeccable/live/manual-edit-evidence/
 .impeccable/live/pending-manual-edits.json
+
+# Python bytecode (skill scripts)
+__pycache__/
+*.pyc

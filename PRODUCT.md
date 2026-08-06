@@ -102,6 +102,11 @@ The profile exposes the preferences Iter has learned from accepted choices, not 
 - A failed source, stale estimate or unavailable route is stated in plain Italian next to the affected choice.
 - The client never holds a Gemini or routing-provider secret. Planning requests pass through an authenticated Supabase Edge Function.
 
+La nuova chat-first, con messaggi multimodali, TripSnapshot read-only e viaggi
+come conversazioni, è allo stato di prototipo isolato dietro
+`ITER_CHAT_FIRST_PROTOTYPE` e non ha ancora una decisione prodotto; la sua
+spec di dettaglio è nel branch `codex/chat-first-prototype` (vedi `HANDOFF.md`).
+
 ## MVP Boundaries
 
 - Launch language: Italian.

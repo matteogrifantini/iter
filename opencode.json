@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "build": {
+      "description": "Orchestratore Iter: conserva contesto, decide ambiguità, assegna proprietà, integra risultati. Fallback: modello opencode gratuito finché il provider Copilot non risolve.",
+      "model": "opencode/deepseek-v4-flash-free"
+    },
+    "quality_reviewer": {
+      "permission": {
+        "edit": "deny"
+      }
+    }
+  }
+}

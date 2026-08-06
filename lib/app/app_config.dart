@@ -10,6 +10,7 @@ class AppConfig {
     required this.supabaseUrl,
     required this.supabaseAnonKey,
     this.newTripLab = false,
+    this.chatFirstPrototype = false,
   });
 
   factory AppConfig.fromEnvironment() {
@@ -21,6 +22,10 @@ class AppConfig {
         'ITER_NEW_TRIP_LAB',
         defaultValue: kDebugMode,
       ),
+      chatFirstPrototype: bool.fromEnvironment(
+        'ITER_CHAT_FIRST_PROTOTYPE',
+        defaultValue: kDebugMode,
+      ),
     );
   }
 
@@ -28,6 +33,7 @@ class AppConfig {
   final String supabaseUrl;
   final String supabaseAnonKey;
   final bool newTripLab;
+  final bool chatFirstPrototype;
 
   bool get usesSupabase =>
       backend == 'supabase' &&

@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 
 abstract final class IterPalette {
-  // Light: neutral daylight with a subtle petrol bias, never cream.
-  static const lightCanvas = Color(0xFFF4F7F7);
+  // Light: warm daylight. The canvas reads as warm white so travel media and
+  // the petrol identity sit on a calm, editorial surface, never clinical white.
+  static const lightCanvas = Color(0xFFFAF4EC);
   static const lightSurface = Color(0xFFFFFFFF);
-  static const lightRaised = Color(0xFFE8EFF0);
-  static const lightInk = Color(0xFF10191B);
-  static const lightMutedInk = Color(0xFF45585C);
+  static const lightRaised = Color(0xFFF1E8DA);
+  static const lightInk = Color(0xFF2A2319);
+  static const lightMutedInk = Color(0xFF5B5044);
   static const petrol = Color(0xFF075866);
   static const petrolPressed = Color(0xFF003F4B);
   static const vermilion = Color(0xFFC84833);
   static const mintSignal = Color(0xFF56C9B2);
-  static const lightLine = Color(0xFFB8C7CA);
+  static const lightLine = Color(0xFFC6B7A1);
 
   // Dark: its own surface ramp. Depth comes from lightness, not shadows.
   static const darkCanvas = Color(0xFF091113);
@@ -103,7 +104,7 @@ abstract final class IterTheme {
       onPrimary: isDark ? IterPalette.darkCanvas : Colors.white,
       primaryContainer: isDark
           ? const Color(0xFF173D44)
-          : const Color(0xFFD1E9EC),
+          : const Color(0xFFDDE8DC),
       onPrimaryContainer: isDark ? IterPalette.darkInk : IterPalette.petrol,
       secondary: secondary,
       onSecondary: isDark ? IterPalette.darkCanvas : Colors.white,
@@ -124,15 +125,15 @@ abstract final class IterTheme {
       surfaceContainer: raised,
       surfaceContainerHigh: isDark
           ? const Color(0xFF223438)
-          : const Color(0xFFDCE6E8),
+          : const Color(0xFFEDE2D1),
       surfaceContainerHighest: isDark
           ? const Color(0xFF2B4146)
-          : const Color(0xFFCEDCDF),
+          : const Color(0xFFE7DCC7),
       onSurfaceVariant: muted,
       outline: outline,
       outlineVariant: isDark
           ? const Color(0xFF2F464B)
-          : const Color(0xFFD3DFE1),
+          : const Color(0xFFE4D7C0),
       shadow: Colors.black,
       scrim: Colors.black,
       inverseSurface: ink,
