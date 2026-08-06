@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/trip_models.dart' show JourneyRoute;
 import '../../widgets/journey_media.dart';
 import 'chat_first_data.dart' show journeyCity;
+import 'chat_first_models.dart' show DestinationPoint;
 
 /// Editorial city sheet on Iter's warm surface: small media up top, the facts
 /// and the AI why on the plain background, and one clear call to organise the
@@ -12,10 +13,15 @@ class ChatPreviewSheet extends StatelessWidget {
     super.key,
     required this.journey,
     required this.onStartChat,
+    this.pois,
   });
 
   final JourneyRoute journey;
   final VoidCallback onStartChat;
+
+  /// The must-see points for the destination. When null (or empty) the sheet
+  /// shows no "Da non perdere" section at all.
+  final Future<List<DestinationPoint>>? pois;
 
   @override
   Widget build(BuildContext context) {
@@ -136,6 +142,10 @@ class ChatPreviewSheet extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (pois != null) ...<Widget>[
+                    const SizedBox(height: 24),
+                    _PoisSection(pois: pois!),
+                  ],
                 ],
               ),
             ),
@@ -276,6 +286,99 @@ class _MetaChip extends StatelessWidget {
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The "Da non perdere" block: the destination's points resolved through the
+/// data source. Renders nothing while loading or when the list is empty, so a
+/// sparse catalogue never breaks the sheet.
+class _PoisSection extends StatelessWidget {
+  const _PoisSection({required this.pois});
+
+  final Future<List<DestinationPoint>> pois;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<DestinationPoint>>(
+      future: pois,
+      builder: (context, snapshot) {
+        final points = snapshot.data ?? const <DestinationPoint>[];
+        if (points.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              'Da non perdere',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (final point in points) _PoiRow(point: point),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PoiRow extends StatelessWidget {
+  const _PoiRow({required this.point});
+
+  final DestinationPoint point;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(point.emoji, style: const TextStyle(fontSize: 20)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  point.name,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (point.category.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 2),
+                  Text(
+                    point.category,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                if (point.whyFits.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Text(
+                    point.whyFits,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],

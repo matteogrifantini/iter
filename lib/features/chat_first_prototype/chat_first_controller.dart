@@ -52,6 +52,13 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The must-see points for a journey's first destination. On Supabase this
+  /// reads the live `pois` rows; on failure an empty list is returned.
+  Future<List<DestinationPoint>> poisFor(JourneyRoute journey) async {
+    if (journey.destinationIds.isEmpty) return const <DestinationPoint>[];
+    return dataSource.fetchPois(journey.destinationIds.first);
+  }
+
   ChatThread threadOf(String id) =>
       _threads.firstWhere((thread) => thread.summary.id == id);
 

@@ -35,6 +35,26 @@ class PlanProposal {
   PlanProposalOutcome? outcome;
 }
 
+/// A must-see point inside a destination: what makes it special, with a small
+/// emoji and the Iter why. Kept deliberately light so both the mock and the
+/// live Supabase rows map onto it.
+@immutable
+class DestinationPoint {
+  const DestinationPoint({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.emoji,
+    required this.whyFits,
+  });
+
+  final String id;
+  final String name;
+  final String category;
+  final String emoji;
+  final String whyFits;
+}
+
 /// A profile picture or poster thumb used as the conversation avatar.
 class ChatAvatar {
   const ChatAvatar(this.asset, {this.label});

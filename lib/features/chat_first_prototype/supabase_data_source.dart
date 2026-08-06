@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/app_config.dart';
 import '../../models/trip_models.dart' show JourneyRoute;
+import 'chat_first_models.dart' show DestinationPoint;
 import 'data_source.dart';
 
 /// Live source backed by the Supabase `iter` project. Only used when the build
@@ -32,6 +33,37 @@ class SupabaseDataSource implements IterDataSource {
       return const <JourneyRoute>[];
     }
   }
+
+  @override
+  Future<List<DestinationPoint>> fetchPois(String destinationSlug) async {
+    try {
+      final client = Supabase.instance.client;
+      final destination = await client
+          .from('destinations')
+          .select('id')
+          .eq('slug', destinationSlug)
+          .maybeSingle();
+      if (destination == null) return const <DestinationPoint>[];
+      final rows = await client
+          .from('pois')
+          .select('id, name, category, emoji, why_fits')
+          .eq('destination_id', destination['id'])
+          .order('name');
+      return rows.map(_fromPoiRow).toList();
+    } catch (_) {
+      return const <DestinationPoint>[];
+    }
+  }
+
+  /// Maps a `pois` row to the light preview-sheet shape. Missing cosmetic
+  /// fields degrade to friendly defaults so the sheet never breaks.
+  DestinationPoint _fromPoiRow(Map<String, dynamic> row) => DestinationPoint(
+        id: (row['id'] as String),
+        name: (row['name'] as String?) ?? '',
+        category: (row['category'] as String?) ?? '',
+        emoji: (row['emoji'] as String?) ?? '📍',
+        whyFits: (row['why_fits'] as String?) ?? '',
+      );
 
   /// Maps a `destinations` row (city or route) to the shared journey model.
   /// A city without stops falls back to its own name and slug so the Home

@@ -4,7 +4,13 @@ import '../../app/iter_theme.dart';
 import '../../models/trip_models.dart' show JourneyRoute;
 import '../../widgets/journey_media.dart';
 import 'chat_first_data.dart';
+import 'chat_first_models.dart' show DestinationPoint;
 import 'chat_first_preview_sheet.dart';
+
+/// Resolves the must-see points for a journey, used by the editorial preview
+/// sheet. Defaults to an empty result when not wired (e.g. in isolation).
+typedef PoisLoader =
+    Future<List<DestinationPoint>> Function(JourneyRoute journey);
 
 /// Chat-first Home: one featured decision, then horizontal rows for resume and
 /// inspiration. Every card shows a single city name, a poster and the why.
@@ -17,6 +23,7 @@ class ChatFirstHomeScreen extends StatelessWidget {
     required this.onResume,
     required this.onOpenChats,
     required this.unread,
+    this.poisLoader,
   });
 
   final List<JourneyRoute> journeys;
@@ -25,6 +32,7 @@ class ChatFirstHomeScreen extends StatelessWidget {
   final ValueChanged<ChatThread> onResume;
   final VoidCallback onOpenChats;
   final int unread;
+  final PoisLoader? poisLoader;
 
   static String _greetingFor(DateTime now) =>
       now.hour < 13 ? 'Buongiorno' : 'Buonasera';
@@ -121,6 +129,7 @@ class ChatFirstHomeScreen extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (context) => ChatPreviewSheet(
         journey: journey,
+        pois: poisLoader?.call(journey),
         onStartChat: () {
           Navigator.of(context).pop();
           onStartChat(journey);

@@ -47,6 +47,7 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
                 onResume: (thread) => _openThread(context, thread),
                 onOpenChats: () => setState(() => _tabIndex = 1),
                 unread: controller.unread,
+                poisLoader: controller.poisFor,
               ),
               ChatFirstListScreen(
                 controller: controller,

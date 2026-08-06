@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../app/app_config.dart';
 import '../../models/trip_models.dart' show JourneyRoute;
+import 'chat_first_models.dart' show DestinationPoint;
 import 'mock_data_source.dart';
 import 'supabase_data_source.dart';
 
@@ -16,6 +17,11 @@ abstract class IterDataSource {
 
   /// The discoverable journeys shown on Home: cities and routes.
   Future<List<JourneyRoute>> fetchJourneys();
+
+  /// The must-see points for one destination, keyed by its slug (e.g. 'roma').
+  /// Mock returns deterministic demo places; Supabase reads the live `pois`
+  /// table. Empty list on missing data or failure, never a crash.
+  Future<List<DestinationPoint>> fetchPois(String destinationSlug);
 }
 
 /// Picks the live source when the app was started with Supabase configured,

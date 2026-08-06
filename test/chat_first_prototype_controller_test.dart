@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:iter/features/chat_first_prototype/chat_first_controller.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_models.dart';
+import 'package:iter/features/chat_first_prototype/mock_data_source.dart';
+import 'package:iter/models/trip_models.dart' show JourneyRoute;
 
 void main() {
   group('ChatFirstPrototypeController', () {
@@ -205,6 +207,51 @@ void main() {
       final lastSummary = summaries.last;
       expect(lastSummary.summary?.days.first.theme, 'Mattina più lenta');
       expect(lastSummary.summary?.days.first.items.first.time, '10:30');
+    });
+
+    test('poisFor ritorna i punti della prima destinazione (mock)', () async {
+      final controller = ChatFirstPrototypeController();
+      final journey = controller.trendJourneys.firstWhere(
+        (j) => j.destinationIds.contains('porto'),
+      );
+      final pois = await controller.poisFor(journey);
+      expect(pois, isNotEmpty);
+      expect(pois.first.name, isNotEmpty);
+      expect(pois.first.whyFits, isNotEmpty);
+    });
+
+    test('poisFor ritorna lista vuota senza destinazioni', () async {
+      final controller = ChatFirstPrototypeController();
+      const empty = JourneyRoute(
+        id: 'x',
+        title: 'X',
+        summary: '',
+        durationLabel: '',
+        stops: <String>[],
+        destinationIds: <String>[],
+        whyItFits: '',
+        season: '',
+        travelMode: '',
+        videoAssets: <String>[],
+        matchScore: 0,
+      );
+      expect(await controller.poisFor(empty), isEmpty);
+    });
+  });
+
+  group('MockDataSource pois', () {
+    test('fetchPois ritorna i punti di una destinazione conosciuta', () async {
+      final source = MockDataSource();
+      final pois = await source.fetchPois('porto');
+      expect(pois, isNotEmpty);
+      expect(pois.first.name, isNotEmpty);
+      expect(pois.first.emoji, isNotEmpty);
+      expect(pois.first.whyFits, isNotEmpty);
+    });
+
+    test('fetchPois ritorna lista vuota per slug sconosciuto', () async {
+      final source = MockDataSource();
+      expect(await source.fetchPois('atlantide'), isEmpty);
     });
   });
 }
