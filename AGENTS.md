@@ -31,9 +31,19 @@ quality_reviewer):
   e per individuare call path e blast radius. Grep/Read diretti restano ammessi
   solo per conferme puntuali o quando codegraph non copre il caso.
 - **rtk**: proxy CLI per output compatti; usare i sottocomandi espliciti al posto
-  dei comandi nudi per le operazioni che supporta (`rtk git ...`, `rtk grep ...`,
-  `rtk read ...`, `rtk test ...`, `rtk diff ...`, `rtk log ...`). Codice, comandi
-  Flutter e output verbatim restano invariati.
+  dei comandi nudi per ogni operazione che supporta. Rilevanti qui:
+  - Git: `rtk git status`, `rtk git log`, `rtk git diff`, `rtk git show`,
+    `rtk git stash list`;
+  - File/ricerca: `rtk ls`, `rtk find`, `rtk tree`, `rtk grep`, `rtk rg`,
+    `rtk read <file>` (al posto di `cat`/`head`/`tail`), `rtk wc`, `rtk diff`,
+    `rtk smart <file>` (riassunto firme);
+  - Test/build/lint: `rtk test`, `rtk err`, `rtk summary` (per runner supportati:
+    jest, vitest, pytest, go test, cargo test, tsc, ruff, eslint, dotnet);
+  - Altri proxy disponibili quando servono: `gh`, `docker`, `kubectl`, `psql`,
+    `curl`, `aws`, `wc`, `pnpm`.
+  Flag utili: `--ultra-compact`, `-v`/`-vv`/`-vvv`. Codice, comandi Flutter,
+  `flutter analyze`/`flutter test`/`flutter build ...` e output verbatim restano
+  invariati.
 - **caveman**: i report di rientro (sintesi, file, evidenze, rischi) usano lo
   stile compresso caveman: frasi minime, niente filler, termini tecnici e comandi
   verbatim. Codice, commit e messaggi di errore restano invariati. Niente

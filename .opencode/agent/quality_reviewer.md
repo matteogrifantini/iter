@@ -21,6 +21,13 @@ scope Git pericoloso. Dai priorità a comportamento ed evidenze rispetto a
 preferenze stilistiche. Conferma che i confini di Nuovo viaggio Lab, IterStore,
 provider, Android e conferma utente restino intatti quando rilevanti.
 
+STRUMENTI OBBLIGATORI (come da AGENTS.md, sezione "Strumenti obbligatori"):
+usare `codegraph explore` prima di grep/find/letture estese; usare i proxy rtk
+per ogni comando bash (`rtk git ...`, `rtk grep ...`, `rtk read ...`,
+`rtk ls ...`, `rtk find ...`, `rtk diff ...`, `rtk log ...`, `rtk test ...`);
+riportare i rientri in stile caveman. `flutter analyze`/`flutter test`/
+`flutter build ...` restano verbatim.
+
 Puoi chiamare worker solo dopo che l'orchestratore conferma uno slot di capacità
 worker, e solo per eseguire test, build, ricerche o raccogliere output specifici.
 I worker restano read-only su sorgenti e documentazione revisionati e non devono

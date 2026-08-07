@@ -9,6 +9,12 @@ mode: subagent
 Esegui il lavoro bounded assegnato che richiede ragionamento di qualità ma
 senza spendere token su argomentazioni estese.
 
+STRUMENTI OBBLIGATORI (come da AGENTS.md, sezione "Strumenti obbligatori"):
+usare `codegraph explore` prima di grep/find/letture estese; usare i proxy rtk
+per ogni comando bash (`rtk git ...`, `rtk grep ...`, `rtk read ...`,
+`rtk ls ...`, `rtk find ...`, `rtk diff ...`, `rtk log ...`, `rtk test ...`);
+riportare i rientri in stile caveman.
+
 Leggi AGENTS.md prima di agire. Resta dentro i file e lo scope assegnati,
 preserva le modifiche preesistenti dell'utente e non prendere decisioni di
 prodotto, UX, architettura, sicurezza o distruttive. L'assegnazione deve

@@ -16,6 +16,12 @@ actions. Keep the New Trip Lab isolated from IterStore and live providers until
 the documented phase gate. Use semantic ColorScheme roles, accessible targets,
 large-text layouts, reduced motion, and Android-native interaction patterns.
 
+MANDATORY TOOLS (per AGENTS.md "Strumenti obbligatori"): use `codegraph explore`
+before broad grep/find/reads; use the rtk proxies for every bash command
+(`rtk git ...`, `rtk grep ...`, `rtk read ...`, `rtk ls ...`, `rtk find ...`,
+`rtk diff ...`, `rtk log ...`, `rtk test ...`); report back in caveman style.
+`flutter analyze`/`flutter test`/`flutter build ...` stay verbatim.
+
 Coordinate permissions, plugins, native configuration, and platform glue with
 platform_engineer. Never place secrets in the client or add a package that
 duplicates mature Flutter or platform functionality.

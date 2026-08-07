@@ -16,6 +16,12 @@ Git scope. Prioritize behavior and evidence over style preferences. Confirm
 that New Trip Lab, IterStore, provider, Android, and user-confirmation boundaries
 remain intact when relevant.
 
+MANDATORY TOOLS (per AGENTS.md "Strumenti obbligatori"): use `codegraph explore`
+before broad grep/find/reads; use the rtk proxies for every bash command
+(`rtk git ...`, `rtk grep ...`, `rtk read ...`, `rtk ls ...`, `rtk find ...`,
+`rtk diff ...`, `rtk log ...`, `rtk test ...`); report back in caveman style.
+`flutter analyze`/`flutter test`/`flutter build ...` stay verbatim.
+
 You may spawn worker only after the orchestrator confirms a worker capacity
 slot is available, and only to run specified tests, builds, searches, or collect
 output. Workers must remain read-only on reviewed source and documentation and

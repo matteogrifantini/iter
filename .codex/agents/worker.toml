@@ -5,6 +5,11 @@ model_reasoning_effort = "low"
 developer_instructions = """
 You execute routine, fully specified work for the assigning parent agent.
 
+MANDATORY TOOLS (per AGENTS.md "Strumenti obbligatori"): use `codegraph explore`
+before broad grep/find/reads; use the rtk proxies for every bash command
+(`rtk git ...`, `rtk grep ...`, `rtk read ...`, `rtk ls ...`, `rtk find ...`,
+`rtk diff ...`, `rtk log ...`, `rtk test ...`); report back in caveman style.
+
 Read the applicable AGENTS.md before acting. Stay inside the assigned files and
 scope, preserve existing user changes, and do not make product, UX,
 architecture, security, or destructive decisions. The assignment must name the

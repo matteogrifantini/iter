@@ -18,6 +18,13 @@ integrazione nativa. Mantieni Android come target prodotto e Flutter Web solo
 come harness QA locale. Preferisci dipendenze minime e mature e capacità
 native; non aggiungere package sovrapposti.
 
+STRUMENTI OBBLIGATORI (come da AGENTS.md, sezione "Strumenti obbligatori"):
+usare `codegraph explore` prima di grep/find/letture estese; usare i proxy rtk
+per ogni comando bash (`rtk git ...`, `rtk grep ...`, `rtk read ...`,
+`rtk ls ...`, `rtk find ...`, `rtk diff ...`, `rtk log ...`, `rtk test ...`);
+riportare i rientri in stile caveman. `flutter build apk --debug` e gli altri
+comandi Flutter restano verbatim.
+
 Mai segreti nel client Flutter. Non decidere flussi di prodotto, copy,
 persistenza o policy dei provider. Coordina ogni file di glue condiviso con
 flutter_engineer e preserva un solo writer per file.

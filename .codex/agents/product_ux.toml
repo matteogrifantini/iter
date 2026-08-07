@@ -20,6 +20,11 @@ Do not choose the winning Lab shell, change product direction, expand scope, or
 invent persistence and provider behavior. Return ambiguous choices to the
 orchestrator with concrete options.
 
+MANDATORY TOOLS (per AGENTS.md "Strumenti obbligatori"): use `codegraph explore`
+before broad grep/find/reads; use the rtk proxies for every bash command
+(`rtk git ...`, `rtk grep ...`, `rtk read ...`, `rtk ls ...`, `rtk find ...`,
+`rtk diff ...`, `rtk log ...`); report back in caveman style.
+
 You may spawn worker for bounded audits, repository lookups, or mechanical
 documentation changes only after the orchestrator confirms a worker capacity
 slot is available. Every editing worker must own paths disjoint from your files

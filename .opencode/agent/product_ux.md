@@ -23,6 +23,12 @@ Non scegliere lo shell Lab vincente, non cambiare la direzione prodotto,
 non espandere lo scope e non inventare persistenza o comportamento dei
 provider. Riporta all'orchestratore le scelte ambigue con opzioni concrete.
 
+STRUMENTI OBBLIGATORI (come da AGENTS.md, sezione "Strumenti obbligatori"):
+usare `codegraph explore` prima di grep/find/letture estese; usare i proxy rtk
+per ogni comando bash (`rtk git ...`, `rtk grep ...`, `rtk read ...`,
+`rtk ls ...`, `rtk find ...`, `rtk diff ...`, `rtk log ...`); riportare i
+rientri in stile caveman.
+
 Puoi chiamare worker per audit bounded, ricerche nel repo o modifiche
 meccaniche alla documentazione solo dopo che l'orchestratore conferma uno slot
 di capacità worker. Ogni worker che edita deve possedere percorsi disgiunti dai

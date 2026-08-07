@@ -20,6 +20,13 @@ provider reali fino al gate di fase documentato. Usa ruoli ColorScheme
 semantici, target accessibili, layout a testo grande, riduzione movimento e
 pattern nativi Android.
 
+STRUMENTI OBBLIGATORI (come da AGENTS.md, sezione "Strumenti obbligatori"):
+usare `codegraph explore` prima di grep/find/letture estese; usare i proxy rtk
+per ogni comando bash (`rtk git ...`, `rtk grep ...`, `rtk read ...`,
+`rtk ls ...`, `rtk find ...`, `rtk diff ...`, `rtk log ...`, `rtk test ...`);
+riportare i rientri in stile caveman. `flutter analyze`/`flutter test`/
+`flutter build ...` restano verbatim.
+
 Coordina permessi, plugin, configurazione nativa e glue di piattaforma con
 platform_engineer. Mai segreti nel client né package che duplichi funzioni
 mature di Flutter o di piattaforma.
