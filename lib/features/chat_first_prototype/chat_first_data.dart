@@ -1,5 +1,5 @@
 import '../../data/mock_data.dart';
-import '../../models/trip_models.dart' show JourneyRoute;
+import '../../models/trip_models.dart' show JourneyRoute, Place;
 import '../../widgets/journey_media.dart';
 import 'chat_first_models.dart';
 
@@ -120,6 +120,129 @@ class ChatThread {
   }
 }
 
+/// A planning thread driven by guided questions: each answer advances to the
+/// next question and the final proposal is assembled from the recorded answers
+/// instead of being baked into the script. Still fully deterministic: for the
+/// same answers it always produces the same [PlanProposal].
+class IntakeThread extends ChatThread {
+  IntakeThread({
+    required this.journey,
+    required super.summary,
+    required super.script,
+    super.openedWith,
+  });
+
+  /// The journey the traveler started from; drives the final proposal content.
+  final JourneyRoute journey;
+
+  /// Answers keyed by the question message id (e.g. 'q-duration').
+  final Map<String, String> answers = <String, String>{};
+
+  /// Records the answer whenever a traveler text follows a question with
+  /// choices, keyed by that question id. Typed replies are captured too, so a
+  /// free-text answer still advances the intake.
+  @override
+  ChatMessage travelerMessage(String text) {
+    final message = super.travelerMessage(text);
+    if (messages.length >= 2) {
+      final question = messages[messages.length - 2];
+      if (question.role == ChatRole.assistant && question.choices.isNotEmpty) {
+        answers[question.id] = text;
+      }
+    }
+    return message;
+  }
+
+  /// Emits every beat keeping the script's stable id, so answers can be
+  /// matched back to their question, and builds the final proposal from
+  /// [answers] when the script reaches the proposal beat.
+  @override
+  bool advance() {
+    if (scriptIndex >= script.length) return false;
+    final beat = script[scriptIndex];
+    final isProposal = beat.assistant.kind == ChatMessageKind.planProposal;
+    messages.add(
+      ChatMessage(
+        id: beat.assistant.id,
+        role: beat.assistant.role,
+        kind: beat.assistant.kind,
+        text: beat.assistant.text,
+        sentAt: beat.assistant.sentAt,
+        media: beat.assistant.media,
+        choices: beat.assistant.choices,
+        audioDuration: beat.assistant.audioDuration,
+        summary: beat.assistant.kind == ChatMessageKind.tripSummary
+            ? beat.assistant.summary ?? summary.snapshot
+            : beat.assistant.summary,
+        proposal: isProposal
+            ? beat.assistant.proposal ?? buildFinalProposal()
+            : beat.assistant.proposal,
+      ),
+    );
+    scriptIndex++;
+    return true;
+  }
+
+  /// The concrete plan built from [answers], tied to the journey destination.
+  /// Missing or unexpected answers fall back to the balanced defaults.
+  PlanProposal buildFinalProposal() {
+    final destinationId = journey.destinationIds.first;
+    final city = journeyCity(journey);
+    final durationLabel = switch (answers['q-duration']) {
+      'Un weekend, 3 giorni' => '3 giorni',
+      'Una settimana o più' => '5–7 giorni',
+      _ => '4–5 giorni',
+    };
+    final dayCount = switch (durationLabel) {
+      '3 giorni' => 2,
+      '5–7 giorni' => 4,
+      _ => 3,
+    };
+    final itemsPerDay = switch (answers['q-pace']) {
+      'Rilassato: un paio di tappe al giorno' => 1,
+      'Pieno, ma con pause vere' => 3,
+      _ => 2,
+    };
+    final transport = switch (answers['q-transport']) {
+      'Soprattutto a piedi' => 'A piedi',
+      'Treno o metro + passi' => 'Treno e metro + passi',
+      _ => 'Treno, metro e qualche camminata',
+    };
+    final stay = switch (answers['q-base']) {
+      'Quartiere vissuto, più locale' => 'Quartiere vissuto, fuori dal classico',
+      'Consigliami tu' => ChatFirstDemoData.preferredStayFor(destinationId),
+      _ => 'Base nel centro, tutto a piedi',
+    };
+    final budgetNote = switch (answers['q-budget']) {
+      'Leggero: zero extra' => 'con un budget leggero',
+      'Aperto: non è un limite' => 'con budget aperto',
+      _ => 'con un budget moderato',
+    };
+    final places = ChatFirstDemoData.topPlacesFor(
+      destinationId,
+      take: dayCount * itemsPerDay,
+    );
+    final days = ChatFirstDemoData.intakeDays(places, itemsPerDay: itemsPerDay);
+    final placeLabels =
+        places.take(3).map((place) => place.name).toList(growable: false);
+    return PlanProposal(
+      changeLabel:
+          'Bozza: $city, $durationLabel, $stay, $transport, $budgetNote.',
+      snapshot: TripSnapshot(
+        destinationTitle: city,
+        country: ChatFirstDemoData._countryFor(destinationId),
+        durationLabel: durationLabel,
+        statusLabel: 'In pianificazione',
+        dates: 'giorni da confermare insieme',
+        transport: transport,
+        stay: stay,
+        placeLabels: placeLabels,
+        days: days,
+      ),
+    );
+  }
+}
+
 /// The single city name a journey is presented under in the prototype.
 /// The demo copy keeps the evocative route titles in the shared mock, but the
 /// chat-first surfaces show one clean city name, never a slogan.
@@ -136,6 +259,206 @@ abstract final class ChatFirstDemoData {
   /// Trend destinations shown on the Home. Each gets an editorial city sheet
   /// and an "Organizza un viaggio" entry that opens a fresh planning thread.
   static List<JourneyRoute> trendJourneys() => MockData.journeys.take(4).toList();
+
+  /// Opens the guided intake for a home destination trend: one question at a
+  /// time as messages with [ChatChoice]s (duration, pace, base, transport,
+  /// budget) and a final proposal assembled from the answers. Deterministic
+  /// for the same answers and tied to the journey destination.
+  static IntakeThread intakeThreadFor(JourneyRoute journey) {
+    final destinationId = journey.destinationIds.first;
+    final posters = DemoMedia.postersForDestination(destinationId);
+    final city = journeyCity(journey);
+    final summary = TripSnapshot(
+      destinationTitle: city,
+      country: _countryFor(destinationId),
+      durationLabel: journey.durationLabel,
+      statusLabel: 'In pianificazione',
+      dates: 'giorni da scegliere insieme',
+      transport: 'da definire',
+      stay: 'da definire',
+      placeLabels: const <String>[],
+      days: const <TripDaySnapshot>[],
+    );
+    return IntakeThread(
+      journey: journey,
+      summary: Conversation(
+        id: 'c-${journey.id}',
+        title: city,
+        subtitle: 'Nuovo piano',
+        avatar: ChatAvatar(
+          posters.isNotEmpty
+              ? posters.first
+              : 'assets/images/travel/rail_coast.jpg',
+          label: city,
+        ),
+        timestamp: DateTime(2026, 10, 16, 10, 0),
+        lastPreview: 'Poche domande e ti preparo una prima proposta.',
+        snapshot: summary,
+        isTrending: true,
+      ),
+      openedWith: <ChatMessage>[
+        ChatMessage(
+          id: 'q-duration',
+          role: ChatRole.assistant,
+          kind: ChatMessageKind.text,
+          text: 'Prima di tutto: quanti giorni vuoi dedicare a $city?',
+          sentAt: DateTime(2026, 10, 16, 10, 0),
+          choices: const <ChatChoice>[
+            ChatChoice(label: 'Un weekend, 3 giorni'),
+            ChatChoice(label: '4–5 giorni, senza fretta'),
+            ChatChoice(label: 'Una settimana o più'),
+          ],
+        ),
+      ],
+      script: <ScriptedBeat>[
+        ScriptedBeat(
+          ChatMessage(
+            id: 'q-pace',
+            role: ChatRole.assistant,
+            kind: ChatMessageKind.text,
+            text: 'Che ritmo preferisci per le tue giornate a $city?',
+            sentAt: DateTime(2026, 10, 16, 10, 1),
+            choices: const <ChatChoice>[
+              ChatChoice(label: 'Rilassato: un paio di tappe al giorno'),
+              ChatChoice(label: 'Bilanciato: cultura e pause'),
+              ChatChoice(label: 'Pieno, ma con pause vere'),
+            ],
+          ),
+        ),
+        ScriptedBeat(
+          ChatMessage(
+            id: 'q-base',
+            role: ChatRole.assistant,
+            kind: ChatMessageKind.text,
+            text: 'Dove preferisci dormire a $city?',
+            sentAt: DateTime(2026, 10, 16, 10, 2),
+            choices: const <ChatChoice>[
+              ChatChoice(label: 'Centro, per spostarmi a piedi'),
+              ChatChoice(label: 'Quartiere vissuto, più locale'),
+              ChatChoice(label: 'Consigliami tu'),
+            ],
+          ),
+        ),
+        ScriptedBeat(
+          ChatMessage(
+            id: 'q-transport',
+            role: ChatRole.assistant,
+            kind: ChatMessageKind.text,
+            text: 'Come vuoi spostarti in città?',
+            sentAt: DateTime(2026, 10, 16, 10, 3),
+            choices: const <ChatChoice>[
+              ChatChoice(label: 'Soprattutto a piedi'),
+              ChatChoice(label: 'Treno o metro + passi'),
+              ChatChoice(label: 'Misto, senza pensare troppo'),
+            ],
+          ),
+        ),
+        ScriptedBeat(
+          ChatMessage(
+            id: 'q-budget',
+            role: ChatRole.assistant,
+            kind: ChatMessageKind.text,
+            text: 'Come inquadro il budget?',
+            sentAt: DateTime(2026, 10, 16, 10, 4),
+            choices: const <ChatChoice>[
+              ChatChoice(label: 'Leggero: zero extra'),
+              ChatChoice(label: 'Moderato: qualche tavola bella'),
+              ChatChoice(label: 'Aperto: non è un limite'),
+            ],
+          ),
+        ),
+        ScriptedBeat(
+          ChatMessage(
+            id: 'intake-proposal',
+            role: ChatRole.assistant,
+            kind: ChatMessageKind.planProposal,
+            text:
+                'Ecco la prima proposta per $city, costruita sulle tue risposte.',
+            sentAt: DateTime(2026, 10, 16, 10, 5),
+          ),
+        ),
+        ScriptedBeat(
+          ChatMessage(
+            id: 'intake-summary',
+            role: ChatRole.assistant,
+            kind: ChatMessageKind.tripSummary,
+            text: 'Il piano, aggiornato con la tua decisione.',
+            sentAt: DateTime(2026, 10, 16, 10, 6),
+          ),
+        ),
+        ScriptedBeat(
+          ChatMessage(
+            id: 'intake-operational',
+            role: ChatRole.assistant,
+            kind: ChatMessageKind.operational,
+            text:
+                'Ho salvato il piano come bozza. Potremo rifinirlo qui quando '
+                    'vuoi.',
+            sentAt: DateTime(2026, 10, 16, 10, 7),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The best-matching stay zone name for a destination, or a generic label
+  /// when the catalog has none. Used for the "Consigliami tu" answer.
+  static String preferredStayFor(String destinationId) {
+    final zones = MockData.stayZones
+        .where((zone) => zone.destinationId == destinationId)
+        .toList(growable: false)
+      ..sort((a, b) => a.averageWalkMinutes.compareTo(b.averageWalkMinutes));
+    return zones.isEmpty ? 'In un quartiere vissuto' : zones.first.name;
+  }
+
+  /// The highest-scoring places of a destination, used to shape the proposal.
+  static List<Place> topPlacesFor(String destinationId, {required int take}) {
+    final places = MockData.places
+        .where((place) => place.destinationId == destinationId)
+        .toList(growable: false)
+      ..sort((a, b) => b.matchScore.compareTo(a.matchScore));
+    return places.take(take).toList(growable: false);
+  }
+
+  /// Chunks [places] into daily itineraries of at most [itemsPerDay] items,
+  /// with deterministic times and light themes.
+  static List<TripDaySnapshot> intakeDays(
+    List<Place> places, {
+    required int itemsPerDay,
+  }) {
+    const themes = <String>[
+      'Arrivo senza fretta',
+      'Quartieri e pause',
+      'Ultimo giro con calma',
+      'Chiusura lenta',
+    ];
+    const times = <String>['09:30', '13:00', '16:30', '19:30'];
+    final days = <TripDaySnapshot>[];
+    for (var day = 0;
+        day * itemsPerDay < places.length && day < themes.length;
+        day++) {
+      final start = day * itemsPerDay;
+      final end = start + itemsPerDay < places.length
+          ? start + itemsPerDay
+          : places.length;
+      days.add(
+        TripDaySnapshot(
+          label: 'Giorno ${day + 1}',
+          theme: themes[day],
+          items: <TripItemSnapshot>[
+            for (var i = start; i < end; i++)
+              TripItemSnapshot(
+                title: places[i].name,
+                category: places[i].category,
+                time: times[i % times.length],
+                locked: false,
+              ),
+          ],
+        ),
+      );
+    }
+    return days;
+  }
 
   static ChatThread planningThreadFor(JourneyRoute journey) {
     final destinationId = journey.destinationIds.first;

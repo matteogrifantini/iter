@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:iter/features/chat_first_prototype/chat_first_controller.dart';
+import 'package:iter/features/chat_first_prototype/chat_first_data.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_models.dart';
 import 'package:iter/features/chat_first_prototype/mock_data_source.dart';
 import 'package:iter/models/trip_models.dart' show JourneyRoute;
@@ -237,6 +238,102 @@ void main() {
         matchScore: 0,
       );
       expect(await controller.poisFor(empty), isEmpty);
+    });
+  });
+
+  group('Intake guidato (F4a)', () {
+    test('startFromJourney apre un thread di intake con domande a scelta', () {
+      final controller = ChatFirstPrototypeController();
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+
+      expect(thread, isA<IntakeThread>());
+      expect(thread.summary.isTrending, isTrue);
+      expect(thread.summary.title, journey.stops.first);
+      expect(thread.messages, isNotEmpty);
+      expect(thread.messages.first.choices, isNotEmpty);
+    });
+
+    test('rispondere a tutte le domande produce la proposta finale', () {
+      final controller = ChatFirstPrototypeController();
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+
+      _answerIntake(controller, id);
+
+      final proposalMessage = thread.messages
+          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      final snapshot = proposalMessage.proposal!.snapshot;
+      expect(proposalMessage.proposal?.outcome, isNull);
+      expect(snapshot.destinationTitle, journey.stops.first);
+      expect(snapshot.transport, isNotEmpty);
+      expect(snapshot.stay, isNotEmpty);
+      expect(snapshot.placeLabels, isNotEmpty);
+      expect(snapshot.days, isNotEmpty);
+      expect(proposalMessage.proposal?.changeLabel, contains(journey.stops.first));
+    });
+
+    test('il ritmo scelto cambia il numero di tappe al giorno', () {
+      final relaxed = ChatFirstPrototypeController();
+      final busy = ChatFirstPrototypeController();
+      final journey = relaxed.trendJourneys.first;
+
+      final relaxedThread = relaxed.startFromJourney(journey);
+      final busyThread = busy.startFromJourney(journey);
+      _answerIntake(
+        relaxed,
+        relaxedThread.summary.id,
+        pace: 'Rilassato: un paio di tappe al giorno',
+      );
+      _answerIntake(busy, busyThread.summary.id, pace: 'Pieno, ma con pause vere');
+
+      final relaxedProposal = relaxedThread.messages
+          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      final busyProposal = busyThread.messages
+          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      expect(
+        relaxedProposal.proposal!.snapshot.days.first.items.length,
+        lessThan(busyProposal.proposal!.snapshot.days.first.items.length),
+      );
+    });
+
+    test('accettare la proposta aggiorna lo snapshot e persiste il piano', () async {
+      final source = _TripSpyDataSource();
+      final controller = ChatFirstPrototypeController(dataSource: source);
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+
+      _answerIntake(controller, id, duration: 'Un weekend, 3 giorni');
+      final proposal = thread.messages
+          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      controller.acceptProposal(id, proposal.id);
+
+      await Future<void>.delayed(Duration.zero);
+      expect(thread.summary.snapshot?.destinationTitle, journey.stops.first);
+      expect(thread.summary.snapshot?.durationLabel, '3 giorni');
+      expect(proposal.proposal?.outcome, PlanProposalOutcome.accepted);
+      expect(source.savedVersions.length, 1);
+      expect(source.savedVersions.single.snapshot.durationLabel, '3 giorni');
+    });
+
+    test('il riepilogo dopo l’accettazione riflette il piano accettato', () {
+      final controller = ChatFirstPrototypeController();
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+
+      _answerIntake(controller, id);
+      final proposal = thread.messages
+          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      controller.acceptProposal(id, proposal.id);
+
+      final summaries = thread.messages
+          .where((m) => m.kind == ChatMessageKind.tripSummary);
+      final lastSummary = summaries.last;
+      expect(lastSummary.summary?.destinationTitle, journey.stops.first);
+      expect(lastSummary.summary?.placeLabels, isNotEmpty);
     });
   });
 
@@ -568,5 +665,25 @@ class _ProfileSpyDataSource extends MockDataSource {
   @override
   Future<void> upsertProfile({ThemeMode? themeMode, List<String>? memoryTags}) async {
     upserts.add((themeMode: themeMode, memoryTags: memoryTags));
+  }
+}
+
+/// Answers every guided intake question by tapping the choice with [label].
+/// Defaults pick the balanced option of each question.
+void _answerIntake(
+  ChatFirstPrototypeController controller,
+  String conversationId, {
+  String duration = '4–5 giorni, senza fretta',
+  String pace = 'Bilanciato: cultura e pause',
+  String base = 'Centro, per spostarmi a piedi',
+  String transport = 'Treno o metro + passi',
+  String budget = 'Moderato: qualche tavola bella',
+}) {
+  for (final label in <String>[duration, pace, base, transport, budget]) {
+    final thread = controller.threadOf(conversationId);
+    final choice = thread.messages
+        .expand((m) => m.choices)
+        .firstWhere((c) => c.label == label);
+    controller.choose(choice, conversationId: conversationId);
   }
 }

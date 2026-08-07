@@ -48,6 +48,60 @@ Return Server-Sent Events from this allowlist only:
 
 The function has a 45-second application timeout. On a partial source failure, emit `warning` and a valid partial `complete` when possible. Never stream model prompts, token traces, chain-of-thought or provider secrets.
 
+## `PlanDraftV1` schema (server contract)
+
+The `complete` event always carries a valid `PlanDraftV1`:
+
+```json
+{
+  "schemaVersion": "PlanDraftV1",
+  "operation": "suggest_destination | curate_places | compose_itinerary | revise_itinerary",
+  "destination": "city name",
+  "dates": { "start": "ISO date | null", "end": "ISO date | null" },
+  "places": [{ "poiId": "catalogue id", "title": "…", "category": "…" }],
+  "days": [
+    {
+      "dayIndex": 1,
+      "title": "Giorno 1 · <city>",
+      "items": [
+        {
+          "poiId": "catalogue id",
+          "title": "…",
+          "category": "…",
+          "timeSlot": "09:00–10:30",
+          "locked": false
+        }
+      ]
+    }
+  ],
+  "lockedItemIds": ["ids the model may not move or remove"],
+  "source": { "provider": "mock", "generatedAt": "ISO timestamp", "catalogue": "mock-catalogue-v1" }
+}
+```
+
+- `suggest_destination` returns `places: []` and `days: []`.
+- `curate_places` returns the selected places in `places` with `days: []`.
+- `compose_itinerary` and `revise_itinerary` return structured `days`; items
+  reference places by `poiId`.
+- A `patch` event is a local validated change previewable by the Flutter UI
+  (e.g. `{"kind":"move_item", "itemId", "from", "to", "reason"}`). A patch
+  never moves or removes a locked item.
+
+## Implementation notes (F4b)
+
+- Default provider is the deterministic `mock` (catalogue baked into
+  `index.ts`, no external keys). If `GEMINI_API_KEY` and `GEMINI_MODEL` are set
+  the function emits a `warning` (`provider_not_implemented`) and falls back to
+  the mock draft; the Gemini path is not implemented yet.
+- Quota: before generating, the function calls
+  `public.consume_ai_credit(max_generations => 2, max_global_generations => 70)`
+  with a client bound to the caller's `Authorization` so `auth.uid()` resolves
+  to the traveller. `quota-exceeded` → `error` event (`ai_quota_exceeded`), no
+  automatic paid fallback. If the RPC is missing the function emits a
+  `warning` (`quota_unavailable`) and proceeds with the mock draft.
+- `verify_jwt = true` for this function is declared in `supabase/config.toml`;
+  the platform rejects missing/invalid JWTs before the function runs.
+
 ## Persistence and approvals
 
 `/plan` is read/propose only. It may read catalogues/cache and consume a quota, but it must not create a trip version, booking, redirect or payment.

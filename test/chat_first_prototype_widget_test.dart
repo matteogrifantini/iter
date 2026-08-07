@@ -140,6 +140,42 @@ void main() {
     expect(find.text('Annulla'), findsNothing);
   });
 
+  testWidgets('intake: domande, proposta e accettazione nel thread', (tester) async {
+    final controller = ChatFirstPrototypeController();
+    final journey = controller.trendJourneys.first;
+    final thread = controller.startFromJourney(journey);
+    await tester.pumpWidget(wrap(ChatFirstThreadScreen(
+      controller: controller,
+      conversationId: thread.summary.id,
+      onOpenSnapshot: (_) {},
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('quanti giorni'), findsOneWidget);
+
+    const labels = <String>[
+      '4–5 giorni, senza fretta',
+      'Bilanciato: cultura e pause',
+      'Centro, per spostarmi a piedi',
+      'Treno o metro + passi',
+      'Moderato: qualche tavola bella',
+    ];
+    for (final label in labels) {
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.text('Accetta'), findsOneWidget);
+    await tester.tap(find.text('Accetta'));
+    await tester.pumpAndSettle();
+
+    final snapshot = controller.threadOf(thread.summary.id).summary.snapshot!;
+    expect(snapshot.destinationTitle, journey.stops.first);
+    expect(snapshot.durationLabel, '4–5 giorni');
+    expect(snapshot.days, isNotEmpty);
+    expect(find.text('Modifica applicata'), findsOneWidget);
+  });
+
   testWidgets('profilo mostra memoria appresa e privacy', (tester) async {
     tester.view.physicalSize = const Size(800, 2600);
     tester.view.devicePixelRatio = 1.0;

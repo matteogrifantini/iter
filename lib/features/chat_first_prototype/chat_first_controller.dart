@@ -257,16 +257,16 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Opens (or creates) a planning thread for a home destination trend. On
-  /// Supabase a fresh thread is persisted right away so the conversation row
-  /// exists before the first message lands.
+  /// Opens (or creates) a guided-intake thread for a home destination trend.
+  /// On Supabase a fresh thread is persisted right away so the conversation
+  /// row exists before the first message lands.
   ChatThread startFromJourney(JourneyRoute journey) {
     final existing = threadForJourney(journey.id);
     if (existing != null) {
       openConversation(existing.summary.id);
       return existing;
     }
-    final thread = ChatFirstDemoData.planningThreadFor(journey);
+    final thread = ChatFirstDemoData.intakeThreadFor(journey);
     _threads.insert(0, thread);
     _activeThreadId = thread.summary.id;
     notifyListeners();

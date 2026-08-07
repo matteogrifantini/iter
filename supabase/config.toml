@@ -1,0 +1,11 @@
+# Iter Supabase project configuration (Supabase CLI).
+# Minimal config for Edge Functions. project_id is a local alias; linking uses
+# `supabase link --project-ref <ref>`. See supabase/README.md.
+project_id = "iter"
+
+# The plan function requires a logged-in traveller: the platform rejects
+# requests without a valid Supabase user JWT before the function runs. The
+# function still validates the token via auth.getUser() to resolve auth.uid()
+# for the consume_ai_credit quota guard.
+[functions.plan]
+verify_jwt = true
