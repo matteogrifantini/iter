@@ -21,6 +21,26 @@ sono in `.codex/agents/`; le schede leggibili sono in `agents/`.
 6. Definire `owner -> file/area -> risultato -> dipendenze -> verifica ->
    worker -> Git owner` prima di delegare.
 
+## Strumenti obbligatori (ogni agente)
+
+Vale per l'orchestratore e per ogni subagent (specialisti, worker,
+quality_reviewer):
+
+- **codegraph**: se esiste `.codegraph/` alla radice, usare
+  `codegraph explore "<simboli o domanda>"` prima di grep/find/letture estese,
+  e per individuare call path e blast radius. Grep/Read diretti restano ammessi
+  solo per conferme puntuali o quando codegraph non copre il caso.
+- **rtk**: proxy CLI per output compatti; usare i sottocomandi espliciti al posto
+  dei comandi nudi per le operazioni che supporta (`rtk git ...`, `rtk grep ...`,
+  `rtk read ...`, `rtk test ...`, `rtk diff ...`, `rtk log ...`). Codice, comandi
+  Flutter e output verbatim restano invariati.
+- **caveman**: i report di rientro (sintesi, file, evidenze, rischi) usano lo
+  stile compresso caveman: frasi minime, niente filler, termini tecnici e comandi
+  verbatim. Codice, commit e messaggi di errore restano invariati. Niente
+  annuncio dello stile e niente riepiloghi ridondanti.
+- In caso di conflitto tra queste regole e istruzioni più specifiche di un
+  agente, valgono le più specifiche.
+
 ## Routing
 
 | Lavoro | Owner |
