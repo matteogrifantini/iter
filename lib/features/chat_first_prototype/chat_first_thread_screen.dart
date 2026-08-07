@@ -33,9 +33,19 @@ class _ChatFirstThreadScreenState extends State<ChatFirstThreadScreen> {
   }
 
   void _jumpToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    void clamp() {
       if (!_scroll.hasClients) return;
       _scroll.jumpTo(_scroll.position.maxScrollExtent);
+    }
+
+    // Clamp to the bottom on this frame and re-clamp over the following ones
+    // so content that settles after the first layout (e.g. async-decoded card
+    // images that grow the last message) never leaves the new chips off-screen.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      clamp();
+      for (var i = 1; i <= 3; i++) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => clamp());
+      }
     });
   }
 
