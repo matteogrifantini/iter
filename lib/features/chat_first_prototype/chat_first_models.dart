@@ -14,6 +14,9 @@ enum ChatMessageKind {
   tripSummary,
   operational,
   planProposal,
+  placeCard,
+  transport,
+  stayZone,
   system,
 }
 
@@ -193,6 +196,140 @@ class ChatChoice {
       );
 }
 
+/// A catalog place proposed one at a time during the in-chat curation,
+/// rendered as a card with skip/save/must actions. Deliberately a light view
+/// of the shared [Place] mock so serialization stays self-contained.
+@immutable
+class PlaceCard {
+  const PlaceCard({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.neighborhood,
+    required this.durationMinutes,
+    required this.whyFits,
+    required this.bestMoment,
+    this.imageAsset,
+  });
+
+  final String id;
+  final String name;
+  final String category;
+  final String neighborhood;
+  final int durationMinutes;
+  final String whyFits;
+  final String bestMoment;
+
+  /// Optional destination poster shown above the card content. Null keeps the
+  /// card text-only, so restored messages without media stay intact.
+  final String? imageAsset;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'name': name,
+        'category': category,
+        'neighborhood': neighborhood,
+        'durationMinutes': durationMinutes,
+        'whyFits': whyFits,
+        'bestMoment': bestMoment,
+        if (imageAsset != null) 'imageAsset': imageAsset,
+      };
+
+  factory PlaceCard.fromJson(Map<String, dynamic> json) => PlaceCard(
+        id: (json['id'] as String?) ?? '',
+        name: (json['name'] as String?) ?? '',
+        category: (json['category'] as String?) ?? '',
+        neighborhood: (json['neighborhood'] as String?) ?? '',
+        durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
+        whyFits: (json['whyFits'] as String?) ?? '',
+        bestMoment: (json['bestMoment'] as String?) ?? '',
+        imageAsset: json['imageAsset'] as String?,
+      );
+}
+
+/// One demo transport option shown in the in-chat comparison: reaching the
+/// destination, with fake but destination-coherent price and duration.
+@immutable
+class TransportOptionView {
+  const TransportOptionView({
+    required this.label,
+    required this.priceLabel,
+    required this.durationLabel,
+    this.isRecommended = false,
+  });
+
+  final String label;
+  final String priceLabel;
+  final String durationLabel;
+  final bool isRecommended;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'label': label,
+        'priceLabel': priceLabel,
+        'durationLabel': durationLabel,
+        'isRecommended': isRecommended,
+      };
+
+  factory TransportOptionView.fromJson(Map<String, dynamic> json) =>
+      TransportOptionView(
+        label: (json['label'] as String?) ?? '',
+        priceLabel: (json['priceLabel'] as String?) ?? '',
+        durationLabel: (json['durationLabel'] as String?) ?? '',
+        isRecommended: (json['isRecommended'] as bool?) ?? false,
+      );
+}
+
+/// The in-chat transport comparison: a small list of demo [TransportOptionView]s.
+@immutable
+class TransportCompare {
+  const TransportCompare({required this.options});
+
+  final List<TransportOptionView> options;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'options': options.map((o) => o.toJson()).toList(growable: false),
+      };
+
+  factory TransportCompare.fromJson(Map<String, dynamic> json) =>
+      TransportCompare(
+        options: (json['options'] as List<dynamic>?)
+                ?.map((o) => TransportOptionView.fromJson(o as Map<String, dynamic>))
+                .toList(growable: false) ??
+            const <TransportOptionView>[],
+      );
+}
+
+/// The recommended stay zone for a destination, rendered with atmosphere and
+/// walk times and a decorative demo "map" (no real map dependency).
+@immutable
+class StayZoneInfo {
+  const StayZoneInfo({
+    required this.name,
+    required this.summary,
+    required this.whyFits,
+    required this.averageWalkMinutes,
+  });
+
+  final String name;
+  final String summary;
+  final String whyFits;
+  final int averageWalkMinutes;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'name': name,
+        'summary': summary,
+        'whyFits': whyFits,
+        'averageWalkMinutes': averageWalkMinutes,
+      };
+
+  factory StayZoneInfo.fromJson(Map<String, dynamic> json) => StayZoneInfo(
+        name: (json['name'] as String?) ?? '',
+        summary: (json['summary'] as String?) ?? '',
+        whyFits: (json['whyFits'] as String?) ?? '',
+        averageWalkMinutes: (json['averageWalkMinutes'] as num?)?.toInt() ?? 0,
+      );
+}
+
 /// A media attachment shown inside a thread. Videos reuse the local vertical
 /// demo clips; images reuse the travel posters.
 @immutable
@@ -242,6 +379,30 @@ class TripSnapshot {
   final String stay;
   final List<String> placeLabels;
   final List<TripDaySnapshot> days;
+
+  TripSnapshot copyWith({
+    String? destinationTitle,
+    String? country,
+    String? durationLabel,
+    String? statusLabel,
+    String? dates,
+    String? transport,
+    String? stay,
+    List<String>? placeLabels,
+    List<TripDaySnapshot>? days,
+  }) {
+    return TripSnapshot(
+      destinationTitle: destinationTitle ?? this.destinationTitle,
+      country: country ?? this.country,
+      durationLabel: durationLabel ?? this.durationLabel,
+      statusLabel: statusLabel ?? this.statusLabel,
+      dates: dates ?? this.dates,
+      transport: transport ?? this.transport,
+      stay: stay ?? this.stay,
+      placeLabels: placeLabels ?? this.placeLabels,
+      days: days ?? this.days,
+    );
+  }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'destinationTitle': destinationTitle,
@@ -346,6 +507,9 @@ class ChatMessage {
     this.audioDuration,
     this.summary,
     this.proposal,
+    this.placeCard,
+    this.transport,
+    this.stayZone,
   });
 
   final String id;
@@ -365,6 +529,15 @@ class ChatMessage {
   /// Present only on [ChatMessageKind.planProposal].
   final PlanProposal? proposal;
 
+  /// Present only on [ChatMessageKind.placeCard].
+  final PlaceCard? placeCard;
+
+  /// Present only on [ChatMessageKind.transport].
+  final TransportCompare? transport;
+
+  /// Present only on [ChatMessageKind.stayZone].
+  final StayZoneInfo? stayZone;
+
   bool get isIncoming => role != ChatRole.traveler;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -378,6 +551,9 @@ class ChatMessage {
         if (audioDuration != null) 'audioDuration': audioDuration,
         if (summary != null) 'summary': summary!.toJson(),
         if (proposal != null) 'proposal': proposal!.toJson(),
+        if (placeCard != null) 'placeCard': placeCard!.toJson(),
+        if (transport != null) 'transport': transport!.toJson(),
+        if (stayZone != null) 'stayZone': stayZone!.toJson(),
       };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -401,6 +577,16 @@ class ChatMessage {
             : null,
         proposal: json['proposal'] is Map<String, dynamic>
             ? PlanProposal.fromJson(json['proposal'] as Map<String, dynamic>)
+            : null,
+        placeCard: json['placeCard'] is Map<String, dynamic>
+            ? PlaceCard.fromJson(json['placeCard'] as Map<String, dynamic>)
+            : null,
+        transport: json['transport'] is Map<String, dynamic>
+            ? TransportCompare.fromJson(
+                json['transport'] as Map<String, dynamic>)
+            : null,
+        stayZone: json['stayZone'] is Map<String, dynamic>
+            ? StayZoneInfo.fromJson(json['stayZone'] as Map<String, dynamic>)
             : null,
       );
 }

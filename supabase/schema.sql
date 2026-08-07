@@ -93,7 +93,8 @@ create table if not exists public.messages (
   role text not null check (role in ('user', 'assistant')),
   kind text not null default 'text'
     check (kind in ('text', 'choice', 'image', 'video', 'audio', 'system',
-                    'operational', 'tripSummary', 'planProposal')),
+                    'operational', 'tripSummary', 'planProposal',
+                    'placeCard', 'transport', 'stayZone')),
   text text,
   audio_duration integer,
   proposal jsonb,

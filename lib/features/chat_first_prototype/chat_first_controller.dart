@@ -236,14 +236,21 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   }
 
   /// Responds to a clickable choice. Non-confirming choices (e.g. "Solo
-  /// ispirazione") do not create a message and just record the intent.
-  void choose(ChatChoice choice, {required String conversationId}) {
+  /// ispirazione") do not create a message and just record the intent. When
+  /// [messageId] is given it must belong to the thread's current decision
+  /// point, so a stale tap on an already-answered card never applies twice.
+  void choose(
+    ChatChoice choice, {
+    required String conversationId,
+    String? messageId,
+  }) {
     final thread = threadOf(conversationId);
     if (!choice.confirm) {
       _activeThreadId = conversationId;
       notifyListeners();
       return;
     }
+    if (messageId != null && !thread.acceptsChoiceFrom(messageId)) return;
     _advance(thread, choice.label);
   }
 

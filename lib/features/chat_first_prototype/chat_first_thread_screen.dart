@@ -99,14 +99,19 @@ class _ChatFirstThreadScreenState extends State<ChatFirstThreadScreen> {
                     final message = messages[index];
                     final showDayDivider = index == 0 ||
                         messages[index - 1].sentAt.day != message.sentAt.day;
+                    final interactive =
+                        messages.isNotEmpty && messages.last.choices.isNotEmpty;
                     return _MessageRow(
                       message: message,
                       showDayDivider: showDayDivider,
                       avatar: summary.avatar,
+                      enabled:
+                          interactive && index == messages.length - 1,
                       onChoice: (choice) {
                         widget.controller.choose(
                           choice,
                           conversationId: widget.conversationId,
+                          messageId: message.id,
                         );
                         _jumpToBottom();
                       },
@@ -195,6 +200,7 @@ class _MessageRow extends StatelessWidget {
     required this.avatar,
     required this.onChoice,
     required this.reducedMotion,
+    this.enabled = true,
     this.onAcceptProposal,
     this.onRejectProposal,
   });
@@ -206,6 +212,11 @@ class _MessageRow extends StatelessWidget {
   final VoidCallback? onAcceptProposal;
   final VoidCallback? onRejectProposal;
   final bool reducedMotion;
+
+  /// Whether the chips below this message are still actionable. Only the
+  /// thread's current decision point enables them; older messages show the
+  /// chips read-only.
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -256,7 +267,9 @@ class _MessageRow extends StatelessWidget {
                               for (final choice in message.choices)
                                 ActionChip(
                                   label: Text(choice.label),
-                                  onPressed: () => onChoice(choice),
+                                  onPressed: enabled
+                                      ? () => onChoice(choice)
+                                      : null,
                                 ),
                             ],
                           ),
@@ -413,6 +426,12 @@ class _MessageContent extends StatelessWidget {
           onAccept: onAcceptProposal,
           onReject: onRejectProposal,
         );
+      case ChatMessageKind.placeCard:
+        return _PlaceCardContent(message: message);
+      case ChatMessageKind.transport:
+        return _TransportContent(message: message);
+      case ChatMessageKind.stayZone:
+        return _StayZoneContent(message: message);
       case ChatMessageKind.system:
         return const SizedBox.shrink();
     }
@@ -617,6 +636,328 @@ class _SummaryCard extends StatelessWidget {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// A place proposed during the in-chat curation: a light card with category,
+/// neighborhood, why-it-fits and the best moment, plus Passa/Salva/Irrinunciabile
+/// actions rendered as choices below the bubble.
+class _PlaceCardContent extends StatelessWidget {
+  const _PlaceCardContent({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final card = message.placeCard;
+    if (card == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (message.text.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              message.text,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: colors.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: colors.outlineVariant),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              if (card.imageAsset != null) ...<Widget>[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.asset(
+                    card.imageAsset!,
+                    height: 140,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              Text(
+                card.name,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: <Widget>[
+                  Icon(Icons.place_outlined, size: 15, color: colors.primary),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      '${card.category} · ${card.neighborhood}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                card.whyFits,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: <Widget>[
+                  Icon(Icons.schedule, size: 15, color: colors.primary),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      '${card.durationMinutes} min · ${card.bestMoment}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The in-chat transport comparison: a small table of demo options (plane,
+/// train, car) with price and duration, with the recommended one highlighted.
+class _TransportContent extends StatelessWidget {
+  const _TransportContent({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final compare = message.transport;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (message.text.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              message.text,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: colors.onSurface,
+              ),
+            ),
+          ),
+        if (compare != null)
+          for (final option in compare.options)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colors.outlineVariant),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Icon(
+                        Icons.directions_outlined,
+                        size: 17,
+                        color: colors.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          option.label,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          option.durationLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          option.priceLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (option.isRecommended) ...<Widget>[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors.primaryContainer,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Icon(
+                            Icons.recommend,
+                            size: 13,
+                            color: colors.primary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Consigliato',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: colors.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+/// The stay-zone context: the recommended zone with its atmosphere and walk
+/// times, plus a decorative demo "map" box (no real map dependency). The zone
+/// choice renders as choices below the bubble.
+class _StayZoneContent extends StatelessWidget {
+  const _StayZoneContent({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final zone = message.stayZone;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (message.text.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              message.text,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: colors.onSurface,
+              ),
+            ),
+          ),
+        if (zone != null)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: colors.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  zone.name,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  zone.summary,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: <Widget>[
+                    Icon(
+                      Icons.directions_walk,
+                      size: 16,
+                      color: colors.primary,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        '${zone.averageWalkMinutes} min a piedi dalle tappe · '
+                            '${zone.whyFits}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  height: 72,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: colors.primaryContainer.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: colors.primaryContainer),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Icon(Icons.location_on, size: 18, color: colors.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Mappa demo — zona consigliata',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }

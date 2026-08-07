@@ -1,7 +1,15 @@
 import '../../data/mock_data.dart';
-import '../../models/trip_models.dart' show JourneyRoute, Place;
+import '../../models/trip_models.dart' show JourneyRoute, Place, StayZone;
 import '../../widgets/journey_media.dart';
 import 'chat_first_models.dart';
+
+/// Stable id of the intake proposal beat. Accepting it hooks the F5
+/// refinement modules (curation, transport, zone, itinerary) to the thread.
+const String kIntakeProposalId = 'intake-proposal';
+
+/// Stable id of the F5 itinerary proposal beat. Its snapshot is assembled at
+/// emission time from the curated thread state.
+const String kItineraryProposalId = 'f5-itinerary-proposal';
 
 /// A canned exchange used to advance a thread deterministically. Sending a
 /// message (typed or via a choice) appends the traveler text plus [assistant].
@@ -118,6 +126,16 @@ class ChatThread {
     }
     advance();
   }
+
+  /// Whether a chip from [messageId] is still actionable: only the latest
+  /// message offering choices accepts input. Everything older is read-only, so
+  /// stale taps can never settle a question twice.
+  bool acceptsChoiceFrom(String messageId) {
+    for (var i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].choices.isNotEmpty) return messages[i].id == messageId;
+    }
+    return false;
+  }
 }
 
 /// A planning thread driven by guided questions: each answer advances to the
@@ -138,26 +156,108 @@ class IntakeThread extends ChatThread {
   /// Answers keyed by the question message id (e.g. 'q-duration').
   final Map<String, String> answers = <String, String>{};
 
+  /// Places the traveler explicitly kept or marked must during the F5
+  /// curation, in decision order. Drives the refined snapshot's labels and days.
+  final List<Place> _savedPlaces = <Place>[];
+
+  /// Place ids the traveler marked as irrinunciabile (locked in the days).
+  final Set<String> _mustPlaceIds = <String>{};
+
+  /// F5 question ids already settled, so repeated taps never double-apply.
+  final Set<String> _answeredF5 = <String>{};
+
+  /// Maps a free-text clarification id ('f5-clarify-N') back to the place-card
+  /// question it re-asks, so the eventual chip answer lands on the right place.
+  final Map<String, String> _clarificationToQuestion = <String, String>{};
+
+  int _clarification = 0;
+
+  /// True while the next [advance] must be consumed by a just-emitted
+  /// clarification instead of emitting the following script beat.
+  bool _clarificationPending = false;
+
   /// Records the answer whenever a traveler text follows a question with
   /// choices, keyed by that question id. Typed replies are captured too, so a
-  /// free-text answer still advances the intake.
+  /// free-text answer still advances the intake. F5 module answers (curation,
+  /// transport, stay) are applied to the thread snapshot right here, so the
+  /// next assistant beat always reflects the latest decision.
+  ///
+  /// A free-text reply that a place card does not understand (anything other
+  /// than Passa/Salva/Irrinunciabile) does not advance: the thread re-asks the
+  /// same question as a clarification with the three choices.
   @override
   ChatMessage travelerMessage(String text) {
     final message = super.travelerMessage(text);
     if (messages.length >= 2) {
       final question = messages[messages.length - 2];
       if (question.role == ChatRole.assistant && question.choices.isNotEmpty) {
-        answers[question.id] = text;
+        final isClarification =
+            _clarificationToQuestion.containsKey(question.id);
+        final resolvedId = _clarificationToQuestion[question.id] ?? question.id;
+        if (!isClarification && _needsClarification(question, text)) {
+          _emitClarification(question);
+        } else {
+          answers[resolvedId] = text;
+          _applyF5Answer(resolvedId, text);
+        }
       }
     }
     return message;
   }
 
+  bool _needsClarification(ChatMessage question, String text) =>
+      question.kind == ChatMessageKind.placeCard &&
+      text != 'Passa' &&
+      text != 'Salva' &&
+      text != 'Irrinunciabile';
+
+  void _emitClarification(ChatMessage question) {
+    final clarification = ChatMessage(
+      id: 'f5-clarify-${_clarification++}',
+      role: ChatRole.assistant,
+      kind: ChatMessageKind.choices,
+      text: 'Non ho capito: Passa, Salva o Irrinunciabile?',
+      choices: const <ChatChoice>[
+        ChatChoice(label: 'Passa'),
+        ChatChoice(label: 'Salva'),
+        ChatChoice(label: 'Irrinunciabile'),
+      ],
+      sentAt: DateTime(2026, 10, 16, 10, 30),
+    );
+    _clarificationToQuestion[clarification.id] = question.id;
+    messages.add(clarification);
+    _clarificationPending = true;
+  }
+
+  /// Accepting the intake proposal appends the F5 refinement modules to the
+  /// script and lets the thread advance through the transition beats (summary,
+  /// operational, curation intro) without free-text input, landing straight on
+  /// the first place card. The proposal handling itself stays identical to the
+  /// base thread.
+  @override
+  void respondToProposal(ChatMessage message, {required bool accept}) {
+    final proposal = message.proposal;
+    if (proposal == null || proposal.outcome != null) return;
+    if (accept && message.id == kIntakeProposalId) {
+      _queueRefinement();
+    }
+    super.respondToProposal(message, accept: accept);
+  }
+
   /// Emits every beat keeping the script's stable id, so answers can be
   /// matched back to their question, and builds the final proposal from
-  /// [answers] when the script reaches the proposal beat.
+  /// [answers] when the script reaches the proposal beat. The F5 itinerary
+  /// proposal is assembled at emission time from the curated thread state.
+  /// Transition beats (no choices, no proposal) are consumed automatically, so
+  /// the thread never asks the traveler for free text on a message that has no
+  /// decision: it stops exactly on a question with choices or on a proposal,
+  /// never past one.
   @override
   bool advance() {
+    if (_clarificationPending) {
+      _clarificationPending = false;
+      return true;
+    }
     if (scriptIndex >= script.length) return false;
     final beat = script[scriptIndex];
     final isProposal = beat.assistant.kind == ChatMessageKind.planProposal;
@@ -175,12 +275,146 @@ class IntakeThread extends ChatThread {
             ? beat.assistant.summary ?? summary.snapshot
             : beat.assistant.summary,
         proposal: isProposal
-            ? beat.assistant.proposal ?? buildFinalProposal()
+            ? beat.assistant.proposal ??
+                (beat.assistant.id == kItineraryProposalId
+                    ? _buildItineraryProposal()
+                    : buildFinalProposal())
             : beat.assistant.proposal,
+        placeCard: beat.assistant.placeCard,
+        transport: beat.assistant.transport,
+        stayZone: beat.assistant.stayZone,
       ),
     );
     scriptIndex++;
-    return true;
+    final requiresInput =
+        beat.assistant.choices.isNotEmpty || isProposal;
+    if (requiresInput) return true;
+    if (scriptIndex >= script.length) return true;
+    return advance();
+  }
+
+  /// Appends the F5 refinement beats after the intake tail. Script index keeps
+  /// its position, so the next user action continues straight into curation.
+  void _queueRefinement() {
+    final destinationId = journey.destinationIds.first;
+    script.addAll(
+      ChatFirstDemoData.refinementBeats(destinationId, journeyCity(journey)),
+    );
+  }
+
+  TripSnapshot _snapshot() =>
+      summary.snapshot ??
+      TripSnapshot(
+        destinationTitle: '',
+        country: '',
+        durationLabel: '',
+        statusLabel: '',
+        dates: '',
+        transport: '',
+        stay: '',
+        placeLabels: const <String>[],
+        days: const <TripDaySnapshot>[],
+      );
+
+  void _applyF5Answer(String questionId, String answer) {
+    if (!_answeredF5.add(questionId)) return;
+    if (questionId.startsWith('f5-place-')) {
+      _applyCuration(questionId, answer);
+      return;
+    }
+    if (questionId == 'f5-transport') {
+      summary = summary.copyWith(
+        snapshot: _snapshot().copyWith(
+          transport: ChatFirstDemoData.transportSummaryFor(answer),
+        ),
+      );
+      return;
+    }
+    if (questionId == 'f5-stay') {
+      final stay = answer == 'Consigliami tu'
+          ? ChatFirstDemoData.preferredStayFor(journey.destinationIds.first)
+          : answer;
+      summary = summary.copyWith(
+        snapshot: _snapshot().copyWith(stay: stay),
+      );
+    }
+  }
+
+  /// Resolves the [Place] behind a curation question id, e.g. 'f5-place-...'.
+  Place? _placeForQuestion(String questionId) {
+    final id = questionId.replaceFirst('f5-place-', '');
+    for (final place in MockData.places) {
+      if (place.id == id) return place;
+    }
+    return null;
+  }
+
+  /// Passa (or any free-text reply) keeps the snapshot untouched; Salva and
+  /// Irrinunciabile add the place to the plan and rebuild labels + days.
+  void _applyCuration(String questionId, String answer) {
+    if (answer != 'Salva' && answer != 'Irrinunciabile') return;
+    final place = _placeForQuestion(questionId);
+    if (place == null) return;
+    if (_savedPlaces.any((saved) => saved.id == place.id)) return;
+    _savedPlaces.add(place);
+    if (answer == 'Irrinunciabile') _mustPlaceIds.add(place.id);
+    _rebuildDays();
+  }
+
+  void _rebuildDays() {
+    if (_savedPlaces.isEmpty) return;
+    final days = ChatFirstDemoData.intakeDays(
+      List<Place>.of(_savedPlaces),
+      itemsPerDay: _f5ItemsPerDay(),
+      mustIds: _mustPlaceIds,
+    );
+    final current = _snapshot();
+    summary = summary.copyWith(
+      snapshot: current.copyWith(
+        placeLabels: _savedPlaces
+            .map((place) => place.name)
+            .toList(growable: false),
+        days: days,
+      ),
+    );
+  }
+
+  /// The daily items count from the intake pace answer, reusing the same
+  /// mapping as [buildFinalProposal].
+  int _f5ItemsPerDay() => switch (answers['q-pace']) {
+        'Rilassato: un paio di tappe al giorno' => 1,
+        'Pieno, ma con pause vere' => 3,
+        _ => 2,
+      };
+
+  /// The concrete F5 edit Iter proposes before saving: a gentle closing walk
+  /// on the last day. Built from the curated thread state, so accepting both
+  /// applies the change and persists the fully refined plan.
+  PlanProposal _buildItineraryProposal() {
+    final current = _snapshot();
+    final days = List<TripDaySnapshot>.of(current.days);
+    if (days.isNotEmpty) {
+      final last = days.removeLast();
+      days.add(
+        TripDaySnapshot(
+          label: last.label,
+          theme: last.theme,
+          items: <TripItemSnapshot>[
+            ...last.items,
+            const TripItemSnapshot(
+              title: 'Passeggiata finale',
+              category: 'Passeggiata',
+              time: '18:30',
+              locked: false,
+            ),
+          ],
+        ),
+      );
+    }
+    return PlanProposal(
+      changeLabel: 'Aggiungo una passeggiata finale senza orari fissi.',
+      snapshot: current.copyWith(days: days),
+    );
   }
 
   /// The concrete plan built from [answers], tied to the journey destination.
@@ -404,12 +638,173 @@ abstract final class ChatFirstDemoData {
   /// The best-matching stay zone name for a destination, or a generic label
   /// when the catalog has none. Used for the "Consigliami tu" answer.
   static String preferredStayFor(String destinationId) {
+    final zones = _stayZonesSorted(destinationId);
+    return zones.isEmpty ? 'In un quartiere vissuto' : zones.first.name;
+  }
+
+  /// The destination's stay zones ordered by average walk minutes, shortest
+  /// first. The first is the recommended one; the second is the alternative.
+  static List<StayZone> _stayZonesSorted(String destinationId) {
     final zones = MockData.stayZones
         .where((zone) => zone.destinationId == destinationId)
         .toList(growable: false)
       ..sort((a, b) => a.averageWalkMinutes.compareTo(b.averageWalkMinutes));
-    return zones.isEmpty ? 'In un quartiere vissuto' : zones.first.name;
+    return zones;
   }
+
+  /// The demo transport comparison: reaching the destination by plane, train
+  /// or car, with fake but coherent price and duration. Fully deterministic.
+  static List<TransportOptionView> transportOptions() =>
+      const <TransportOptionView>[
+        TransportOptionView(
+          label: 'Aereo diretto',
+          priceLabel: 'da 89 €',
+          durationLabel: '1h 30m',
+          isRecommended: true,
+        ),
+        TransportOptionView(
+          label: 'Treno ad alta velocità',
+          priceLabel: 'da 54 €',
+          durationLabel: '4h 45m',
+        ),
+        TransportOptionView(
+          label: 'In auto',
+          priceLabel: 'da 46 €',
+          durationLabel: '3h 50m',
+        ),
+      ];
+
+  /// The transport line stored in the snapshot after the traveler picks a
+  /// demo option, e.g. 'Aereo diretto · 1h 30m'.
+  static String transportSummaryFor(String label) {
+    for (final option in transportOptions()) {
+      if (option.label == label) {
+        return '${option.label} · ${option.durationLabel}';
+      }
+    }
+    return label;
+  }
+
+  /// The F5 refinement modules appended to an accepted intake thread:
+  /// curation (places one at a time), transport comparison, stay zone, then
+  /// the visual itinerary with the final edit proposal. Deterministic for the
+  /// same destination.
+  static List<ScriptedBeat> refinementBeats(
+    String destinationId,
+    String city,
+  ) {
+    final places = topPlacesFor(destinationId, take: 6);
+    final zones = _stayZonesSorted(destinationId);
+    final hasZones = zones.isNotEmpty;
+    final recommended = zones.isNotEmpty ? zones.first : null;
+    final alternative = zones.length > 1 ? zones[1] : null;
+    final options = transportOptions();
+    final posters = DemoMedia.postersForDestination(destinationId);
+    return <ScriptedBeat>[
+      ScriptedBeat(
+        ChatMessage(
+          id: 'f5-curation-intro',
+          role: ChatRole.assistant,
+          kind: ChatMessageKind.text,
+          text:
+              'Bene. Ora rifiniamo il piano: ti mostro i luoghi di $city uno '
+                  'alla volta e mi dici come trattarli.',
+          sentAt: DateTime(2026, 10, 16, 10, 8),
+        ),
+      ),
+      for (var i = 0; i < places.length; i++)
+        ScriptedBeat(
+          ChatMessage(
+            id: 'f5-place-${places[i].id}',
+            role: ChatRole.assistant,
+            kind: ChatMessageKind.placeCard,
+            text: 'Luogo ${i + 1} di ${places.length}',
+            sentAt: DateTime(2026, 10, 16, 10, 9, i),
+            placeCard: placeCardFor(
+              places[i],
+              imageAsset: posters[i % posters.length],
+            ),
+            choices: const <ChatChoice>[
+              ChatChoice(label: 'Passa'),
+              ChatChoice(label: 'Salva'),
+              ChatChoice(label: 'Irrinunciabile'),
+            ],
+          ),
+        ),
+      ScriptedBeat(
+        ChatMessage(
+          id: 'f5-transport',
+          role: ChatRole.assistant,
+          kind: ChatMessageKind.transport,
+          text: 'Come arrivi a $city? Ecco tre opzioni demo, con prezzi e '
+              'durata indicativi.',
+          sentAt: DateTime(2026, 10, 16, 10, 15),
+          transport: TransportCompare(options: options),
+          choices: <ChatChoice>[
+            for (final option in options) ChatChoice(label: option.label),
+          ],
+        ),
+      ),
+      ScriptedBeat(
+        ChatMessage(
+          id: 'f5-stay',
+          role: ChatRole.assistant,
+          kind: ChatMessageKind.stayZone,
+          text: 'Dove dormire a $city? Ti consiglio '
+              '${recommended?.name ?? 'un quartiere vissuto'} per atmosfera e '
+              'tempi a piedi. Prezzi e durate dei mezzi sono dimostrativi: non '
+              'prenotiamo niente.',
+          sentAt: DateTime(2026, 10, 16, 10, 16),
+          stayZone: recommended != null ? stayZoneInfoFor(recommended) : null,
+          choices: <ChatChoice>[
+            if (recommended != null) ChatChoice(label: recommended.name),
+            if (alternative != null) ChatChoice(label: alternative.name),
+            if (!hasZones) const ChatChoice(label: 'Consigliami tu'),
+          ],
+        ),
+      ),
+      ScriptedBeat(
+        ChatMessage(
+          id: kItineraryProposalId,
+          role: ChatRole.assistant,
+          kind: ChatMessageKind.planProposal,
+          text: 'Prima di salvare, un ritocco: chiudo il piano con una '
+              'passeggiata finale senza orari fissi.',
+          sentAt: DateTime(2026, 10, 16, 10, 18),
+        ),
+      ),
+      ScriptedBeat(
+        ChatMessage(
+          id: 'f5-operational',
+          role: ChatRole.assistant,
+          kind: ChatMessageKind.operational,
+          text: 'Il piano è pronto e resta qui: quando vuoi, proponiamo il '
+              'prossimo ritocco.',
+          sentAt: DateTime(2026, 10, 16, 10, 19),
+        ),
+      ),
+    ];
+  }
+
+  /// Light view of a catalog [Place] for the in-chat curation card.
+  static PlaceCard placeCardFor(Place place, {String? imageAsset}) => PlaceCard(
+        id: place.id,
+        name: place.name,
+        category: place.category,
+        neighborhood: place.neighborhood,
+        durationMinutes: place.durationMinutes,
+        whyFits: place.whyItFits,
+        bestMoment: place.bestMoment,
+        imageAsset: imageAsset,
+      );
+
+  /// Light view of a catalog [StayZone] for the in-chat zone context.
+  static StayZoneInfo stayZoneInfoFor(StayZone zone) => StayZoneInfo(
+        name: zone.name,
+        summary: zone.summary,
+        whyFits: zone.whyItFits,
+        averageWalkMinutes: zone.averageWalkMinutes,
+      );
 
   /// The highest-scoring places of a destination, used to shape the proposal.
   static List<Place> topPlacesFor(String destinationId, {required int take}) {
@@ -421,10 +816,12 @@ abstract final class ChatFirstDemoData {
   }
 
   /// Chunks [places] into daily itineraries of at most [itemsPerDay] items,
-  /// with deterministic times and light themes.
+  /// with deterministic times and light themes. Places whose id is in
+  /// [mustIds] are locked (time-fixed) in the itinerary.
   static List<TripDaySnapshot> intakeDays(
     List<Place> places, {
     required int itemsPerDay,
+    Set<String>? mustIds,
   }) {
     const themes = <String>[
       'Arrivo senza fretta',
@@ -451,7 +848,7 @@ abstract final class ChatFirstDemoData {
                 title: places[i].name,
                 category: places[i].category,
                 time: times[i % times.length],
-                locked: false,
+                locked: mustIds?.contains(places[i].id) ?? false,
               ),
           ],
         ),

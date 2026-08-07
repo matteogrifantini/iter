@@ -286,6 +286,9 @@ class SupabaseDataSource implements IterDataSource {
       ChatMessageKind.tripSummary => 'tripSummary',
       ChatMessageKind.operational => 'operational',
       ChatMessageKind.planProposal => 'planProposal',
+      ChatMessageKind.placeCard => 'placeCard',
+      ChatMessageKind.transport => 'transport',
+      ChatMessageKind.stayZone => 'stayZone',
       ChatMessageKind.system => 'system',
     };
   }

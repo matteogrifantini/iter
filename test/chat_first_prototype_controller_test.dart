@@ -337,6 +337,251 @@ void main() {
     });
   });
 
+  group('Moduli F5 (curation, trasporto, zona, itinerario)', () {
+    test('accettata l’intake il thread avanza da solo alla prima card luogo',
+        () {
+      final controller = ChatFirstPrototypeController();
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+      _startF5(controller, id);
+
+      final summary = thread.messages
+          .lastWhere((m) => m.kind == ChatMessageKind.tripSummary);
+      expect(summary.summary?.destinationTitle, journey.stops.first);
+      expect(
+        thread.messages.any(
+          (m) => m.kind == ChatMessageKind.operational &&
+              m.text.contains('salvato'),
+        ),
+        isTrue,
+      );
+      expect(thread.messages.last.kind, ChatMessageKind.placeCard);
+      expect(thread.messages.last.placeCard, isNotNull);
+      expect(
+        thread.messages.last.choices.map((c) => c.label),
+        <String>['Passa', 'Salva', 'Irrinunciabile'],
+      );
+    });
+
+    test('Salva porta il luogo in placeLabels e giorni dello snapshot', () {
+      final controller = ChatFirstPrototypeController();
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+      _startF5(controller, id);
+      final place = thread.messages.last.placeCard!;
+
+      _tapChoice(controller, id, 'Salva');
+
+      final snapshot = thread.summary.snapshot!;
+      expect(snapshot.placeLabels, <String>[place.name]);
+      expect(snapshot.days, isNotEmpty);
+      expect(
+        snapshot.days.expand((d) => d.items).any((i) => i.title == place.name),
+        isTrue,
+      );
+    });
+
+    test('Irrinunciabile blocca il luogo nei giorni', () {
+      final controller = ChatFirstPrototypeController();
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+      _startF5(controller, id);
+      final place = thread.messages.last.placeCard!;
+
+      _tapChoice(controller, id, 'Irrinunciabile');
+
+      final snapshot = thread.summary.snapshot!;
+      final item = snapshot.days
+          .expand((d) => d.items)
+          .firstWhere((i) => i.title == place.name);
+      expect(item.locked, isTrue);
+    });
+
+    test('Passa non tocca lo snapshot', () {
+      final controller = ChatFirstPrototypeController();
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+      _startF5(controller, id);
+      final before = thread.summary.snapshot!;
+
+      _tapChoice(controller, id, 'Passa');
+
+      expect(thread.summary.snapshot, same(before));
+    });
+
+    test('la scelta del trasporto aggiorna snapshot.transport', () {
+      final controller = ChatFirstPrototypeController();
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+      _startF5(controller, id);
+      for (var i = 0; i < 6; i++) {
+        _tapChoice(controller, id, 'Passa');
+      }
+      expect(thread.messages.last.kind, ChatMessageKind.transport);
+
+      _tapChoice(controller, id, 'Aereo diretto');
+
+      expect(thread.summary.snapshot!.transport, 'Aereo diretto · 1h 30m');
+    });
+
+    test('la scelta della zona aggiorna snapshot.stay', () {
+      final controller = ChatFirstPrototypeController();
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+      _startF5(controller, id);
+      for (var i = 0; i < 6; i++) {
+        _tapChoice(controller, id, 'Passa');
+      }
+      _tapChoice(controller, id, 'Aereo diretto');
+      final stayMessage = thread.messages
+          .lastWhere((m) => m.kind == ChatMessageKind.stayZone);
+      final zoneName = stayMessage.stayZone!.name;
+
+      _tapChoice(controller, id, zoneName);
+
+      expect(thread.summary.snapshot!.stay, zoneName);
+    });
+
+    test('il riepilogo itinerario riflette il piano raffinato', () {
+      final controller = ChatFirstPrototypeController();
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+      _startF5(controller, id);
+      _tapChoice(controller, id, 'Salva');
+      _tapChoice(controller, id, 'Salva');
+      for (var i = 0; i < 4; i++) {
+        _tapChoice(controller, id, 'Passa');
+      }
+      _tapChoice(controller, id, 'Aereo diretto');
+      final zoneName = thread.messages
+          .lastWhere((m) => m.kind == ChatMessageKind.stayZone)
+          .stayZone!
+          .name;
+      _tapChoice(controller, id, zoneName);
+
+      final proposal = thread.messages
+          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      final snapshot = proposal.proposal!.snapshot;
+      expect(snapshot.placeLabels.length, 2);
+      expect(snapshot.transport, 'Aereo diretto · 1h 30m');
+      expect(snapshot.stay, zoneName);
+    });
+
+    test('accettare la proposta itinerario persiste una seconda versione',
+        () async {
+      final source = _TripSpyDataSource();
+      final controller = ChatFirstPrototypeController(dataSource: source);
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+      _startF5(controller, id);
+      for (var i = 0; i < 6; i++) {
+        _tapChoice(controller, id, 'Passa');
+      }
+      _tapChoice(controller, id, 'Aereo diretto');
+      final zoneName = thread.messages
+          .lastWhere((m) => m.kind == ChatMessageKind.stayZone)
+          .stayZone!
+          .name;
+      _tapChoice(controller, id, zoneName);
+
+      final proposal = thread.messages
+          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      expect(
+        proposal.proposal!.snapshot.days.last.items.last.title,
+        'Passeggiata finale',
+      );
+      controller.acceptProposal(id, proposal.id);
+
+      await Future<void>.delayed(Duration.zero);
+      expect(source.savedVersions.length, 2);
+      expect(
+        source.savedVersions.last.snapshot.days.last.items.last.title,
+        'Passeggiata finale',
+      );
+    });
+
+    test('annullare la proposta itinerario non persiste e non modifica', () async {
+      final source = _TripSpyDataSource();
+      final controller = ChatFirstPrototypeController(dataSource: source);
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+      _startF5(controller, id);
+      for (var i = 0; i < 6; i++) {
+        _tapChoice(controller, id, 'Passa');
+      }
+      _tapChoice(controller, id, 'In auto');
+      final zoneName = thread.messages
+          .lastWhere((m) => m.kind == ChatMessageKind.stayZone)
+          .stayZone!
+          .name;
+      _tapChoice(controller, id, zoneName);
+
+      final proposal = thread.messages
+          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      controller.rejectProposal(id, proposal.id);
+
+      await Future<void>.delayed(Duration.zero);
+      expect(source.savedVersions.length, 1);
+      expect(
+        thread.summary.snapshot!.days.last.items.last.title,
+        isNot('Passeggiata finale'),
+      );
+    });
+
+    test('un testo libero non riconosciuto su una card luogo chiarisce e non '
+        'avanza', () {
+      final controller = ChatFirstPrototypeController();
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+      _startF5(controller, id);
+      final before = thread.messages.length;
+      final snapshotBefore = thread.summary.snapshot!;
+
+      controller.sendText('quello bello');
+
+      expect(thread.messages.length, before + 2);
+      final clarification = thread.messages.last;
+      expect(clarification.role, ChatRole.assistant);
+      expect(clarification.text, contains('Passa, Salva o Irrinunciabile'));
+      expect(clarification.choices, isNotEmpty);
+      expect(thread.summary.snapshot, same(snapshotBefore));
+    });
+
+    test('decisioni doppie sulla curation non duplicano il luogo', () {
+      final controller = ChatFirstPrototypeController();
+      final journey = controller.trendJourneys.first;
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+      _startF5(controller, id);
+      final place = thread.messages.last.placeCard!;
+
+      _tapChoice(controller, id, 'Salva');
+      final cardMessage = thread.messages.firstWhere(
+        (m) => m.kind == ChatMessageKind.placeCard && m.placeCard!.id == place.id,
+      );
+      controller.choose(
+        cardMessage.choices.firstWhere((c) => c.label == 'Salva'),
+        conversationId: id,
+        messageId: cardMessage.id,
+      );
+
+      expect(
+        thread.summary.snapshot!.placeLabels.where((l) => l == place.name),
+        hasLength(1),
+      );
+    });
+  });
+
   group('MockDataSource pois', () {
     test('fetchPois ritorna i punti di una destinazione conosciuta', () async {
       final source = MockDataSource();
@@ -621,6 +866,60 @@ void main() {
       expect(restored.kind, ChatMessageKind.text);
       expect(restored.text, '');
     });
+
+    test('ChatMessage round-trip conserva card luoghi, trasporto e zona', () {
+      final original = ChatMessage(
+        id: 'm-f5',
+        role: ChatRole.assistant,
+        kind: ChatMessageKind.placeCard,
+        text: '',
+        sentAt: DateTime(2026, 10, 16, 10, 30),
+        placeCard: const PlaceCard(
+          id: 'p-1',
+          name: 'Perdersi in Alfama',
+          category: 'Quartiere',
+          neighborhood: 'Alfama',
+          durationMinutes: 100,
+          whyFits: 'Strade senza meta',
+          bestMoment: 'Mattina presto',
+        ),
+        transport: const TransportCompare(
+          options: <TransportOptionView>[
+            TransportOptionView(
+              label: 'Aereo diretto',
+              priceLabel: 'da 89 €',
+              durationLabel: '1h 30m',
+              isRecommended: true,
+            ),
+          ],
+        ),
+        stayZone: const StayZoneInfo(
+          name: 'Chiado',
+          summary: 'Centrale e ben collegata.',
+          whyFits: 'Riduce salite.',
+          averageWalkMinutes: 13,
+        ),
+      );
+
+      final restored = ChatMessage.fromJson(original.toJson());
+      expect(restored.placeCard?.name, 'Perdersi in Alfama');
+      expect(restored.placeCard?.durationMinutes, 100);
+      expect(restored.transport?.options.single.isRecommended, isTrue);
+      expect(restored.transport?.options.single.durationLabel, '1h 30m');
+      expect(restored.stayZone?.averageWalkMinutes, 13);
+      expect(restored.stayZone?.name, 'Chiado');
+    });
+
+    test('TripSnapshot.copyWith sostituisce solo i campi indicati', () {
+      final controller = ChatFirstPrototypeController();
+      final roma = controller.threads.firstWhere(
+        (t) => t.summary.title.contains('Roma'),
+      );
+      final updated = roma.summary.snapshot!.copyWith(transport: 'A piedi');
+      expect(updated.transport, 'A piedi');
+      expect(updated.stay, roma.summary.snapshot!.stay);
+      expect(updated.days, roma.summary.snapshot!.days);
+    });
   });
 }
 
@@ -686,4 +985,30 @@ void _answerIntake(
         .firstWhere((c) => c.label == label);
     controller.choose(choice, conversationId: conversationId);
   }
+}
+
+/// Answers the intake, accepts its proposal, then lets the thread auto-advance
+/// through the transition tail, landing on the first F5 curation place card.
+void _startF5(
+  ChatFirstPrototypeController controller,
+  String conversationId,
+) {
+  _answerIntake(controller, conversationId);
+  final proposal = controller.threadOf(conversationId).messages
+      .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+  controller.acceptProposal(conversationId, proposal.id);
+}
+
+/// Chooses [label] on the most recent message that offers it, advancing the
+/// thread one beat.
+void _tapChoice(
+  ChatFirstPrototypeController controller,
+  String conversationId,
+  String label,
+) {
+  final thread = controller.threadOf(conversationId);
+  final message = thread.messages
+      .lastWhere((m) => m.choices.any((c) => c.label == label));
+  final choice = message.choices.firstWhere((c) => c.label == label);
+  controller.choose(choice, conversationId: conversationId);
 }

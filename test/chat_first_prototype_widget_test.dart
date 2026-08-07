@@ -6,6 +6,7 @@ import 'package:iter/features/chat_first_prototype/chat_first_controller.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_data.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_home_screen.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_list_screen.dart';
+import 'package:iter/features/chat_first_prototype/chat_first_models.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_profile_screen.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_thread_screen.dart';
 import 'package:iter/features/chat_first_prototype/trip_snapshot_screen.dart';
@@ -23,6 +24,11 @@ void main() {
       theme: IterTheme.light(),
       home: Scaffold(body: child),
     );
+  }
+
+  Future<void> tapLast(WidgetTester tester, String label) async {
+    await tester.tap(find.text(label).last);
+    await tester.pumpAndSettle();
   }
 
   testWidgets('home mostra riga Riprendi e apre la conversazione', (tester) async {
@@ -173,7 +179,113 @@ void main() {
     expect(snapshot.destinationTitle, journey.stops.first);
     expect(snapshot.durationLabel, '4–5 giorni');
     expect(snapshot.days, isNotEmpty);
-    expect(find.text('Modifica applicata'), findsOneWidget);
+    expect(
+      controller
+          .threadOf(thread.summary.id)
+          .messages
+          .lastWhere((m) => m.kind == ChatMessageKind.planProposal)
+          .proposal!
+          .outcome,
+      PlanProposalOutcome.accepted,
+    );
+    expect(
+      controller.threadOf(thread.summary.id).messages.last.kind,
+      ChatMessageKind.placeCard,
+    );
+  });
+
+  testWidgets('curation F5: card luogo con scelte Passa/Salva/Irrinunciabile',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final controller = ChatFirstPrototypeController();
+    final journey = controller.trendJourneys.first;
+    final thread = controller.startFromJourney(journey);
+    await tester.pumpWidget(wrap(ChatFirstThreadScreen(
+      controller: controller,
+      conversationId: thread.summary.id,
+      onOpenSnapshot: (_) {},
+    )));
+    await tester.pumpAndSettle();
+
+    const intakeLabels = <String>[
+      '4–5 giorni, senza fretta',
+      'Bilanciato: cultura e pause',
+      'Centro, per spostarmi a piedi',
+      'Treno o metro + passi',
+      'Moderato: qualche tavola bella',
+    ];
+    for (final label in intakeLabels) {
+      await tapLast(tester, label);
+    }
+    await tapLast(tester, 'Accetta');
+
+    final place = thread.messages
+        .lastWhere((m) => m.kind == ChatMessageKind.placeCard)
+        .placeCard!;
+    expect(find.text(place.name), findsWidgets);
+    expect(find.text('Passa'), findsWidgets);
+    expect(find.text('Salva'), findsWidgets);
+    expect(find.text('Irrinunciabile'), findsWidgets);
+    expect(find.textContaining('Mappa demo'), findsNothing);
+  });
+
+  testWidgets('flusso F5 completo: curation, trasporto, zona e itinerario',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final controller = ChatFirstPrototypeController();
+    final journey = controller.trendJourneys.first;
+    final thread = controller.startFromJourney(journey);
+    final id = thread.summary.id;
+    await tester.pumpWidget(wrap(ChatFirstThreadScreen(
+      controller: controller,
+      conversationId: id,
+      onOpenSnapshot: (_) {},
+    )));
+    await tester.pumpAndSettle();
+
+    const intakeLabels = <String>[
+      '4–5 giorni, senza fretta',
+      'Bilanciato: cultura e pause',
+      'Centro, per spostarmi a piedi',
+      'Treno o metro + passi',
+      'Moderato: qualche tavola bella',
+    ];
+    for (final label in intakeLabels) {
+      await tapLast(tester, label);
+    }
+    await tapLast(tester, 'Accetta');
+
+    await tapLast(tester, 'Salva');
+    await tapLast(tester, 'Salva');
+    await tapLast(tester, 'Irrinunciabile');
+    await tapLast(tester, 'Passa');
+    await tapLast(tester, 'Passa');
+    await tapLast(tester, 'Passa');
+    await tapLast(tester, 'Aereo diretto');
+
+    final zoneName = controller.threadOf(id).messages
+        .lastWhere((m) => m.kind == ChatMessageKind.stayZone)
+        .stayZone!
+        .name;
+    expect(find.textContaining('Mappa demo'), findsOneWidget);
+    await tapLast(tester, zoneName);
+
+    await tapLast(tester, 'Accetta');
+
+    final snapshot = controller.threadOf(id).summary.snapshot!;
+    expect(snapshot.transport, 'Aereo diretto · 1h 30m');
+    expect(snapshot.stay, zoneName);
+    expect(
+      snapshot.days.last.items.last.title,
+      'Passeggiata finale',
+    );
+    expect(find.text('Modifica applicata'), findsWidgets);
   });
 
   testWidgets('profilo mostra memoria appresa e privacy', (tester) async {
