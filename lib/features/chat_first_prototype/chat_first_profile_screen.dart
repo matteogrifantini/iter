@@ -6,18 +6,16 @@ class ChatFirstProfileScreen extends StatelessWidget {
     required this.themeMode,
     required this.onThemeChanged,
     required this.onOpenChats,
+    this.memoryTags = const <String>[],
   });
 
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeChanged;
   final VoidCallback onOpenChats;
 
-  static const _learned = <String>[
-    'Ritmo lento e senza orari fissi',
-    'Niente museo dopo il pomeriggio in città',
-    'Almeno una tavola di quartiere per viaggio',
-    'Preferisci la finestra sul corridoio in treno',
-  ];
+  /// The learned memory tags owned by the controller: the demo tags on the
+  /// mock path, the persisted `profiles.memory_tags` on Supabase.
+  final List<String> memoryTags;
 
   @override
   Widget build(BuildContext context) {
@@ -67,7 +65,7 @@ class ChatFirstProfileScreen extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: <Widget>[
-                for (final item in _learned)
+                for (final item in memoryTags)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,

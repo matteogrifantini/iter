@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/app_config.dart';
@@ -10,6 +11,7 @@ import 'chat_first_models.dart'
         Conversation,
         ConversationRow,
         DestinationPoint,
+        ProfileRow,
         TripSnapshot;
 import 'data_source.dart';
 
@@ -218,6 +220,49 @@ class SupabaseDataSource implements IterDataSource {
     }
   }
 
+  @override
+  Future<ProfileRow?> fetchProfile() async {
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) return null;
+      final row = await client
+          .from('profiles')
+          .select('theme_mode, memory_tags')
+          .eq('id', userId)
+          .maybeSingle();
+      if (row == null) return null;
+      return ProfileRow(
+        themeMode: _themeModeFromColumn(row['theme_mode']),
+        memoryTags: (row['memory_tags'] as List<dynamic>?)
+                ?.whereType<String>()
+                .toList(growable: false) ??
+            const <String>[],
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> upsertProfile({ThemeMode? themeMode, List<String>? memoryTags}) async {
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) return;
+      final themeModeColumn = themeMode == null ? null : _themeModeColumn(themeMode);
+      final payload = <String, dynamic>{
+        'id': userId,
+        'theme_mode': ?themeModeColumn,
+        'memory_tags': ?memoryTags,
+      };
+      if (payload.length == 1) return;
+      await client.from('profiles').upsert(payload);
+    } catch (_) {
+      // Best effort: the in-memory profile stays authoritative.
+    }
+  }
+
   /// Maps a message role onto the `messages.role` check constraint
   /// (`'user' | 'assistant'`); the travel-first [ChatRole] enums collapse onto
   /// the assistant bucket for divider/system rows.
@@ -244,6 +289,21 @@ class SupabaseDataSource implements IterDataSource {
       ChatMessageKind.system => 'system',
     };
   }
+
+  /// Maps a `profiles.theme_mode` column onto [ThemeMode]; unknown values
+  /// degrade to the app default light theme.
+  ThemeMode _themeModeFromColumn(Object? value) => switch (value) {
+        'dark' => ThemeMode.dark,
+        'system' => ThemeMode.system,
+        _ => ThemeMode.light,
+      };
+
+  /// Maps [ThemeMode] onto the `profiles.theme_mode` check constraint.
+  String _themeModeColumn(ThemeMode mode) => switch (mode) {
+        ThemeMode.dark => 'dark',
+        ThemeMode.system => 'system',
+        ThemeMode.light => 'light',
+      };
 
   /// Maps a `pois` row to the light preview-sheet shape. Missing cosmetic
   /// fields degrade to friendly defaults so the sheet never breaks.

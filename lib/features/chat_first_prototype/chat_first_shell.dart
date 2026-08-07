@@ -56,6 +56,7 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
               ChatFirstProfileScreen(
                 themeMode: widget.themeMode,
                 onThemeChanged: widget.onThemeChanged,
+                memoryTags: widget.controller.memoryTags,
                 onOpenChats: () => setState(() => _tabIndex = 1),
               ),
             ],

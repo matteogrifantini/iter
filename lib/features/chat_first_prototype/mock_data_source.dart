@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart' show ThemeMode;
+
 import '../../data/mock_data.dart';
 import '../../models/trip_models.dart' show JourneyRoute, Place;
 import 'chat_first_data.dart';
@@ -7,6 +9,7 @@ import 'chat_first_models.dart'
         Conversation,
         ConversationRow,
         DestinationPoint,
+        ProfileRow,
         TripSnapshot;
 import 'data_source.dart';
 
@@ -56,6 +59,12 @@ class MockDataSource implements IterDataSource {
     required String title,
     required TripSnapshot snapshot,
   }) async {}
+
+  @override
+  Future<ProfileRow?> fetchProfile() async => null;
+
+  @override
+  Future<void> upsertProfile({ThemeMode? themeMode, List<String>? memoryTags}) async {}
 
   /// Maps a mock [Place] to the light [DestinationPoint] shape the preview
   /// sheet needs. The emoji is derived from the category so the demo stays

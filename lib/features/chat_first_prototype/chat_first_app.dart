@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/iter_theme.dart';
 import 'chat_first_controller.dart';
 import 'chat_first_shell.dart';
 import 'data_source.dart';
 
-const _themeModeKey = 'appearance:theme-mode:v1';
-
 /// Top-level app for the chat-first prototype. It reuses Iter's visual theme
-/// and theme persistence while keeping its own isolated controller.
+/// while keeping its own isolated controller; the theme now lives on the
+/// controller (light default on mock, persisted `profiles.theme_mode` on
+/// Supabase) instead of SharedPreferences.
 class ChatFirstPrototypeApp extends StatefulWidget {
   const ChatFirstPrototypeApp({super.key});
 
@@ -26,43 +25,20 @@ class _ChatFirstPrototypeAppState extends State<ChatFirstPrototypeApp> {
   void initState() {
     super.initState();
     _controller = ChatFirstPrototypeController(dataSource: resolveDataSource());
-    _loadTheme();
+    _loadProfile();
     _controller.loadTrendJourneys();
     _controller.restoreConversations();
   }
 
-  Future<void> _loadTheme() async {
-    try {
-      final preferences = SharedPreferencesAsync();
-      final saved = await preferences.getString(_themeModeKey);
-      if (!mounted || saved == null) return;
-      setState(() {
-        _themeMode = switch (saved) {
-          'dark' => ThemeMode.dark,
-          'system' => ThemeMode.system,
-          _ => ThemeMode.light,
-        };
-      });
-    } catch (_) {
-      // Unsupportable host keeps the light default.
-    }
+  Future<void> _loadProfile() async {
+    await _controller.loadProfile();
+    if (!mounted) return;
+    setState(() => _themeMode = _controller.themeMode);
   }
 
   Future<void> _setTheme(ThemeMode mode) async {
     setState(() => _themeMode = mode);
-    try {
-      final preferences = SharedPreferencesAsync();
-      await preferences.setString(
-        _themeModeKey,
-        switch (mode) {
-          ThemeMode.dark => 'dark',
-          ThemeMode.system => 'system',
-          ThemeMode.light => 'light',
-        },
-      );
-    } catch (_) {
-      // The visual preference still applies for this session.
-    }
+    await _controller.setThemeMode(mode);
   }
 
   @override

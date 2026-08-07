@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 
 import '../../models/trip_models.dart' show JourneyRoute;
 import 'chat_first_data.dart';
@@ -38,9 +39,46 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   String? _activeThreadId;
   int _unread = 0;
   List<JourneyRoute>? _journeys;
+  ThemeMode _themeMode = ThemeMode.light;
+  List<String> _memoryTags = _demoMemoryTags;
 
   int get unread => _unread;
   String? get activeThreadId => _activeThreadId;
+
+  /// The session theme. Defaults to light; [loadProfile] replaces it on
+  /// Supabase with the persisted value, [setThemeMode] updates it.
+  ThemeMode get themeMode => _themeMode;
+
+  /// The learned memory tags shown in the profile. Demo tags on the mock path,
+  /// the persisted tags on Supabase.
+  List<String> get memoryTags => List<String>.unmodifiable(_memoryTags);
+
+  static const _demoMemoryTags = <String>[
+    'Ritmo lento e senza orari fissi',
+    'Niente museo dopo il pomeriggio in città',
+    'Almeno una tavola di quartiere per viaggio',
+    'Preferisci la finestra sul corridoio in treno',
+  ];
+
+  /// Loads the persisted profile (theme and learned memory) from the resolved
+  /// [dataSource]. On the mock path the row is always absent, so the light
+  /// theme and the demo tags keep applying.
+  Future<void> loadProfile() async {
+    final profile = await dataSource.fetchProfile();
+    if (profile == null) return;
+    _themeMode = profile.themeMode;
+    _memoryTags = List<String>.from(profile.memoryTags);
+    notifyListeners();
+  }
+
+  /// Applies [mode] to the session and persists it best effort on the resolved
+  /// [dataSource] (no-op on mock, upsert on Supabase).
+  Future<void> setThemeMode(ThemeMode mode) async {
+    if (_themeMode == mode) return;
+    _themeMode = mode;
+    notifyListeners();
+    await dataSource.upsertProfile(themeMode: mode);
+  }
 
   List<ChatThread> get threads => List<ChatThread>.unmodifiable(_threads);
 

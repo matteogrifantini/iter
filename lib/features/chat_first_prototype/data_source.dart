@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 
 import '../../app/app_config.dart';
 import '../../models/trip_models.dart' show JourneyRoute;
@@ -8,6 +9,7 @@ import 'chat_first_models.dart'
         Conversation,
         ConversationRow,
         DestinationPoint,
+        ProfileRow,
         TripSnapshot;
 import 'mock_data_source.dart';
 import 'supabase_data_source.dart';
@@ -59,6 +61,16 @@ abstract class IterDataSource {
     required String title,
     required TripSnapshot snapshot,
   });
+
+  /// The persisted owner profile (theme and learned memory tags), or null when
+  /// no row exists yet. The mock always returns null so the demo defaults keep
+  /// applying.
+  Future<ProfileRow?> fetchProfile();
+
+  /// Persists the owner's theme and/or memory tags on the `profiles` row keyed
+  /// by `auth.uid()`. Best effort: failures never crash and the in-memory
+  /// state stays authoritative.
+  Future<void> upsertProfile({ThemeMode? themeMode, List<String>? memoryTags});
 }
 
 /// Picks the live source when the app was started with Supabase configured,

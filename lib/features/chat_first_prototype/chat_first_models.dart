@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 
 /// Who produced a message in a chat-first thread.
 enum ChatRole { traveler, assistant, system }
@@ -139,6 +140,17 @@ class ConversationRow {
           : DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
+}
+
+/// The persisted owner profile as stored by the data source: the chosen theme
+/// and the learned memory tags. The mock always returns null so the demo
+/// defaults keep applying.
+@immutable
+class ProfileRow {
+  const ProfileRow({required this.themeMode, required this.memoryTags});
+
+  final ThemeMode themeMode;
+  final List<String> memoryTags;
 }
 
 /// A profile picture or poster thumb used as the conversation avatar.

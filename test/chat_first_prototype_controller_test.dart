@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:iter/features/chat_first_prototype/chat_first_controller.dart';
@@ -368,6 +369,58 @@ void main() {
     });
   });
 
+  group('Profilo e memoria (F3)', () {
+    test('fetchProfile su mock è nullo e upsertProfile è no-op', () async {
+      final source = MockDataSource();
+      expect(await source.fetchProfile(), isNull);
+      await source.upsertProfile(themeMode: ThemeMode.dark);
+      await source.upsertProfile(memoryTags: const <String>['Ritmo lento']);
+      expect(await source.fetchProfile(), isNull);
+    });
+
+    test('loadProfile su mock mantiene tema chiaro e tag demo', () async {
+      final controller = ChatFirstPrototypeController(dataSource: MockDataSource());
+      expect(controller.themeMode, ThemeMode.light);
+      expect(controller.memoryTags, isNotEmpty);
+      await controller.loadProfile();
+      expect(controller.themeMode, ThemeMode.light);
+      expect(controller.memoryTags, isNotEmpty);
+    });
+
+    test('setThemeMode aggiorna lo stato e persiste via spy', () async {
+      final source = _ProfileSpyDataSource();
+      final controller = ChatFirstPrototypeController(dataSource: source);
+      expect(controller.themeMode, ThemeMode.light);
+
+      await controller.setThemeMode(ThemeMode.dark);
+      expect(controller.themeMode, ThemeMode.dark);
+      expect(source.upserts.length, 1);
+      expect(source.upserts.single.themeMode, ThemeMode.dark);
+      expect(source.upserts.single.memoryTags, isNull);
+    });
+
+    test('setThemeMode su stesso valore non persiste di nuovo', () async {
+      final source = _ProfileSpyDataSource();
+      final controller = ChatFirstPrototypeController(dataSource: source);
+      await controller.setThemeMode(ThemeMode.dark);
+      await controller.setThemeMode(ThemeMode.dark);
+      expect(source.upserts.length, 1);
+    });
+
+    test('loadProfile valorizza tema e tag letti dallo spy', () async {
+      final source = _ProfileSpyDataSource(
+        profile: const ProfileRow(
+          themeMode: ThemeMode.dark,
+          memoryTags: <String>['Ama i borghi'],
+        ),
+      );
+      final controller = ChatFirstPrototypeController(dataSource: source);
+      await controller.loadProfile();
+      expect(controller.themeMode, ThemeMode.dark);
+      expect(controller.memoryTags, <String>['Ama i borghi']);
+    });
+  });
+
   group('Serializzazione (F2a)', () {
     test('Conversation round-trip conserva campi e snapshot', () {
       final controller = ChatFirstPrototypeController();
@@ -495,5 +548,25 @@ class _TripSpyDataSource extends MockDataSource {
     required TripSnapshot snapshot,
   }) async {
     savedVersions.add((conversationId: conversationId, title: title, snapshot: snapshot));
+  }
+}
+
+/// Serves a configurable `fetchProfile` result and records `upsertProfile`
+/// calls so tests can assert profile loading and theme persistence without a
+/// real database.
+class _ProfileSpyDataSource extends MockDataSource {
+  _ProfileSpyDataSource({this.profile});
+
+  final ProfileRow? profile;
+
+  final List<({ThemeMode? themeMode, List<String>? memoryTags})> upserts =
+      <({ThemeMode? themeMode, List<String>? memoryTags})>[];
+
+  @override
+  Future<ProfileRow?> fetchProfile() async => profile;
+
+  @override
+  Future<void> upsertProfile({ThemeMode? themeMode, List<String>? memoryTags}) async {
+    upserts.add((themeMode: themeMode, memoryTags: memoryTags));
   }
 }
