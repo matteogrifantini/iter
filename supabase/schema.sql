@@ -62,6 +62,17 @@ create table if not exists public.trips (
   updated_at timestamptz not null default now()
 );
 
+-- Versioni del piano: ogni proposta accettata appende una riga, così il revert
+-- e la cronologia restano verificabili (unique per trip + version_number).
+create table if not exists public.trip_versions (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid not null references public.trips (id) on delete cascade,
+  version_number integer not null check (version_number > 0),
+  draft jsonb not null,
+  created_at timestamptz not null default now(),
+  unique (trip_id, version_number)
+);
+
 -- Conversazioni
 create table if not exists public.conversations (
   id uuid primary key default gen_random_uuid(),
@@ -93,6 +104,7 @@ create table if not exists public.messages (
 -- Indici
 create index if not exists idx_pois_destination on public.pois (destination_id);
 create index if not exists idx_trips_user on public.trips (user_id);
+create index if not exists idx_trip_versions_trip on public.trip_versions (trip_id, created_at desc);
 create index if not exists idx_conversations_user on public.conversations (user_id, updated_at desc);
 create index if not exists idx_messages_conversation on public.messages (conversation_id, sent_at);
 
@@ -101,6 +113,7 @@ alter table public.destinations enable row level security;
 alter table public.pois enable row level security;
 alter table public.profiles enable row level security;
 alter table public.trips enable row level security;
+alter table public.trip_versions enable row level security;
 alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
 
@@ -121,6 +134,16 @@ create policy "profiles owner update"
 -- Trips: solo il proprietario
 create policy "trips owner all"
   on public.trips for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Trip versions: via il trip del proprietario
+create policy "trip_versions owner all"
+  on public.trip_versions for all using (
+    exists (select 1 from public.trips t
+            where t.id = trip_versions.trip_id and t.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from public.trips t
+            where t.id = trip_versions.trip_id and t.user_id = auth.uid())
+  );
 
 -- Conversazioni: solo il proprietario
 create policy "conversations owner all"

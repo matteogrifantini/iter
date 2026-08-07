@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../models/trip_models.dart' show JourneyRoute;
@@ -23,6 +25,16 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   final IterDataSource dataSource;
 
   final List<ChatThread> _threads;
+
+  /// Maps a stable client id (`c-<journey>`) to the persisted `conversations`
+  /// row uuid, so message writes target the right row. Empty on the mock path.
+  final Map<String, String> _dbIdByClientId = <String, String>{};
+
+  /// In-flight conversation-creation futures keyed by client id, so concurrent
+  /// writers never double-create the row for the same thread.
+  final Map<String, Future<String?>> _pendingConversation =
+      <String, Future<String?>>{};
+
   String? _activeThreadId;
   int _unread = 0;
   List<JourneyRoute>? _journeys;
@@ -52,6 +64,34 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replaces the in-memory threads with the persisted conversations when the
+  /// store has any. On the mock path (empty list) the seeded demo threads stay,
+  /// so debug and tests remain byte-identical.
+  Future<void> restoreConversations() async {
+    final rows = await dataSource.fetchConversations();
+    if (rows.isEmpty) return;
+    final restored = <ChatThread>[];
+    final dbIds = <String, String>{};
+    for (final row in rows) {
+      final messages = await dataSource.fetchMessages(row.id);
+      final thread = ChatThread(
+        summary: row.conversation,
+        script: const <ScriptedBeat>[],
+        openedWith: messages,
+      )..persistedCount = messages.length;
+      restored.add(thread);
+      dbIds[row.conversation.id] = row.id;
+    }
+    _threads
+      ..clear()
+      ..addAll(restored);
+    _dbIdByClientId
+      ..clear()
+      ..addAll(dbIds);
+    _recomputeUnread();
+    notifyListeners();
+  }
+
   /// The must-see points for a journey's first destination. On Supabase this
   /// reads the live `pois` rows; on failure an empty list is returned.
   Future<List<DestinationPoint>> poisFor(JourneyRoute journey) async {
@@ -78,12 +118,15 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     _unread = _sumUnread();
   }
 
-  /// Marks a conversation as read without navigating.
+  /// Marks a conversation as read without navigating, and persists the reset
+  /// when the conversation already exists in the store.
   void openConversation(String id) {
     final thread = threadOf(id);
     if (thread.summary.unread > 0) {
       thread.summary = thread.summary.copyWith(unread: 0);
       _recomputeUnread();
+      final dbId = _dbIdByClientId[id];
+      if (dbId != null) unawaited(dataSource.setConversationRead(dbId));
     }
     _activeThreadId = id;
     notifyListeners();
@@ -114,7 +157,10 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     }
     if (message == null) return;
     _activeThreadId = conversationId;
+    final wasSettled = message.proposal?.outcome != null;
     thread.respondToProposal(message, accept: accept);
+    _persistNewMessages(thread);
+    if (accept && !wasSettled) _persistAcceptedPlan(thread);
     notifyListeners();
   }
 
@@ -147,6 +193,7 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     if (!thread.advance()) {
       thread.messages.add(ChatFirstDemoData.closingReply());
     }
+    _persistNewMessages(thread);
     notifyListeners();
   }
 
@@ -168,10 +215,13 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     if (!thread.advance()) {
       thread.messages.add(ChatFirstDemoData.closingReply());
     }
+    _persistNewMessages(thread);
     notifyListeners();
   }
 
-  /// Opens (or creates) a planning thread for a home destination trend.
+  /// Opens (or creates) a planning thread for a home destination trend. On
+  /// Supabase a fresh thread is persisted right away so the conversation row
+  /// exists before the first message lands.
   ChatThread startFromJourney(JourneyRoute journey) {
     final existing = threadForJourney(journey.id);
     if (existing != null) {
@@ -182,6 +232,56 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     _threads.insert(0, thread);
     _activeThreadId = thread.summary.id;
     notifyListeners();
+    _persistNewMessages(thread);
     return thread;
+  }
+
+  /// Persists every message of [thread] not yet saved, creating the
+  /// conversation row on first use. On the mock path this is a no-op.
+  Future<void> _persistNewMessages(ChatThread thread) async {
+    final dbId = await _ensureConversation(thread);
+    if (dbId == null) return;
+    final unsaved = thread.messages.length - thread.persistedCount;
+    for (var i = thread.persistedCount; i < thread.messages.length; i++) {
+      await dataSource.insertMessage(dbId, thread.messages[i]);
+    }
+    thread.persistedCount += unsaved;
+  }
+
+  /// Returns the persisted row uuid for [thread], creating the conversation on
+  /// first touch. Null on the mock path or when the store is unreachable.
+  /// Concurrent callers share the in-flight creation future, so the row is
+  /// never created twice for the same thread.
+  Future<String?> _ensureConversation(ChatThread thread) async {
+    final existing = _dbIdByClientId[thread.summary.id];
+    if (existing != null) return existing;
+    final pending = _pendingConversation[thread.summary.id];
+    if (pending != null) return pending;
+    final future = _createConversation(thread);
+    _pendingConversation[thread.summary.id] = future;
+    return future;
+  }
+
+  Future<String?> _createConversation(ChatThread thread) async {
+    final row = await dataSource.createConversation(thread.summary);
+    _pendingConversation.remove(thread.summary.id);
+    if (row == null) return null;
+    _dbIdByClientId[thread.summary.id] = row.id;
+    return row.id;
+  }
+
+  /// Persists the accepted plan of [thread] as a new trip version (upserting
+  /// the linked `trips` row). Best effort, exactly once, only when the plan has
+  /// changed; rejecting a proposal never touches the trips.
+  Future<void> _persistAcceptedPlan(ChatThread thread) async {
+    final dbId = await _ensureConversation(thread);
+    if (dbId == null) return;
+    final snapshot = thread.summary.snapshot;
+    if (snapshot == null) return;
+    await dataSource.saveTripVersion(
+      conversationId: dbId,
+      title: thread.summary.title,
+      snapshot: snapshot,
+    );
   }
 }

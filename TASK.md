@@ -1,64 +1,62 @@
-# Task: F1 — Catalogo live (Home + preview da DB)
+# Task: F2b — Piani persistiti (trips + trip_versions)
 
 ## Contesto
 
-F0 completato e committato (`383aeba feat(f0)`): seam `IterDataSource`
-(`lib/features/chat_first_prototype/data_source.dart`) con `MockDataSource`
-(default debug/test) e `SupabaseDataSource` (definisce `ITER_BACKEND=supabase`).
-Il fetch di `destinations` (città + route) già funziona: Home e preview card
-mostrano i dati DB quando Supabase è on.
+F0, F1 e F2a completati sul branch `codex/chat-first-prototype`. Il seam
+`IterDataSource` copre già `conversations`/`messages` con
+`SupabaseDataSource` live e `MockDataSource` no-op. Il controller persiste
+messaggi e badge non letti; il piano accettato resta solo in memoria.
 
-Schema già applicato sul progetto `iter`: tabella `public.destinations`
-(`slug`, `name`, `description`, `poster_asset`, `video_assets[]`, `stops[]`,
-`travel_mode`, `season`, `duration_label`, `match_score`, `why_it_fits`,
-`destination_ids[]`) e tabella `public.pois` (`id uuid`, `destination_id uuid
--> destinations(id)`, `name`, `category`, `emoji`, `lat`, `lng`,
-`duration_min`, `best_moment`, `why_fits`, `media_asset`).
+Scope F2 (ITER_APP_PLAN.md): `conversations`/`messages`/`trips`/`trip_versions`;
+proposta accettata → nuova `trip_versions` + upsert `trips` + messaggio
+conferma; annullata → messaggio, nessuna versione; riavvio → tutto ancora lì.
 
-Media: restano in asset locali (`DemoMedia`), il DB tiene solo riferimenti.
-Niente Storage Supabase in questa fase.
+## Obiettivo F2b
 
-## Obiettivo F1
-
-Il preview sheet (e l'esperienza Home) usa anche i **POI** reali del DB per la
-destinazione selezionata, quando la sorgente è Supabase. Il percorso mock deve
-restare identico a oggi (stessi dati, stessi test verdi).
+Con backend Supabase, accettare una proposta persiste il piano come nuova
+`trip_versions` (numero incrementale) e aggiorna (upsert) la riga `trips`
+collegata alla conversazione (`conversations.trip_id`). Rifiutare non tocca i
+piani. Mock invariato: le scritture restano no-op e i test restano verdi.
 
 ## Checklist
 
-- [x] Estendere `IterDataSource` con un metodo per i POI di una destinazione,
-      es. `Future<List<DestinationPoint>> fetchPois(String destinationSlug)`.
-      Definire un modello leggero `DestinationPoint` (id, name, category,
-      emoji, whyFits) riusando quanto più possibile i modelli esistenti —
-      NON toccare `lib/models/trip_models.dart` se non strettamente necessario.
-- [x] `MockDataSource`: ritorna POI deterministici coerenti con la demo
-      (riusa i dati esistenti di `ChatFirstDemoData` se compatibili; altrimenti
-      un piccolo set locale stabile per i test).
-- [x] `SupabaseDataSource.fetchPois`: legge `public.pois` per la destinazione.
-      La join è su `destination_id uuid`: risolvere prima lo `slug` in `id`
-      (select `id` da `destinations` dove `slug = ...`) oppure query con
-      `destinations!inner(...)`; scegliere il modo più robusto. Su errore o
-      vuoto ritorna lista vuota, mai crash.
-- [x] Cablare il preview: `ChatPreviewSheet` mostra i POI della destinazione
-      (es. sezione "Da non perdere" / "Vicino a te") caricandoli in modo
-      asincrono dal controller/dataSource. Il mock deve mostrare gli stessi POI
-      di oggi.
-- [x] NON modificare file legacy (`lib/screens/`, `lib/app/iter_app.dart`,
-      `lib/app/iter_store.dart`).
-- [x] Verifica: `flutter analyze` → 0 issue; `flutter test` → 75 verdi (mock
-      invariato + test nuovi per il modello POI); `flutter build web
-      --release` → ok.
-- [~] QA web su `http://127.0.0.1:7357` (via `./tool/run_web.sh`):
-      con backend default i POI mock appaiono; con `ITER_BACKEND=supabase` i
-      POI del DB appaiono. Non eseguito qui (loop autonomo); build release ok.
+- [x] `schema.sql`: aggiungere `public.trip_versions` (trip_id → trips on delete
+      cascade, version_number > 0, draft jsonb, unique(trip_id, version_number),
+      created_at) con indice (trip_id, created_at desc), RLS abilitata e policy
+      "trip_versions owner all" via trips.user_id.
+- [x] `IterDataSource`: aggiungere il contratto
+      `Future<void> saveTripVersion({conversationId, title, snapshot})` — upsert
+      `trips` + append `trip_versions` per la conversazione indicata.
+- [x] `MockDataSource`: `saveTripVersion` no-op sicuro.
+- [x] `SupabaseDataSource`: implementazione. Legge `conversations.trip_id`; se
+      assente crea la riga `trips` (status derivato da `statusLabel`,
+      snapshot jsonb) e collega la conversazione; altrimenti aggiorna la riga
+      esistente. Poi inserisce `trip_versions` con `version_number` =
+      max+1. Best effort, mai crash.
+- [x] Controller: `acceptProposal` (primo settlement) persiste il piano
+      aggiornato (`_persistAcceptedPlan`); `rejectProposal` e ri-tentativi su
+      proposta già risolta non generano versioni. `_ensureConversation`
+      memoizza il future di creazione per evitare doppie righe su scritture
+      concorrenti.
+- [x] Test nuovi (gruppo "Persistenza piano (F2b)"): accept salva la versione
+      aggiornata; reject non salva; proposta già risolta non genera una seconda
+      versione; `saveTripVersion` su mock è no-op. Spy `_TripSpyDataSource`
+      registra le chiamate.
+- [x] Verifica: `flutter analyze` → 0 issue; `flutter test` → 89/89 verdi;
+      `flutter build web --release` → ok.
+- [~] QA live: non eseguito in questo loop (richiederebbe `./tool/run_web.sh`
+      con `ITER_BACKEND=supabase` e credenziali reali; il nuovo schema
+      `trip_versions` va applicato prima a mano/CLI su `iter`). Evidenza:
+      analyze 0, test 89/89, build web ok, mapping versione+upsert coperti da
+      test unitari sullo spy e round-trip serializzazione.
 
 ## Vincoli
 
-- NON fare commit o push.
+- NON fare commit o push (il Git owner decide a fine loop).
 - Nessuna chiave nel codice; solo `AppConfig`/dart-define e `.env` locale.
-- Se l'API `supabase_flutter` v2 richiede qualcosa di diverso, adeguati alla
-  versione reale e annota la differenza nel report.
-- Un file = un solo writer; serializzare `data_source.dart` e
-  `supabase_data_source.dart` se toccati in più punti.
+- Un file = un solo writer; serializzare `data_source.dart`,
+  `supabase_data_source.dart`, `chat_first_controller.dart`.
+- Il mock resta la verità per i test: nessuna modifica a
+  `ChatFirstDemoData`/`ChatThread` che cambi l'output osservabile oggi.
 - Termina la risposta con `STATUS: DONE` quando l'intera checklist è
   completata e la verifica passa, altrimenti `STATUS: CONTINUE`.

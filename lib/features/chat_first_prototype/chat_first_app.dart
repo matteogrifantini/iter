@@ -28,6 +28,7 @@ class _ChatFirstPrototypeAppState extends State<ChatFirstPrototypeApp> {
     _controller = ChatFirstPrototypeController(dataSource: resolveDataSource());
     _loadTheme();
     _controller.loadTrendJourneys();
+    _controller.restoreConversations();
   }
 
   Future<void> _loadTheme() async {

@@ -23,6 +23,11 @@ class ChatThread {
   Conversation summary;
   final List<ScriptedBeat> script;
   final List<ChatMessage> messages;
+
+  /// How many of [messages] have already been persisted by the data source.
+  /// Threads restored from the DB start with all messages persisted; seeded
+  /// demo threads start at zero and are only persisted after a real change.
+  int persistedCount = 0;
   int scriptIndex = 0;
   int _id = 0;
 

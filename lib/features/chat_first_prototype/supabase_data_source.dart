@@ -2,7 +2,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/app_config.dart';
 import '../../models/trip_models.dart' show JourneyRoute;
-import 'chat_first_models.dart' show DestinationPoint;
+import 'chat_first_models.dart'
+    show
+        ChatMessage,
+        ChatMessageKind,
+        ChatRole,
+        Conversation,
+        ConversationRow,
+        DestinationPoint,
+        TripSnapshot;
 import 'data_source.dart';
 
 /// Live source backed by the Supabase `iter` project. Only used when the build
@@ -53,6 +61,188 @@ class SupabaseDataSource implements IterDataSource {
     } catch (_) {
       return const <DestinationPoint>[];
     }
+  }
+
+  @override
+  Future<List<ConversationRow>> fetchConversations() async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('conversations')
+          .select()
+          .order('updated_at', ascending: false);
+      return rows.map(ConversationRow.fromDbRow).toList();
+    } catch (_) {
+      return const <ConversationRow>[];
+    }
+  }
+
+  @override
+  Future<List<ChatMessage>> fetchMessages(String conversationId) async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('messages')
+          .select()
+          .eq('conversation_id', conversationId)
+          .order('sent_at');
+      return rows
+          .map((row) => ChatMessage.fromJson(
+              (row['content'] as Map?)?.cast<String, dynamic>() ??
+                  const <String, dynamic>{}))
+          .where((message) => message.id.isNotEmpty)
+          .toList();
+    } catch (_) {
+      return const <ChatMessage>[];
+    }
+  }
+
+  @override
+  Future<void> insertMessage(String conversationId, ChatMessage message) async {
+    try {
+      await Supabase.instance.client.from('messages').insert(<String, dynamic>{
+        'conversation_id': conversationId,
+        'role': _roleColumn(message.role),
+        'kind': _kindColumn(message),
+        'text': message.text.isEmpty ? null : message.text,
+        'proposal': message.proposal?.toJson(),
+        'content': message.toJson(),
+        'sent_at': message.sentAt.toIso8601String(),
+      });
+    } catch (_) {
+      // Keep the in-memory thread authoritative; persistence is best effort.
+    }
+  }
+
+  @override
+  Future<void> setConversationRead(String conversationId) async {
+    try {
+      await Supabase.instance.client
+          .from('conversations')
+          .update(<String, dynamic>{'unread': 0})
+          .eq('id', conversationId);
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> incrementUnread(String conversationId) async {
+    try {
+      final client = Supabase.instance.client;
+      final rows = await client
+          .from('conversations')
+          .select('unread')
+          .eq('id', conversationId)
+          .maybeSingle();
+      if (rows == null) return;
+      final unread = ((rows['unread'] as num?)?.toInt() ?? 0) + 1;
+      await client
+          .from('conversations')
+          .update(<String, dynamic>{'unread': unread})
+          .eq('id', conversationId);
+    } catch (_) {}
+  }
+
+  @override
+  Future<ConversationRow?> createConversation(Conversation summary) async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('conversations')
+          .insert(<String, dynamic>{
+            'user_id':
+                Supabase.instance.client.auth.currentUser?.id,
+            'title': summary.title,
+            'avatar_asset': summary.avatar.asset,
+            'unread': summary.unread,
+            'summary': summary.toJson(),
+          })
+          .select();
+      if (rows.isEmpty) return null;
+      return ConversationRow.fromDbRow(rows.first);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> saveTripVersion({
+    required String conversationId,
+    required String title,
+    required TripSnapshot snapshot,
+  }) async {
+    try {
+      final client = Supabase.instance.client;
+      final conversation = await client
+          .from('conversations')
+          .select('trip_id')
+          .eq('id', conversationId)
+          .maybeSingle();
+      if (conversation == null) return;
+
+      String? tripId = conversation['trip_id'] as String?;
+      final status = snapshot.statusLabel == 'In viaggio' ? 'active' : 'draft';
+      if (tripId == null) {
+        final rows = await client.from('trips').insert(<String, dynamic>{
+          'user_id': client.auth.currentUser?.id,
+          'title': title,
+          'status': status,
+          'snapshot': snapshot.toJson(),
+        }).select('id');
+        if (rows.isEmpty) return;
+        tripId = rows.first['id'] as String;
+        await client
+            .from('conversations')
+            .update(<String, dynamic>{'trip_id': tripId})
+            .eq('id', conversationId);
+      } else {
+        await client.from('trips').update(<String, dynamic>{
+          'title': title,
+          'status': status,
+          'snapshot': snapshot.toJson(),
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', tripId);
+      }
+
+      final latest = await client
+          .from('trip_versions')
+          .select('version_number')
+          .eq('trip_id', tripId)
+          .order('version_number', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      final nextVersion = ((latest?['version_number'] as num?)?.toInt() ?? 0) + 1;
+      await client.from('trip_versions').insert(<String, dynamic>{
+        'trip_id': tripId,
+        'version_number': nextVersion,
+        'draft': snapshot.toJson(),
+      });
+    } catch (_) {
+      // Best effort: the conversation and its messages stay authoritative.
+    }
+  }
+
+  /// Maps a message role onto the `messages.role` check constraint
+  /// (`'user' | 'assistant'`); the travel-first [ChatRole] enums collapse onto
+  /// the assistant bucket for divider/system rows.
+  String _roleColumn(ChatRole role) => switch (role) {
+        ChatRole.traveler => 'user',
+        ChatRole.assistant || ChatRole.system => 'assistant',
+      };
+
+  /// Maps a message kind onto the `messages.kind` check constraint. The full
+  /// kind is also stored inside `content` so round-trips stay lossless even
+  /// when the coarse column value differs (choices -> 'choice').
+  String _kindColumn(ChatMessage message) {
+    if (message.kind == ChatMessageKind.media && message.media?.isVideo == true) {
+      return 'video';
+    }
+    return switch (message.kind) {
+      ChatMessageKind.text => 'text',
+      ChatMessageKind.choices => 'choice',
+      ChatMessageKind.media => 'image',
+      ChatMessageKind.audio => 'audio',
+      ChatMessageKind.tripSummary => 'tripSummary',
+      ChatMessageKind.operational => 'operational',
+      ChatMessageKind.planProposal => 'planProposal',
+      ChatMessageKind.system => 'system',
+    };
   }
 
   /// Maps a `pois` row to the light preview-sheet shape. Missing cosmetic

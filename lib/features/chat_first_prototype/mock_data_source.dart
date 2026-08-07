@@ -1,11 +1,19 @@
 import '../../data/mock_data.dart';
 import '../../models/trip_models.dart' show JourneyRoute, Place;
 import 'chat_first_data.dart';
-import 'chat_first_models.dart' show DestinationPoint;
+import 'chat_first_models.dart'
+    show
+        ChatMessage,
+        Conversation,
+        ConversationRow,
+        DestinationPoint,
+        TripSnapshot;
 import 'data_source.dart';
 
 /// Deterministic in-memory source backing the prototype in debug and tests.
-/// Behavior is identical to the pre-F0 demo data.
+/// Behavior is identical to the pre-F0 demo data. Persistence methods are
+/// no-ops: conversations and messages live only in the controller memory, so
+/// the mock and the tests keep working without a database.
 class MockDataSource implements IterDataSource {
   @override
   Future<void> init() async {}
@@ -21,6 +29,33 @@ class MockDataSource implements IterDataSource {
         .toList(growable: false);
     return places.map(_fromPlace).toList(growable: false);
   }
+
+  @override
+  Future<List<ConversationRow>> fetchConversations() async =>
+      const <ConversationRow>[];
+
+  @override
+  Future<List<ChatMessage>> fetchMessages(String conversationId) async =>
+      const <ChatMessage>[];
+
+  @override
+  Future<void> insertMessage(String conversationId, ChatMessage message) async {}
+
+  @override
+  Future<void> setConversationRead(String conversationId) async {}
+
+  @override
+  Future<void> incrementUnread(String conversationId) async {}
+
+  @override
+  Future<ConversationRow?> createConversation(Conversation summary) async => null;
+
+  @override
+  Future<void> saveTripVersion({
+    required String conversationId,
+    required String title,
+    required TripSnapshot snapshot,
+  }) async {}
 
   /// Maps a mock [Place] to the light [DestinationPoint] shape the preview
   /// sheet needs. The emoji is derived from the category so the demo stays
