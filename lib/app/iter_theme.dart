@@ -1,51 +1,32 @@
 import 'package:flutter/material.dart';
 
-/// Iter visual world — "Neutro System Blue".
-///
-/// THESIS: a quiet native travel planner that refuses the travel-brand rut of
-/// warm creams and editorial terracotta; this product is a tool on the phone,
-/// not a magazine inside it. Neutrals plus one decisive action colour carry
-/// the brand.
-///
-/// OWN-WORLD: iOS-style neutrals (light grouped greys and white, pure-black
-/// dark surfaces) with System Blue as the single accent, a hairline separator
-/// grammar, no shadows, and Material 3 components toned neutral.
-///
-/// STORY: the traveller always sees the current decision cleanly; the single
-/// blue action is unmistakable, status is quiet, and content (media, maps,
-/// the trip) carries the personality.
-///
-/// FIRST VIEWPORT: light grouped background, white raised surfaces, one blue
-/// primary action, ink labels with muted secondary copy; the blue accent never
-/// scatters.
-///
-/// FORM: replacement visual world, pinned by request (App-wide, neutral +
-/// System Blue), re-defining the Design System that previously shipped the
-/// "Atlante personale" warm palette.
+/// Iter visual world — "Rotta viva": an orientation system for a route that
+/// becomes possible one confirmed signal at a time.
 abstract final class IterPalette {
-  // Light: iOS system greys. Grouped background, white raised surfaces.
-  static const lightCanvas = Color(0xFFF2F2F7);
+  static const lightCanvas = Color(0xFFF9F7EF);
   static const lightSurface = Color(0xFFFFFFFF);
-  static const lightRaised = Color(0xFFE9E9EF);
-  static const lightInk = Color(0xFF000000);
-  static const lightMutedInk = Color(0xFF6C6C70);
-  static const systemBlue = Color(0xFF0A52DB);
-  static const systemBlueDeep = Color(0xFF0A3C9C);
-  static const systemRed = Color(0xFFFF3B30);
-  static const systemGreen = Color(0xFF34C759);
-  static const lightLine = Color(0xFFD1D1D6);
+  static const lightRaised = Color(0xFFF0EEE6);
+  static const lightInk = Color(0xFF18204B);
+  static const lightMutedInk = Color(0xFF4D567E);
+  static const lightRoute = Color(0xFF2D63FF);
+  static const lightRouteDeep = Color(0xFF183CBA);
+  static const lightSignal = Color(0xFFFF5C42);
+  static const possibility = Color(0xFFE7FF67);
+  static const lightLine = Color(0xFF70799E);
 
-  // Dark: iOS dark greys, black primary surface.
-  static const darkCanvas = Color(0xFF000000);
-  static const darkSurface = Color(0xFF1C1C1E);
-  static const darkRaised = Color(0xFF2C2C2E);
-  static const darkInk = Color(0xFFFFFFFF);
-  static const darkMutedInk = Color(0xFFAEAEB2);
-  static const darkBlue = Color(0xFF4C8CFF);
-  static const darkBlueDeep = Color(0xFF8FB6FF);
-  static const darkRed = Color(0xFFFF453A);
-  static const darkGreen = Color(0xFF30D158);
-  static const darkLine = Color(0xFF3A3A3C);
+  static const darkCanvas = Color(0xFF0B1028);
+  static const darkSurface = Color(0xFF141C3B);
+  static const darkRaised = Color(0xFF1D2750);
+  static const darkInk = Color(0xFFF9F7EF);
+  static const darkMutedInk = Color(0xFFC7CEE4);
+  static const darkRoute = Color(0xFF7EA0FF);
+  static const darkRouteDeep = Color(0xFFDDE6FF);
+  static const darkSignal = Color(0xFFFF7A63);
+  static const darkLine = Color(0xFFB7C1E8);
+
+  static const lightError = Color(0xFFB3261E);
+  static const darkError = Color(0xFFFFB4AB);
+  static const darkOnError = Color(0xFF690005);
 }
 
 @immutable
@@ -56,6 +37,7 @@ class IterColorRoles extends ThemeExtension<IterColorRoles> {
     required this.mutedInk,
     required this.route,
     required this.routeSignal,
+    required this.possibility,
     required this.videoScrim,
   });
 
@@ -64,6 +46,7 @@ class IterColorRoles extends ThemeExtension<IterColorRoles> {
   final Color mutedInk;
   final Color route;
   final Color routeSignal;
+  final Color possibility;
   final Color videoScrim;
 
   @override
@@ -73,6 +56,7 @@ class IterColorRoles extends ThemeExtension<IterColorRoles> {
     Color? mutedInk,
     Color? route,
     Color? routeSignal,
+    Color? possibility,
     Color? videoScrim,
   }) {
     return IterColorRoles(
@@ -81,6 +65,7 @@ class IterColorRoles extends ThemeExtension<IterColorRoles> {
       mutedInk: mutedInk ?? this.mutedInk,
       route: route ?? this.route,
       routeSignal: routeSignal ?? this.routeSignal,
+      possibility: possibility ?? this.possibility,
       videoScrim: videoScrim ?? this.videoScrim,
     );
   }
@@ -94,6 +79,7 @@ class IterColorRoles extends ThemeExtension<IterColorRoles> {
       mutedInk: Color.lerp(mutedInk, other.mutedInk, t)!,
       route: Color.lerp(route, other.route, t)!,
       routeSignal: Color.lerp(routeSignal, other.routeSignal, t)!,
+      possibility: Color.lerp(possibility, other.possibility, t)!,
       videoScrim: Color.lerp(videoScrim, other.videoScrim, t)!,
     );
   }
@@ -104,6 +90,17 @@ extension IterThemeContext on BuildContext {
 }
 
 abstract final class IterTheme {
+  static const _bodyFontFamily = 'Figtree';
+  static const _displayFontFamily = 'BricolageGrotesque';
+
+  static const wordmarkTextStyle = TextStyle(
+    fontFamily: _displayFontFamily,
+    fontSize: 25,
+    height: 1,
+    letterSpacing: -0.8,
+    fontWeight: FontWeight.w800,
+  );
+
   static ThemeData light() => _build(Brightness.light);
 
   static ThemeData dark() => _build(Brightness.dark);
@@ -115,8 +112,8 @@ abstract final class IterTheme {
     final raised = isDark ? IterPalette.darkRaised : IterPalette.lightRaised;
     final ink = isDark ? IterPalette.darkInk : IterPalette.lightInk;
     final muted = isDark ? IterPalette.darkMutedInk : IterPalette.lightMutedInk;
-    final primary = isDark ? IterPalette.darkBlue : IterPalette.systemBlue;
-    final secondary = isDark ? IterPalette.darkRed : IterPalette.systemRed;
+    final primary = isDark ? IterPalette.darkRoute : IterPalette.lightRoute;
+    final secondary = isDark ? IterPalette.darkSignal : IterPalette.lightSignal;
     final outline = isDark ? IterPalette.darkLine : IterPalette.lightLine;
 
     final scheme = ColorScheme(
@@ -124,48 +121,51 @@ abstract final class IterTheme {
       primary: primary,
       onPrimary: isDark ? IterPalette.darkCanvas : Colors.white,
       primaryContainer: isDark
-          ? const Color(0xFF17314E)
-          : const Color(0xFFDBE6FA),
-      onPrimaryContainer: isDark ? IterPalette.darkBlueDeep : IterPalette.systemBlueDeep,
+          ? const Color(0xFF294690)
+          : const Color(0xFFDDE6FF),
+      onPrimaryContainer: isDark
+          ? IterPalette.darkRouteDeep
+          : IterPalette.lightRouteDeep,
       secondary: secondary,
-      onSecondary: isDark ? IterPalette.darkCanvas : Colors.white,
+      onSecondary: IterPalette.lightInk,
       secondaryContainer: isDark
-          ? const Color(0xFF4D2621)
-          : const Color(0xFFFDEAEA),
+          ? const Color(0xFF613039)
+          : const Color(0xFFFFE1D9),
       onSecondaryContainer: isDark
-          ? const Color(0xFFFFC7BE)
-          : const Color(0xFF92241A),
-      tertiary: isDark ? IterPalette.darkGreen : IterPalette.systemGreen,
-      onTertiary: IterPalette.darkCanvas,
-      error: isDark ? const Color(0xFFFFB3AB) : const Color(0xFFB3261E),
-      onError: isDark ? const Color(0xFF7A0008) : Colors.white,
+          ? const Color(0xFFFFDAD4)
+          : IterPalette.lightInk,
+      tertiary: IterPalette.possibility,
+      onTertiary: IterPalette.lightInk,
+      error: isDark ? IterPalette.darkError : IterPalette.lightError,
+      onError: isDark ? IterPalette.darkOnError : Colors.white,
       surface: surface,
       onSurface: ink,
       surfaceContainerLowest: canvas,
       surfaceContainerLow: surface,
       surfaceContainer: raised,
       surfaceContainerHigh: isDark
-          ? const Color(0xFF3A3A3C)
-          : const Color(0xFFE3E3E9),
+          ? const Color(0xFF26315E)
+          : const Color(0xFFE9E7DF),
       surfaceContainerHighest: isDark
-          ? const Color(0xFF45444A)
-          : const Color(0xFFDADAE0),
+          ? const Color(0xFF303E72)
+          : const Color(0xFFE1DFD7),
       onSurfaceVariant: muted,
       outline: outline,
       outlineVariant: isDark
-          ? const Color(0xFF3A3A3C)
-          : const Color(0xFFE5E5EA),
+          ? const Color(0xFF4E5E8D)
+          : const Color(0xFFC9C7BE),
       shadow: Colors.black,
       scrim: Colors.black,
-      inverseSurface: ink,
-      onInverseSurface: surface,
-      inversePrimary: isDark ? IterPalette.systemBlue : IterPalette.darkBlue,
+      inverseSurface: isDark ? IterPalette.lightCanvas : IterPalette.lightInk,
+      onInverseSurface: isDark ? IterPalette.lightInk : IterPalette.lightCanvas,
+      inversePrimary: isDark ? IterPalette.lightRoute : IterPalette.darkRoute,
     );
 
     final base = ThemeData(
       useMaterial3: true,
       brightness: brightness,
       colorScheme: scheme,
+      fontFamily: _bodyFontFamily,
       scaffoldBackgroundColor: canvas,
       splashFactory: InkSparkle.splashFactory,
       extensions: <ThemeExtension<dynamic>>[
@@ -175,65 +175,96 @@ abstract final class IterTheme {
           mutedInk: muted,
           route: primary,
           routeSignal: secondary,
+          possibility: IterPalette.possibility,
           videoScrim: const Color(0x52000000),
         ),
       ],
     );
 
-    final textTheme = base.textTheme.copyWith(
-      displaySmall: base.textTheme.displaySmall?.copyWith(
-        fontSize: 34,
-        height: 1.08,
-        letterSpacing: -0.6,
-        fontWeight: FontWeight.w700,
-        color: ink,
-      ),
-      headlineLarge: base.textTheme.headlineLarge?.copyWith(
-        fontSize: 28,
-        height: 1.12,
-        letterSpacing: -0.4,
-        fontWeight: FontWeight.w700,
-        color: ink,
-      ),
-      headlineMedium: base.textTheme.headlineMedium?.copyWith(
-        fontSize: 24,
-        height: 1.2,
-        letterSpacing: -0.2,
-        fontWeight: FontWeight.w700,
-        color: ink,
-      ),
-      titleLarge: base.textTheme.titleLarge?.copyWith(
-        fontSize: 20,
-        height: 1.25,
-        fontWeight: FontWeight.w700,
-        color: ink,
-      ),
-      titleMedium: base.textTheme.titleMedium?.copyWith(
-        fontSize: 17,
-        height: 1.3,
-        fontWeight: FontWeight.w600,
-        color: ink,
-      ),
-      bodyLarge: base.textTheme.bodyLarge?.copyWith(
-        fontSize: 17,
-        height: 1.45,
-        fontWeight: FontWeight.w400,
-        color: ink,
-      ),
-      bodyMedium: base.textTheme.bodyMedium?.copyWith(
-        fontSize: 15,
-        height: 1.4,
-        color: ink,
-      ),
-      labelLarge: base.textTheme.labelLarge?.copyWith(
-        fontSize: 15,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0,
-      ),
-    );
+    final textTheme = base.textTheme
+        .apply(fontFamily: _bodyFontFamily)
+        .copyWith(
+          displayLarge: base.textTheme.displayLarge?.copyWith(
+            fontFamily: _displayFontFamily,
+            fontSize: 44,
+            height: 1.04,
+            letterSpacing: -1.2,
+            fontWeight: FontWeight.w800,
+            color: ink,
+          ),
+          displayMedium: base.textTheme.displayMedium?.copyWith(
+            fontFamily: _displayFontFamily,
+            fontSize: 38,
+            height: 1.06,
+            letterSpacing: -0.8,
+            fontWeight: FontWeight.w800,
+            color: ink,
+          ),
+          displaySmall: base.textTheme.displaySmall?.copyWith(
+            fontFamily: _displayFontFamily,
+            fontSize: 34,
+            height: 1.08,
+            letterSpacing: -0.6,
+            fontWeight: FontWeight.w700,
+            color: ink,
+          ),
+          headlineLarge: base.textTheme.headlineLarge?.copyWith(
+            fontFamily: _displayFontFamily,
+            fontSize: 28,
+            height: 1.12,
+            letterSpacing: -0.4,
+            fontWeight: FontWeight.w700,
+            color: ink,
+          ),
+          headlineMedium: base.textTheme.headlineMedium?.copyWith(
+            fontFamily: _displayFontFamily,
+            fontSize: 24,
+            height: 1.2,
+            letterSpacing: -0.2,
+            fontWeight: FontWeight.w700,
+            color: ink,
+          ),
+          headlineSmall: base.textTheme.headlineSmall?.copyWith(
+            fontFamily: _displayFontFamily,
+            fontSize: 21,
+            height: 1.24,
+            letterSpacing: -0.1,
+            fontWeight: FontWeight.w700,
+            color: ink,
+          ),
+          titleLarge: base.textTheme.titleLarge?.copyWith(
+            fontFamily: _displayFontFamily,
+            fontSize: 20,
+            height: 1.25,
+            fontWeight: FontWeight.w700,
+            color: ink,
+          ),
+          titleMedium: base.textTheme.titleMedium?.copyWith(
+            fontSize: 17,
+            height: 1.3,
+            fontWeight: FontWeight.w600,
+            color: ink,
+          ),
+          bodyLarge: base.textTheme.bodyLarge?.copyWith(
+            fontSize: 17,
+            height: 1.45,
+            fontWeight: FontWeight.w400,
+            color: ink,
+          ),
+          bodyMedium: base.textTheme.bodyMedium?.copyWith(
+            fontSize: 15,
+            height: 1.4,
+            color: ink,
+          ),
+          labelLarge: base.textTheme.labelLarge?.copyWith(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0,
+          ),
+        );
 
-    final rounded12 = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
+    final rounded14 = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
     );
     return base.copyWith(
       textTheme: textTheme,
@@ -264,7 +295,7 @@ abstract final class IterTheme {
         style: FilledButton.styleFrom(
           minimumSize: const Size(48, 52),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          shape: rounded12,
+          shape: rounded14,
           textStyle: textTheme.labelLarge,
         ),
       ),
@@ -273,7 +304,7 @@ abstract final class IterTheme {
           minimumSize: const Size(48, 52),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           elevation: 0,
-          shape: rounded12,
+          shape: rounded14,
           textStyle: textTheme.labelLarge,
         ),
       ),
@@ -281,7 +312,7 @@ abstract final class IterTheme {
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(48, 52),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
-          shape: rounded12,
+          shape: rounded14,
           side: BorderSide(color: outline),
           textStyle: textTheme.labelLarge,
         ),
@@ -291,15 +322,15 @@ abstract final class IterTheme {
         fillColor: surface,
         hintStyle: textTheme.bodyMedium?.copyWith(color: muted),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: outline),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: outline),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: primary, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(
@@ -311,12 +342,10 @@ abstract final class IterTheme {
         color: surface,
         elevation: 0,
         margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       chipTheme: ChipThemeData(
-        shape: rounded12,
+        shape: rounded14,
         side: BorderSide(color: outline),
         selectedColor: scheme.primaryContainer,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -329,9 +358,7 @@ abstract final class IterTheme {
       listTileTheme: ListTileThemeData(
         iconColor: muted,
         textColor: ink,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }
