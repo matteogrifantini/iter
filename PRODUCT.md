@@ -56,7 +56,7 @@ unchanged. Semplice prioritises a
 dominant title and concise copy, with emoji-and-text options in two columns only
 above 360 dp at normal text size and one column at 360 dp or less or with large
 text. Its progress sits after the options and states the current and remaining
-questions, above a warm Material surface derived from `ColorScheme` roles,
+questions, above a neutral Material surface derived from `ColorScheme` roles,
 including `secondaryContainer`, over the existing canvas.
 
 Phase 1 integrated Browser QA is complete for Home, direct Lab entry and manual
