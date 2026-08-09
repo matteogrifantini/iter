@@ -45,13 +45,14 @@ void main() {
       timestamp: DateTime.utc(2026, 8, 11),
       snapshot: _snapshot('In pianificazione'),
     );
-    final originalOrder = <ChatThread>[newerPlanning, olderPlanning];
+    final originalOrder = <ChatThread>[olderPlanning, newerPlanning];
 
     final result = resolveAdaptiveHome(originalOrder);
 
     expect(result.kind, AdaptiveHomeKind.planning);
     expect(result.thread, same(newerPlanning));
-    expect(originalOrder, orderedEquals(<ChatThread>[newerPlanning, olderPlanning]));
+    expect(originalOrder[0], same(olderPlanning));
+    expect(originalOrder[1], same(newerPlanning));
   });
 }
 
