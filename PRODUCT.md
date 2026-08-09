@@ -132,10 +132,14 @@ The profile exposes the preferences Iter has learned from accepted choices, not 
 - A failed source, stale estimate or unavailable route is stated in plain Italian next to the affected choice.
 - The client never holds a Gemini or routing-provider secret. Planning requests pass through an authenticated Supabase Edge Function.
 
-La nuova chat-first, con messaggi multimodali, TripSnapshot read-only e viaggi
-come conversazioni, è allo stato di prototipo isolato dietro
-`ITER_CHAT_FIRST_PROTOTYPE` e non ha ancora una decisione prodotto; la sua
-spec di dettaglio è nel branch `codex/chat-first-prototype` (vedi `HANDOFF.md`).
+La Home adattiva e il flusso FreeTalk descritti sopra sono la decisione prodotto
+canonica approvata per questa esperienza: l'invio esplicito apre il thread,
+mostra gli indizi compresi e converge sull'intake condiviso prima della proposta
+confermabile. L'implementazione chat-first che li realizza resta però una
+sperimentazione isolata dietro `ITER_CHAT_FIRST_PROTOTYPE`: conserva messaggi
+multimodali, `TripSnapshot` read-only e viaggi come conversazioni, senza
+equivalere a rollout prodotto, provider reale o persistenza. La sua spec di
+dettaglio è nel branch `codex/chat-first-prototype` (vedi `HANDOFF.md`).
 
 ## MVP Boundaries
 

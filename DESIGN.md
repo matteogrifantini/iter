@@ -170,10 +170,10 @@ Light is the default on first launch. The profile contains an explicit two-way *
 - Semantic order follows context, question, composer, signals, primary action,
   secondary content, then navigation. After an update, screen-reader focus
   moves to the new signal or next question.
-- At `360 dp`, `390 dp` and the minimum compact Android width, and with large
-  text, headline, composer and signals flow vertically; the route line never
-  fixes their height. The keyboard never obscures the input, error or send
-  action.
+- Required responsive gates are `320 dp`, `360 dp`, `390 dp`, the minimum
+  compact Android width, and text scale `1.5`. At every gate, headline,
+  composer and signals flow vertically; the route line never fixes their
+  height. The keyboard never obscures the input, error or send action.
 - Semantic labels for personal-fit scores, route changes, locked stops and outbound booking links.
 - Text and state never rely on colour alone; maintain contrast in both themes.
 - Screen-reader order follows the visible decision order.
