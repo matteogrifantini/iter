@@ -177,10 +177,12 @@ class AdaptivePlanningSection extends StatelessWidget {
     super.key,
     required this.thread,
     required this.onOpenThread,
+    this.onStartAnotherJourney,
   });
 
   final ChatThread thread;
   final ValueChanged<ChatThread> onOpenThread;
+  final Future<void> Function()? onStartAnotherJourney;
 
   @override
   Widget build(BuildContext context) {
@@ -235,6 +237,13 @@ class AdaptivePlanningSection extends StatelessWidget {
                   icon: const Icon(Icons.arrow_forward_rounded),
                   label: const Text('Continua il viaggio'),
                 ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: onStartAnotherJourney == null
+                      ? null
+                      : () => onStartAnotherJourney!(),
+                  child: const Text('Inizia un altro viaggio'),
+                ),
               ],
             ),
           ),
@@ -272,10 +281,12 @@ class ActiveTimelineSection extends StatelessWidget {
     }
     final day = snapshot.days.first;
     final colors = Theme.of(context).colorScheme;
-    var update = thread.summary.lastPreview;
+    String? update;
     for (final message in thread.messages.reversed) {
-      if (message.kind == ChatMessageKind.operational &&
-          message.text.isNotEmpty) {
+      if (message.text.isNotEmpty &&
+          (message.kind == ChatMessageKind.operational ||
+              (message.kind == ChatMessageKind.planProposal &&
+                  message.proposal?.outcome == null))) {
         update = message.text;
         break;
       }
@@ -352,7 +363,7 @@ class ActiveTimelineSection extends StatelessWidget {
                 .toList(growable: false),
           ),
         ),
-        ...<Widget>[
+        if (update != null) ...<Widget>[
           const SizedBox(height: 4),
           Card(
             color: colors.secondaryContainer,
@@ -383,6 +394,15 @@ class ActiveTimelineSection extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+        ] else ...<Widget>[
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => onOpenThread(thread),
+              child: const Text('Apri il piano di oggi'),
             ),
           ),
         ],

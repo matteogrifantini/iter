@@ -995,41 +995,119 @@ void main() {
       );
     });
 
-    test('free talk preserves ordinary words containing a destination label', () {
-      final controller = ChatFirstPrototypeController();
-      final thread = controller.startFreeTalk();
-      controller.openConversation(thread.summary.id);
+    test(
+      'free talk preserves ordinary words containing a destination label',
+      () {
+        final controller = ChatFirstPrototypeController();
+        final thread = controller.startFreeTalk();
+        controller.openConversation(thread.summary.id);
 
-      controller.sendText('Vorrei un weekend romantico a Roma.');
+        controller.sendText('Vorrei un weekend romantico a Roma.');
 
-      final ack = controller.threadOf(thread.summary.id).messages.lastWhere(
-        (message) => message.id == kFreeTalkAckId,
-      );
-      expect(ack.text, contains('weekend romantico'));
-      expect(ack.text, isNot(contains('Roma')));
-    });
+        final ack = controller
+            .threadOf(thread.summary.id)
+            .messages
+            .lastWhere((message) => message.id == kFreeTalkAckId);
+        expect(ack.text, contains('weekend romantico'));
+        expect(ack.text, isNot(contains('Roma')));
+      },
+    );
 
-    test('free talk asks one missing constraint at a time', () {
-      final controller = ChatFirstPrototypeController();
-      final thread = controller.startFreeTalk();
-      controller.openConversation(thread.summary.id);
-      final freeTalk = controller.threadOf(thread.summary.id) as FreeTalkThread;
+    test(
+      'free talk first reply emits acknowledgement then one missing question',
+      () {
+        final controller = ChatFirstPrototypeController();
+        final thread = controller.startFreeTalk();
+        controller.openConversation(thread.summary.id);
+        final freeTalk =
+            controller.threadOf(thread.summary.id) as FreeTalkThread;
 
-      controller.sendText('Vorrei un weekend con calma.');
-      controller.sendText('A ottobre.');
+        controller.sendText('Vorrei un weekend con calma.');
 
-      expect(
-        freeTalk.messages.where((message) => message.id == kFreeTalkMissingId),
-        hasLength(1),
-      );
-      expect(
-        freeTalk.messages.where(
-          (message) =>
-              message.role == ChatRole.assistant && message.choices.isNotEmpty,
-        ),
-        isEmpty,
-      );
-    });
+        final assistant = freeTalk.messages
+            .where((message) => message.role == ChatRole.assistant)
+            .toList(growable: false);
+        expect(
+          assistant.map((message) => message.id),
+          containsAllInOrder(<String>[kFreeTalkAckId, kFreeTalkMissingId]),
+        );
+        expect(freeTalk.messages.last.id, kFreeTalkMissingId);
+        expect(
+          freeTalk.messages.where(
+            (message) =>
+                message.role == ChatRole.assistant &&
+                message.choices.isNotEmpty,
+          ),
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'free talk correction revises the same thread and emits one proposal',
+      () {
+        final controller = ChatFirstPrototypeController();
+        final thread = controller.startFreeTalk();
+        controller.openConversation(thread.summary.id);
+
+        controller.sendText('Vorrei quattro giorni lenti e buon cibo.');
+        controller.sendText('A fine settembre.');
+        _tapChoice(controller, thread.summary.id, 'Correggi');
+        controller.sendText('Meglio ottobre e 500 euro.');
+        final revised = controller
+            .threadOf(thread.summary.id)
+            .messages
+            .lastWhere((message) => message.id == 'free-talk-summary-revised');
+        expect(revised.text, contains('Meglio ottobre e 500 euro.'));
+
+        _tapChoice(controller, thread.summary.id, 'Conferma');
+        final messages = controller.threadOf(thread.summary.id).messages;
+        expect(
+          messages.where((message) => message.id == kFreeTalkProposalId),
+          hasLength(1),
+        );
+        expect(controller.threadOf(thread.summary.id), same(thread));
+      },
+    );
+
+    test(
+      'home intent retries the same persisted batch without duplicate beats',
+      () async {
+        final source = _RetryingPersistenceDataSource();
+        final controller = ChatFirstPrototypeController(dataSource: source);
+
+        await expectLater(
+          controller.submitHomeIntent('Vorrei partire piano.'),
+          throwsStateError,
+        );
+        final failed = controller.threadOf(kFreeTalkConversationId);
+        expect(
+          failed.messages.where((m) => m.role == ChatRole.traveler),
+          hasLength(1),
+        );
+        expect(
+          failed.messages.where((m) => m.id == kFreeTalkMissingId),
+          hasLength(1),
+        );
+
+        final thread = await controller.submitHomeIntent(
+          'Vorrei partire piano.',
+        );
+        expect(thread, same(failed));
+        expect(
+          thread.messages.where((m) => m.role == ChatRole.traveler),
+          hasLength(1),
+        );
+        expect(
+          thread.messages.where((m) => m.id == kFreeTalkAckId),
+          hasLength(1),
+        );
+        expect(
+          thread.messages.where((m) => m.id == kFreeTalkMissingId),
+          hasLength(1),
+        );
+      },
+    );
 
     test('free talk names a destination only after summary confirmation', () {
       final controller = ChatFirstPrototypeController();
@@ -1040,7 +1118,6 @@ void main() {
 
       controller.sendText('Vorrei quattro giorni lenti, con buon cibo.');
       controller.sendText('A fine settembre.');
-      controller.sendText('Con circa 500 euro.');
 
       final summary = freeTalk.messages.lastWhere(
         (message) => message.id == kFreeTalkSummaryId,
@@ -1091,29 +1168,40 @@ void main() {
       );
     });
 
-    test('accepting a proposal keeps the in-memory plan when save fails',
-        () async {
-      final controller = ChatFirstPrototypeController(
-        dataSource: _FailingTripVersionDataSource(),
-      );
-      final roma = controller.threads.firstWhere(
-        (thread) => thread.summary.title.contains('Roma'),
-      );
-      controller.openConversation(roma.summary.id);
-      controller.sendText('Rallenta la mattina');
-      final proposal = controller.threadOf(roma.summary.id).messages.lastWhere(
-        (message) => message.kind == ChatMessageKind.planProposal,
-      );
+    test(
+      'accepting a proposal keeps the in-memory plan when save fails',
+      () async {
+        final controller = ChatFirstPrototypeController(
+          dataSource: _FailingTripVersionDataSource(),
+        );
+        final roma = controller.threads.firstWhere(
+          (thread) => thread.summary.title.contains('Roma'),
+        );
+        controller.openConversation(roma.summary.id);
+        controller.sendText('Rallenta la mattina');
+        final proposal = controller
+            .threadOf(roma.summary.id)
+            .messages
+            .lastWhere(
+              (message) => message.kind == ChatMessageKind.planProposal,
+            );
 
-      controller.acceptProposal(roma.summary.id, proposal.id);
-      await Future<void>.delayed(Duration.zero);
+        controller.acceptProposal(roma.summary.id, proposal.id);
+        await Future<void>.delayed(Duration.zero);
 
-      expect(proposal.proposal?.outcome, PlanProposalOutcome.accepted);
-      expect(
-        controller.threadOf(roma.summary.id).summary.snapshot?.days.first.theme,
-        'Mattina più lenta',
-      );
-    });
+        expect(proposal.proposal?.outcome, PlanProposalOutcome.accepted);
+        expect(
+          controller
+              .threadOf(roma.summary.id)
+              .summary
+              .snapshot
+              ?.days
+              .first
+              .theme,
+          'Mattina più lenta',
+        );
+      },
+    );
   });
 }
 
@@ -1191,6 +1279,26 @@ class _FailingPersistenceDataSource extends MockDataSource {
   @override
   Future<void> insertMessage(String conversationId, ChatMessage message) async {
     throw StateError('persistence unavailable');
+  }
+}
+
+class _RetryingPersistenceDataSource extends MockDataSource {
+  final _fail = <bool>[true];
+
+  @override
+  Future<ConversationRow?> createConversation(Conversation summary) async =>
+      ConversationRow(
+        id: 'retrying-conversation',
+        conversation: summary,
+        updatedAt: DateTime(2026, 10, 16, 10, 30),
+      );
+
+  @override
+  Future<void> insertMessage(String conversationId, ChatMessage message) async {
+    if (_fail.single) {
+      _fail[0] = false;
+      throw StateError('persistence unavailable');
+    }
   }
 }
 

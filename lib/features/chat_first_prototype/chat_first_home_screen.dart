@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../app/iter_theme.dart';
@@ -18,15 +20,17 @@ class ChatFirstHomeScreen extends StatefulWidget {
     required this.onPhotoIntent,
     required this.onOpenThread,
     required this.onOpenTrips,
+    this.onStartAnotherJourney,
   });
 
   final AdaptiveHomeModel model;
   final int unread;
-  final ValueChanged<String> onSubmitIntent;
+  final FutureOr<void> Function(String) onSubmitIntent;
   final VoidCallback onVoiceIntent;
   final ValueChanged<String> onPhotoIntent;
   final ValueChanged<ChatThread> onOpenThread;
   final VoidCallback onOpenTrips;
+  final Future<void> Function()? onStartAnotherJourney;
 
   @override
   State<ChatFirstHomeScreen> createState() => _ChatFirstHomeScreenState();
@@ -35,6 +39,8 @@ class ChatFirstHomeScreen extends StatefulWidget {
 class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
   final _composer = TextEditingController();
   final _selectedClues = <String>{};
+  var _submitting = false;
+  String? _submitError;
 
   @override
   void dispose() {
@@ -70,18 +76,27 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
         .trim();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final intent = _composer.text.trim();
-    if (intent.isEmpty) return;
+    if (intent.isEmpty || _submitting) return;
+    setState(() {
+      _submitting = true;
+      _submitError = null;
+    });
     try {
-      widget.onSubmitIntent(intent);
+      await Future<void>.sync(() => widget.onSubmitIntent(intent));
+      if (!mounted) return;
       setState(() {
         _composer.clear();
         _selectedClues.clear();
+        _submitting = false;
       });
     } catch (_) {
-      // The typed intent is preserved so the person can retry after a failed
-      // synchronous hand-off to navigation or the demo controller.
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _submitError = 'Non riesco a iniziare il viaggio. Riprova.';
+      });
     }
   }
 
@@ -99,7 +114,7 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
           const SizedBox(height: 32),
           if (widget.model.kind == AdaptiveHomeKind.empty) ...<Widget>[
             Text(
-              'Dimmi che viaggio hai in mente',
+              'Che viaggio ti farebbe bene adesso?',
               style: Theme.of(context).textTheme.displaySmall,
             ),
             const SizedBox(height: 8),
@@ -120,6 +135,22 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
                 onSelected: widget.onPhotoIntent,
               ),
             ),
+            if (_submitError != null) ...<Widget>[
+              const SizedBox(height: 12),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  _submitError!,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: colors.error),
+                ),
+              ),
+              TextButton(
+                onPressed: _submitting ? null : _submit,
+                child: const Text('Riprova'),
+              ),
+            ],
             const SizedBox(height: 20),
             Text(
               'Puoi partire da qui',
@@ -131,20 +162,25 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
               onToggle: _toggleSeed,
             ),
             const SizedBox(height: 32),
-            const Align(
+            Align(
               alignment: Alignment.centerRight,
-              child: RottaVivaMark(),
+              child: const RottaVivaRouteTrace(
+                state: RottaVivaRouteState.empty,
+              ),
             ),
           ] else if (widget.model.kind ==
               AdaptiveHomeKind.planning) ...<Widget>[
             AdaptivePlanningSection(
               thread: widget.model.thread!,
               onOpenThread: widget.onOpenThread,
+              onStartAnotherJourney: widget.onStartAnotherJourney,
             ),
             const SizedBox(height: 32),
-            const Align(
+            Align(
               alignment: Alignment.centerRight,
-              child: RottaVivaMark(),
+              child: const RottaVivaRouteTrace(
+                state: RottaVivaRouteState.planning,
+              ),
             ),
           ] else ...<Widget>[
             ActiveTimelineSection(
@@ -168,9 +204,11 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
               ),
             ),
             const SizedBox(height: 32),
-            const Align(
+            Align(
               alignment: Alignment.centerRight,
-              child: RottaVivaMark(),
+              child: const RottaVivaRouteTrace(
+                state: RottaVivaRouteState.active,
+              ),
             ),
           ],
         ],

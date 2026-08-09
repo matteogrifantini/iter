@@ -41,6 +41,8 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   List<JourneyRoute>? _journeys;
   ThemeMode _themeMode = ThemeMode.light;
   List<String> _memoryTags = _demoMemoryTags;
+  ChatThread? _pendingHomeThread;
+  String? _pendingHomeIntent;
 
   int get unread => _unread;
   String? get activeThreadId => _activeThreadId;
@@ -303,20 +305,65 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     return thread;
   }
 
+  /// Home uses the only awaited persistence path: its new free-talk exchange is
+  /// committed before the shell navigates. A failed retry reuses the exact
+  /// in-memory batch, therefore it cannot duplicate the traveler message or
+  /// advance the deterministic script twice. Mock storage returns null and is a
+  /// successful no-op by contract.
+  Future<ChatThread> submitHomeIntent(String text) async {
+    final intent = text.trim();
+    if (intent.isEmpty) throw ArgumentError.value(text, 'text', 'empty intent');
+    var thread = _pendingHomeThread;
+    if (thread == null) {
+      thread =
+          _threads.cast<ChatThread?>().firstWhere(
+            (candidate) => candidate?.summary.id == kFreeTalkConversationId,
+            orElse: () => null,
+          ) ??
+          ChatFirstDemoData.freeTalkThread(trendJourneys);
+      if (!_threads.contains(thread)) {
+        _threads.insert(0, thread);
+      }
+      _activeThreadId = thread.summary.id;
+      thread.travelerMessage(intent);
+      if (!thread.advance()) {
+        thread.messages.add(ChatFirstDemoData.closingReply());
+      }
+      _pendingHomeThread = thread;
+      _pendingHomeIntent = intent;
+    } else if (_pendingHomeIntent != intent) {
+      throw StateError('A home intent is already waiting to be persisted.');
+    }
+
+    await _persistNewMessagesRequired(thread);
+    _pendingHomeThread = null;
+    _pendingHomeIntent = null;
+    notifyListeners();
+    return thread;
+  }
+
   /// Persists every message of [thread] not yet saved, creating the
   /// conversation row on first use. On the mock path this is a no-op.
   Future<void> _persistNewMessages(ChatThread thread) async {
     try {
       final dbId = await _ensureConversation(thread);
       if (dbId == null) return;
-      final unsaved = thread.messages.length - thread.persistedCount;
       for (var i = thread.persistedCount; i < thread.messages.length; i++) {
         await dataSource.insertMessage(dbId, thread.messages[i]);
+        thread.persistedCount++;
       }
-      thread.persistedCount += unsaved;
     } catch (_) {
       // The visible in-memory thread remains authoritative until persistence
       // becomes available again; this best-effort seam must not leak errors.
+    }
+  }
+
+  Future<void> _persistNewMessagesRequired(ChatThread thread) async {
+    final dbId = await _ensureConversation(thread);
+    if (dbId == null) return;
+    for (var i = thread.persistedCount; i < thread.messages.length; i++) {
+      await dataSource.insertMessage(dbId, thread.messages[i]);
+      thread.persistedCount++;
     }
   }
 
@@ -340,8 +387,6 @@ class ChatFirstPrototypeController extends ChangeNotifier {
       if (row == null) return null;
       _dbIdByClientId[thread.summary.id] = row.id;
       return row.id;
-    } catch (_) {
-      return null;
     } finally {
       _pendingConversation.remove(thread.summary.id);
     }

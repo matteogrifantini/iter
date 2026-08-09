@@ -34,6 +34,24 @@ void main() {
     expect(result.thread, same(active));
   });
 
+  test('keeps the first active trip in list order', () {
+    final firstActive = _thread(
+      id: 'first-active',
+      timestamp: DateTime.utc(2026, 8, 8),
+      snapshot: _snapshot('In viaggio'),
+    );
+    final secondActive = _thread(
+      id: 'second-active',
+      timestamp: DateTime.utc(2026, 8, 12),
+      snapshot: _snapshot('In viaggio'),
+    );
+
+    final result = resolveAdaptiveHome(<ChatThread>[firstActive, secondActive]);
+
+    expect(result.kind, AdaptiveHomeKind.active);
+    expect(result.thread, same(firstActive));
+  });
+
   test('returns the newest planning trip when none is active', () {
     final olderPlanning = _thread(
       id: 'older-planning',

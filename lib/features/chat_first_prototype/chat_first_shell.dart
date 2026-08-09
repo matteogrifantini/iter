@@ -49,6 +49,7 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
                     _startFreeTalkWithPhoto(context, asset),
                 onOpenThread: (thread) => _openThread(context, thread),
                 onOpenTrips: () => setState(() => _tabIndex = 1),
+                onStartAnotherJourney: () => _startAnotherFreeTalk(context),
                 unread: controller.unread,
               ),
               ChatFirstListScreen(
@@ -73,10 +74,17 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
     );
   }
 
-  void _startFreeTalkWithText(BuildContext context, String intent) {
+  Future<void> _startFreeTalkWithText(
+    BuildContext context,
+    String intent,
+  ) async {
+    final thread = await widget.controller.submitHomeIntent(intent);
+    if (context.mounted) _openThread(context, thread);
+  }
+
+  Future<void> _startAnotherFreeTalk(BuildContext context) async {
     final thread = widget.controller.startFreeTalk();
-    _openThread(context, thread);
-    widget.controller.sendText(intent);
+    if (context.mounted) _openThread(context, thread);
   }
 
   void _startFreeTalkWithVoice(BuildContext context) {

@@ -11,6 +11,7 @@ import 'package:iter/features/chat_first_prototype/chat_first_models.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_profile_screen.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_shell.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_thread_screen.dart';
+import 'package:iter/features/chat_first_prototype/rotta_viva_mark.dart';
 import 'package:iter/features/chat_first_prototype/trip_snapshot_screen.dart';
 
 void main() {
@@ -34,11 +35,6 @@ void main() {
     await tester.tap(find.text(label).last);
     await tester.pumpAndSettle();
   }
-
-  Finder semanticsLabel(String label) => find.byWidgetPredicate(
-    (widget) => widget is Semantics && widget.properties.label == label,
-    description: 'Semantics label $label',
-  );
 
   testWidgets('home vuota espone manifesto e segnali senza catalogo', (
     tester,
@@ -64,14 +60,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Dimmi che viaggio hai in mente'), findsOneWidget);
-    expect(semanticsLabel('Iter, la rotta che prende forma'), findsWidgets);
+    expect(find.text('Che viaggio ti farebbe bene adesso?'), findsOneWidget);
+    final semantics = tester.ensureSemantics();
     expect(
-      semanticsLabel('Scrivi il viaggio che hai in mente'),
+      find.bySemanticsLabel('Composer per raccontare il viaggio'),
       findsOneWidget,
     );
-    expect(semanticsLabel('Aggiungi una foto'), findsOneWidget);
-    expect(semanticsLabel('Invia un messaggio vocale'), findsOneWidget);
+    semantics.dispose();
     expect(find.text('🌊 Mare e pause'), findsOneWidget);
     expect(find.text('Roma'), findsNothing);
     expect(find.text('Porto'), findsNothing);
@@ -119,6 +114,49 @@ void main() {
     expect(
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       'Vorrei rallentare',
+    );
+  });
+
+  testWidgets('home conserva input e segnali, espone retry dopo errore async', (
+    tester,
+  ) async {
+    var attempts = 0;
+    await tester.pumpWidget(
+      wrapIter(
+        ChatFirstHomeScreen(
+          model: const AdaptiveHomeModel.empty(),
+          unread: 0,
+          onSubmitIntent: (_) async {
+            attempts++;
+            if (attempts == 1) throw StateError('offline');
+          },
+          onVoiceIntent: () {},
+          onPhotoIntent: (_) {},
+          onOpenThread: (_) {},
+          onOpenTrips: () {},
+        ),
+      ),
+    );
+    await tester.tap(find.text('🌊 Mare e pause'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Invia il desiderio'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Non riesco a iniziare il viaggio. Riprova.'),
+      findsOneWidget,
+    );
+    expect(find.text('Riprova'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'Mare e pause',
+    );
+    await tester.tap(find.text('Riprova'));
+    await tester.pumpAndSettle();
+    expect(attempts, 2);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      isEmpty,
     );
   });
 
@@ -486,6 +524,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     final controller = ChatFirstPrototypeController();
+    var startedAnother = false;
     await tester.pumpWidget(
       wrapIter(
         ChatFirstHomeScreen(
@@ -500,6 +539,7 @@ void main() {
           onPhotoIntent: (_) {},
           onOpenThread: (_) {},
           onOpenTrips: () {},
+          onStartAnotherJourney: () async => startedAnother = true,
           unread: 0,
         ),
       ),
@@ -509,6 +549,10 @@ void main() {
     expect(find.text('Prossima scelta'), findsOneWidget);
     expect(find.text('Decidiamo il ritmo del viaggio'), findsOneWidget);
     expect(find.text('Continua il viaggio'), findsOneWidget);
+    expect(find.text('Inizia un altro viaggio'), findsOneWidget);
+    await tester.tap(find.text('Inizia un altro viaggio'));
+    await tester.pump();
+    expect(startedAnother, isTrue);
     expect(find.text('Ispirazioni per te'), findsNothing);
   });
 
@@ -538,8 +582,7 @@ void main() {
 
     expect(find.text('Roma · Oggi'), findsOneWidget);
     expect(find.text('Foro Romano'), findsOneWidget);
-    expect(find.text('Aggiornamento da confermare'), findsOneWidget);
-    expect(semanticsLabel('Timeline di oggi, 2 tappe'), findsOneWidget);
+    expect(find.text('Aggiornamento da confermare'), findsNothing);
     await tester.tap(find.text('Apri il piano di oggi'));
     await tester.pump();
     expect(opened, same(active));
@@ -574,13 +617,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(semanticsLabel('Viaggi, 3 messaggi non letti'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('🌊 Mare e pause'),
       160,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(semanticsLabel('Segnale: mare e pause'), findsWidgets);
   });
 
   testWidgets('shell usa Oggi Viaggi Tu e apre il FreeTalk dopo invio', (
@@ -758,12 +799,42 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('Aggiornamento da confermare'),
-      160,
-      scrollable: find.byType(Scrollable).first,
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('rotta trace distingue gli stati e annulla il moto ridotto', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      const MediaQuery(
+        data: MediaQueryData(disableAnimations: true),
+        child: MaterialApp(
+          home: Row(
+            children: <Widget>[
+              RottaVivaRouteTrace(state: RottaVivaRouteState.empty),
+              RottaVivaRouteTrace(state: RottaVivaRouteState.planning),
+              RottaVivaRouteTrace(state: RottaVivaRouteState.active),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(
+      find.bySemanticsLabel('Rotta vuota, pronta a raccogliere un desiderio'),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel('Rotta in pianificazione, una scelta alla volta'),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel('Rotta attiva, piano di oggi'),
+      findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+    semantics.dispose();
   });
 
   testWidgets('composer mantiene contrasto semantico in chiaro e scuro', (

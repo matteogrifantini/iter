@@ -576,7 +576,9 @@ class FreeTalkThread extends IntakeThread {
           sentAt: beat.sentAt,
         ),
       );
-      return true;
+      // The first intent earns both the acknowledgement and the one missing
+      // question. Do not require an unexplained extra traveler message.
+      return advance();
     }
     if (beat.id == kFreeTalkSummaryId) {
       _emit(_summaryBeat(id: kFreeTalkSummaryId));
