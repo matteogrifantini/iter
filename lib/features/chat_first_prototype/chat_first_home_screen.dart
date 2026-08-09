@@ -20,6 +20,7 @@ class ChatFirstHomeScreen extends StatelessWidget {
     required this.journeys,
     required this.resumable,
     required this.onStartChat,
+    required this.onStartFreeTalk,
     required this.onResume,
     required this.onOpenChats,
     required this.unread,
@@ -29,6 +30,7 @@ class ChatFirstHomeScreen extends StatelessWidget {
   final List<JourneyRoute> journeys;
   final List<ChatThread> resumable;
   final ValueChanged<JourneyRoute> onStartChat;
+  final VoidCallback onStartFreeTalk;
   final ValueChanged<ChatThread> onResume;
   final VoidCallback onOpenChats;
   final int unread;
@@ -71,6 +73,8 @@ class ChatFirstHomeScreen extends StatelessWidget {
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
+          const SizedBox(height: 18),
+          _FreeTalkBanner(onTap: onStartFreeTalk),
           if (featured != null) ...<Widget>[
             const SizedBox(height: 18),
             _FeaturedBanner(
@@ -239,6 +243,66 @@ class _SectionTitle extends StatelessWidget {
 
 /// The hero: one large poster with the city, the essentials and a single
 /// decision to organise the trip. The banner itself is never tappable.
+class _FreeTalkBanner extends StatelessWidget {
+  const _FreeTalkBanner({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: colors.outlineVariant.withValues(alpha: 0.7),
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: colors.primary.withValues(alpha: 0.12),
+                child: Icon(Icons.chat_bubble_outline,
+                    color: colors.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Parlane con Iter',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Dimmi l’idea che hai in testa: non serve ancora una '
+                      'città.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios, size: 16, color: colors.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _FeaturedBanner extends StatelessWidget {
   const _FeaturedBanner({required this.journey, required this.onStartChat});
 
@@ -261,7 +325,15 @@ class _FeaturedBanner extends StatelessWidget {
           Image.asset(poster, fit: BoxFit.cover),
           DecoratedBox(
             decoration: BoxDecoration(
-              color: context.iterColors.videoScrim,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: const [0.35, 1],
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.55),
+                ],
+              ),
             ),
           ),
           Padding(
@@ -277,13 +349,13 @@ class _FeaturedBanner extends StatelessWidget {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: context.iterColors.videoScrim,
+                      color: Colors.white.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(99),
                     ),
                     child: Text(
                       'Scelto per te',
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: colors.onInverseSurface,
+                        color: colors.primary,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -350,17 +422,20 @@ class _GhostChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color: context.iterColors.videoScrim,
+        color: isDark
+            ? Colors.black.withValues(alpha: 0.55)
+            : Colors.white.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(99),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: colors.onInverseSurface,
-          fontWeight: FontWeight.w700,
+          color: isDark ? colors.onInverseSurface : IterPalette.lightInk,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -394,7 +469,15 @@ class _ResumeCard extends StatelessWidget {
               Image.asset(summary.avatar.asset, fit: BoxFit.cover),
               DecoratedBox(
                 decoration: BoxDecoration(
-                  color: colors.scrim.withValues(alpha: 0.5),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: const [0.35, 1],
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.55),
+                    ],
+                  ),
                 ),
               ),
               Positioned(

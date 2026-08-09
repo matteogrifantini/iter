@@ -618,13 +618,14 @@ class Conversation {
   final bool isTrending;
 
   Conversation copyWith({
+    String? title,
     int? unread,
     String? lastPreview,
     TripSnapshot? snapshot,
   }) {
     return Conversation(
       id: id,
-      title: title,
+      title: title ?? this.title,
       subtitle: subtitle,
       avatar: avatar,
       timestamp: timestamp,

@@ -34,6 +34,13 @@ Sperimentazione isolata, senza toccare l'app esistente. Su questo branch:
   Iter propone una modifica concreta (`PlanProposal`), l'utente può
   Accetta/Annulla; accettare aggiorna lo snapshot del thread (es. "mattina più
   lenta" a Roma).
+- **Nuovo viaggio parlando (FreeTalk)**: la Home ha l'entry **Parlane con
+  Iter** che apre un thread senza destinazione imposta; il desiderio libero non
+  pinna la meta, viene echeggiato, poi la conversazione offre le mete trend
+  (inclusa "Consigliami tu"). Appena la destinazione è sciolta, il thread
+  converge sullo stesso intake guidato (stessa `restIntakeScript`, stessa
+  proposta finale e stessi moduli F5). `IntakeThread` ora mantiene `journey`
+  opzionale/mutabile così il FreeTalk lo aggancia a metà conversazione.
 - Profilo: tema Sistema/Chiaro/Scuro con persistenza locale, memoria appresa dal
   contesto (niente sondaggi o profili iniziali), privacy descritta.
 - Tutto mock e isolato: nessuna scrittura in `IterStore`, nessun provider, GPS,
@@ -309,12 +316,12 @@ Il profilo deve supportare la personalizzazione: stile di viaggio, budget, inter
 
 Tema di default: chiaro. L'utente può scegliere Sistema, Chiaro o Scuro. Il tema scuro non è una semplice inversione: le superfici usano ruoli semantici distinti.
 
-Direzione visuale:
+Direzione visuale (mondo "Neutro System Blue", vedi DESIGN.md):
 
-- editorial cartography;
-- travel magazine contemporaneo;
-- immagini e video come materia principale;
-- palette sobria e calda;
+- neutrali system e superfici chiare, non tenute calde;
+- un solo accento System Blue per azioni e selezione;
+- separatori hairline invece di ombre;
+- immagini e mappe come materia principale;
 - molto spazio e gerarchia chiara;
 - motion fluido e funzionale;
 - niente estetica SaaS generica;

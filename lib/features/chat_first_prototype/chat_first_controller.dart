@@ -281,6 +281,29 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     return thread;
   }
 
+  /// Opens (or creates) a free-talk thread: the traveler starts from their own
+  /// words, and the destination is pinned mid-conversation. Reusing the same
+  /// client id keeps repeat entries idempotent across sessions.
+  ChatThread startFreeTalk() {
+    ChatThread? existing;
+    for (final thread in _threads) {
+      if (thread.summary.id == kFreeTalkConversationId) {
+        existing = thread;
+        break;
+      }
+    }
+    if (existing != null) {
+      openConversation(existing.summary.id);
+      return existing;
+    }
+    final thread = ChatFirstDemoData.freeTalkThread(trendJourneys);
+    _threads.insert(0, thread);
+    _activeThreadId = thread.summary.id;
+    notifyListeners();
+    _persistNewMessages(thread);
+    return thread;
+  }
+
   /// Persists every message of [thread] not yet saved, creating the
   /// conversation row on first use. On the mock path this is a no-op.
   Future<void> _persistNewMessages(ChatThread thread) async {

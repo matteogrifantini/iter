@@ -44,6 +44,7 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
                 journeys: controller.trendJourneys,
                 resumable: controller.threads.take(2).toList(growable: false),
                 onStartChat: (journey) => _startFromJourney(context, journey),
+                onStartFreeTalk: () => _startFreeTalk(context),
                 onResume: (thread) => _openThread(context, thread),
                 onOpenChats: () => setState(() => _tabIndex = 1),
                 unread: controller.unread,
@@ -73,6 +74,11 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
 
   void _startFromJourney(BuildContext context, JourneyRoute journey) {
     final thread = widget.controller.startFromJourney(journey);
+    _openThread(context, thread);
+  }
+
+  void _startFreeTalk(BuildContext context) {
+    final thread = widget.controller.startFreeTalk();
     _openThread(context, thread);
   }
 

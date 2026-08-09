@@ -910,15 +910,90 @@ void main() {
       expect(restored.stayZone?.name, 'Chiado');
     });
 
-    test('TripSnapshot.copyWith sostituisce solo i campi indicati', () {
+    });
+
+  group('Free talk (nuovo viaggio parlando)', () {
+    test('startFreeTalk crea il thread libero e riusa quello esistente', () {
       final controller = ChatFirstPrototypeController();
-      final roma = controller.threads.firstWhere(
-        (t) => t.summary.title.contains('Roma'),
+      final created = controller.startFreeTalk();
+      expect(created.summary.id, kFreeTalkConversationId);
+      expect(created.summary.isTrending, isFalse);
+      expect(created.summary.lastPreview, contains('Parlane'));
+      expect(controller.threads.length, 3);
+
+      final reused = controller.startFreeTalk();
+      expect(reused.summary.id, kFreeTalkConversationId);
+      expect(controller.threads.length, 3);
+    });
+
+    test('free talk: il desiderio non pinna la destinazione e viene echeggiato',
+        () {
+      final controller = ChatFirstPrototypeController();
+      final thread = controller.startFreeTalk();
+      controller.openConversation(thread.summary.id);
+      final freeTalk = controller.threadOf(thread.summary.id) as FreeTalkThread;
+
+      expect(freeTalk.journey, isNull);
+
+      controller.sendText('Vorrei un fine settimana lento, tipo Lisbona');
+      expect(freeTalk.journey, isNull, reason: 'il desiderio non deve bloccare');
+      final ack = freeTalk.messages.lastWhere(
+        (m) => m.id == kFreeTalkAckId,
       );
-      final updated = roma.summary.snapshot!.copyWith(transport: 'A piedi');
-      expect(updated.transport, 'A piedi');
-      expect(updated.stay, roma.summary.snapshot!.stay);
-      expect(updated.days, roma.summary.snapshot!.days);
+      expect(ack.kind, ChatMessageKind.text);
+      expect(
+        freeTalk.messages.any((m) => m.id == 'ft-destination'),
+        isTrue,
+      );
+      expect(freeTalk.answers.containsKey('q-duration'), isFalse);
+    });
+
+    test('freeTalk: scelta meta avvia l\u2019intake e converge sullo stesso percorso',
+        () {
+      final controller = ChatFirstPrototypeController();
+      final thread = controller.startFreeTalk();
+      controller.openConversation(thread.summary.id);
+      final freeTalk = controller.threadOf(thread.summary.id) as FreeTalkThread;
+
+      controller.sendText('Vorrei il mare e fare lunghe colazioni');
+
+      final journey = controller.trendJourneys.first;
+      final label = journeyCity(journey);
+      controller.choose(
+        ChatChoice(label: label),
+        conversationId: thread.summary.id,
+      );
+      expect(freeTalk.journey, isNotNull);
+      expect(freeTalk.summary.title, journeyCity(journey));
+
+      _answerIntake(controller, thread.summary.id);
+      final proposal = freeTalk.messages
+          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      expect(proposal.proposal?.snapshot.destinationTitle, journeyCity(journey));
+
+      controller.acceptProposal(thread.summary.id, proposal.id);
+      expect(
+        controller.threadOf(thread.summary.id).summary.snapshot!.destinationTitle,
+        journeyCity(journey),
+      );
+    });
+
+    test('freeTalk: "Consigliami tu" sceglie la prima meta', () {
+      final controller = ChatFirstPrototypeController();
+      final thread = controller.startFreeTalk();
+      controller.openConversation(thread.summary.id);
+      final freeTalk = controller.threadOf(thread.summary.id) as FreeTalkThread;
+
+      controller.sendText('Sono indeciso, dimmi dove andare');
+      controller.choose(
+        const ChatChoice(label: 'Consigliami tu'),
+        conversationId: thread.summary.id,
+      );
+      expect(
+        freeTalk.journey,
+        isNotNull,
+        reason: 'la scelta ricade sulla prima destinazione',
+      );
     });
   });
 }
