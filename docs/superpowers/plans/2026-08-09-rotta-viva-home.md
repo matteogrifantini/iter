@@ -27,7 +27,7 @@
 
 ### Task 1: Canonical product and design contract
 
-**Owner:** `product_ux`. Git owner remains `/root`.
+**Owner and Git owner:** `product_ux`, limited to the two documented paths.
 
 **Files:**
 - Modify: `PRODUCT.md`
@@ -59,7 +59,7 @@ Commit only `PRODUCT.md` and `DESIGN.md` with `docs(product): align adaptive Rot
 
 ### Task 2: Adaptive Home state model
 
-**Owner:** `flutter_engineer`. Git owner remains `/root`.
+**Owner and Git owner:** `flutter_engineer`, limited to the two documented paths.
 
 **Files:**
 - Create: `lib/features/chat_first_prototype/adaptive_home_model.dart`
@@ -125,7 +125,7 @@ Commit only the two owned paths with `feat(home): add adaptive state model`.
 
 ### Task 3: Rotta viva theme and bundled typography
 
-**Owner:** `flutter_engineer`. Git owner remains `/root`.
+**Owner and Git owner:** `flutter_engineer`, limited to the documented font, config, theme, and test paths.
 
 **Files:**
 - Create: `assets/fonts/bricolage-grotesque/BricolageGrotesque-Variable.ttf`
@@ -186,7 +186,7 @@ Commit only owned assets/config/theme/test paths with `feat(theme): apply Rotta 
 
 ### Task 4: AI-first intake before destinations
 
-**Owner:** `flutter_engineer`. Git owner remains `/root`.
+**Owner and Git owner:** `flutter_engineer`, limited to the three documented controller/data/test paths.
 
 **Files:**
 - Modify: `lib/features/chat_first_prototype/chat_first_data.dart`
@@ -247,7 +247,7 @@ Commit only the controller/data/test paths with `feat(chat): collect clues befor
 
 ### Task 5: Adaptive Rotta viva Home and shell
 
-**Owner:** `flutter_engineer`. Git owner remains `/root`.
+**Owner and Git owner:** `flutter_engineer`, limited to the documented Home/shell/widget-test paths.
 
 **Files:**
 - Create: `lib/features/chat_first_prototype/rotta_viva_mark.dart`
