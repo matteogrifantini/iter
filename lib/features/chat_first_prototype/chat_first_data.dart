@@ -618,9 +618,13 @@ class FreeTalkThread extends IntakeThread {
   String _cluePreview(String? value) {
     var preview = value?.trim() ?? 'la tua idea';
     for (final destination in viewDestinations) {
-      preview = preview.replaceAll(
-        RegExp(RegExp.escape(journeyCity(destination)), caseSensitive: false),
-        '',
+      preview = preview.replaceAllMapped(
+        RegExp(
+          '(^|[^\\p{L}\\p{N}_])${RegExp.escape(journeyCity(destination))}(?=\$|[^\\p{L}\\p{N}_])',
+          caseSensitive: false,
+          unicode: true,
+        ),
+        (match) => match.group(1)!,
       );
     }
     preview = preview.replaceAll(RegExp(r'\s{2,}'), ' ').trim();

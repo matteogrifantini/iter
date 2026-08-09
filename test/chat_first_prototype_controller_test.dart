@@ -995,6 +995,20 @@ void main() {
       );
     });
 
+    test('free talk preserves ordinary words containing a destination label', () {
+      final controller = ChatFirstPrototypeController();
+      final thread = controller.startFreeTalk();
+      controller.openConversation(thread.summary.id);
+
+      controller.sendText('Vorrei un weekend romantico a Roma.');
+
+      final ack = controller.threadOf(thread.summary.id).messages.lastWhere(
+        (message) => message.id == kFreeTalkAckId,
+      );
+      expect(ack.text, contains('weekend romantico'));
+      expect(ack.text, isNot(contains('Roma')));
+    });
+
     test('free talk asks one missing constraint at a time', () {
       final controller = ChatFirstPrototypeController();
       final thread = controller.startFreeTalk();
@@ -1076,6 +1090,30 @@ void main() {
         isTrue,
       );
     });
+
+    test('accepting a proposal keeps the in-memory plan when save fails',
+        () async {
+      final controller = ChatFirstPrototypeController(
+        dataSource: _FailingTripVersionDataSource(),
+      );
+      final roma = controller.threads.firstWhere(
+        (thread) => thread.summary.title.contains('Roma'),
+      );
+      controller.openConversation(roma.summary.id);
+      controller.sendText('Rallenta la mattina');
+      final proposal = controller.threadOf(roma.summary.id).messages.lastWhere(
+        (message) => message.kind == ChatMessageKind.planProposal,
+      );
+
+      controller.acceptProposal(roma.summary.id, proposal.id);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(proposal.proposal?.outcome, PlanProposalOutcome.accepted);
+      expect(
+        controller.threadOf(roma.summary.id).summary.snapshot?.days.first.theme,
+        'Mattina più lenta',
+      );
+    });
   });
 }
 
@@ -1153,6 +1191,26 @@ class _FailingPersistenceDataSource extends MockDataSource {
   @override
   Future<void> insertMessage(String conversationId, ChatMessage message) async {
     throw StateError('persistence unavailable');
+  }
+}
+
+/// Fully inherits the mock boundary and fails only accepted-plan persistence.
+class _FailingTripVersionDataSource extends MockDataSource {
+  @override
+  Future<ConversationRow?> createConversation(Conversation summary) async =>
+      ConversationRow(
+        id: 'failing-trip-version',
+        conversation: summary,
+        updatedAt: DateTime(2026, 10, 16, 10, 30),
+      );
+
+  @override
+  Future<void> saveTripVersion({
+    required String conversationId,
+    required String title,
+    required TripSnapshot snapshot,
+  }) async {
+    throw StateError('trip version persistence unavailable');
   }
 }
 

@@ -351,14 +351,19 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   /// the linked `trips` row). Best effort, exactly once, only when the plan has
   /// changed; rejecting a proposal never touches the trips.
   Future<void> _persistAcceptedPlan(ChatThread thread) async {
-    final dbId = await _ensureConversation(thread);
-    if (dbId == null) return;
-    final snapshot = thread.summary.snapshot;
-    if (snapshot == null) return;
-    await dataSource.saveTripVersion(
-      conversationId: dbId,
-      title: thread.summary.title,
-      snapshot: snapshot,
-    );
+    try {
+      final dbId = await _ensureConversation(thread);
+      if (dbId == null) return;
+      final snapshot = thread.summary.snapshot;
+      if (snapshot == null) return;
+      await dataSource.saveTripVersion(
+        conversationId: dbId,
+        title: thread.summary.title,
+        snapshot: snapshot,
+      );
+    } catch (_) {
+      // Accepting a visible proposal stays authoritative in memory even when
+      // the optional persistence boundary is temporarily unavailable.
+    }
   }
 }
