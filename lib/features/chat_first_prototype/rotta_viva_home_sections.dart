@@ -40,6 +40,11 @@ class RottaVivaComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final isDark = colors.brightness == Brightness.dark;
+    final composerBackground = isDark ? colors.surface : colors.inverseSurface;
+    final composerForeground = isDark
+        ? colors.onSurface
+        : colors.onInverseSurface;
     final enabled = controller.text.trim().isNotEmpty;
     return Semantics(
       container: true,
@@ -47,7 +52,7 @@ class RottaVivaComposer extends StatelessWidget {
       label: 'Composer per raccontare il viaggio',
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: colors.inverseSurface,
+          color: composerBackground,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Padding(
@@ -65,16 +70,17 @@ class RottaVivaComposer extends StatelessWidget {
                   maxLines: 5,
                   keyboardType: TextInputType.multiline,
                   textInputAction: TextInputAction.newline,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: colors.onInverseSurface,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(color: composerForeground),
                   decoration: InputDecoration(
                     labelText: 'Scrivi il viaggio che hai in mente',
-                    labelStyle: TextStyle(color: colors.onInverseSurface),
+                    labelStyle: TextStyle(color: composerForeground),
                     hintText: 'Un momento, una disponibilità, un desiderio…',
                     hintStyle: TextStyle(
-                      color: colors.onInverseSurface.withValues(alpha: .72),
+                      color: composerForeground.withValues(alpha: .72),
                     ),
+                    filled: false,
                     border: InputBorder.none,
                   ),
                 ),
@@ -89,7 +95,7 @@ class RottaVivaComposer extends StatelessWidget {
                       tooltip: 'Aggiungi una foto',
                       onPressed: onPhoto,
                       icon: const Icon(Icons.add_photo_alternate_outlined),
-                      color: colors.onInverseSurface,
+                      color: composerForeground,
                     ),
                   ),
                   Semantics(
@@ -99,7 +105,7 @@ class RottaVivaComposer extends StatelessWidget {
                       tooltip: 'Invia un messaggio vocale',
                       onPressed: onVoice,
                       icon: const Icon(Icons.mic_none_rounded),
-                      color: colors.onInverseSurface,
+                      color: composerForeground,
                     ),
                   ),
                   const Spacer(),

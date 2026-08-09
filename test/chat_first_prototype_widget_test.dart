@@ -766,6 +766,79 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('composer mantiene contrasto semantico in chiaro e scuro', (
+    tester,
+  ) async {
+    for (final theme in <ThemeData>[IterTheme.light(), IterTheme.dark()]) {
+      final colors = theme.colorScheme;
+      final isDark = colors.brightness == Brightness.dark;
+      final background = isDark ? colors.surface : colors.inverseSurface;
+      final foreground = isDark ? colors.onSurface : colors.onInverseSurface;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          home: Scaffold(
+            body: ChatFirstHomeScreen(
+              model: const AdaptiveHomeModel.empty(),
+              unread: 0,
+              onSubmitIntent: (_) {},
+              onVoiceIntent: () {},
+              onPhotoIntent: (_) {},
+              onOpenThread: (_) {},
+              onOpenTrips: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final decorator = tester.widget<InputDecorator>(
+        find.byType(InputDecorator),
+      );
+      final field = tester.widget<TextField>(find.byType(TextField));
+      final composer = tester.widget<DecoratedBox>(
+        find
+            .ancestor(
+              of: find.byType(TextField),
+              matching: find.byType(DecoratedBox),
+            )
+            .first,
+      );
+      final decoration = composer.decoration as BoxDecoration;
+
+      expect(decoration.color, background);
+      expect(decorator.decoration.filled, isFalse);
+      expect(field.style?.color, foreground);
+      expect(field.decoration?.labelStyle?.color, foreground);
+      expect(
+        field.decoration?.hintStyle?.color,
+        foreground.withValues(alpha: .72),
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.ancestor(
+                of: find.byTooltip('Aggiungi una foto'),
+                matching: find.byType(IconButton),
+              ),
+            )
+            .color,
+        foreground,
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.ancestor(
+                of: find.byTooltip('Invia un messaggio vocale'),
+                matching: find.byType(IconButton),
+              ),
+            )
+            .color,
+        foreground,
+      );
+    }
+  });
+
   testWidgets('snapshot non mostra il bottone di condivisione demo', (
     tester,
   ) async {
