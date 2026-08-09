@@ -15,8 +15,8 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   ChatFirstPrototypeController({
     List<ChatThread>? seed,
     IterDataSource? dataSource,
-  })  : _threads = seed ?? ChatFirstDemoData.seedThreads(),
-        dataSource = dataSource ?? MockDataSource() {
+  }) : _threads = seed ?? ChatFirstDemoData.seedThreads(),
+       dataSource = dataSource ?? MockDataSource() {
     _unread = _sumUnread();
   }
 
@@ -149,8 +149,7 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     return null;
   }
 
-  int _sumUnread() =>
-      _threads.fold<int>(0, (sum, t) => sum + t.summary.unread);
+  int _sumUnread() => _threads.fold<int>(0, (sum, t) => sum + t.summary.unread);
 
   void _recomputeUnread() {
     _unread = _sumUnread();
@@ -307,13 +306,18 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   /// Persists every message of [thread] not yet saved, creating the
   /// conversation row on first use. On the mock path this is a no-op.
   Future<void> _persistNewMessages(ChatThread thread) async {
-    final dbId = await _ensureConversation(thread);
-    if (dbId == null) return;
-    final unsaved = thread.messages.length - thread.persistedCount;
-    for (var i = thread.persistedCount; i < thread.messages.length; i++) {
-      await dataSource.insertMessage(dbId, thread.messages[i]);
+    try {
+      final dbId = await _ensureConversation(thread);
+      if (dbId == null) return;
+      final unsaved = thread.messages.length - thread.persistedCount;
+      for (var i = thread.persistedCount; i < thread.messages.length; i++) {
+        await dataSource.insertMessage(dbId, thread.messages[i]);
+      }
+      thread.persistedCount += unsaved;
+    } catch (_) {
+      // The visible in-memory thread remains authoritative until persistence
+      // becomes available again; this best-effort seam must not leak errors.
     }
-    thread.persistedCount += unsaved;
   }
 
   /// Returns the persisted row uuid for [thread], creating the conversation on
@@ -331,11 +335,16 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   }
 
   Future<String?> _createConversation(ChatThread thread) async {
-    final row = await dataSource.createConversation(thread.summary);
-    _pendingConversation.remove(thread.summary.id);
-    if (row == null) return null;
-    _dbIdByClientId[thread.summary.id] = row.id;
-    return row.id;
+    try {
+      final row = await dataSource.createConversation(thread.summary);
+      if (row == null) return null;
+      _dbIdByClientId[thread.summary.id] = row.id;
+      return row.id;
+    } catch (_) {
+      return null;
+    } finally {
+      _pendingConversation.remove(thread.summary.id);
+    }
   }
 
   /// Persists the accepted plan of [thread] as a new trip version (upserting

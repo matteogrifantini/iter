@@ -19,6 +19,15 @@ const String kFreeTalkConversationId = 'c-free-talk';
 /// time from the traveler's captured wish.
 const String kFreeTalkAckId = 'free-talk-ack';
 
+/// Stable id of the one missing-constraint question in free talk.
+const String kFreeTalkMissingId = 'free-talk-missing';
+
+/// Stable id of the editable free-talk recap.
+const String kFreeTalkSummaryId = 'free-talk-summary';
+
+/// Stable id of the first destination-bearing proposal, unlocked by confirmation.
+const String kFreeTalkProposalId = 'free-talk-proposal';
+
 /// A canned exchange used to advance a thread deterministically. Sending a
 /// message (typed or via a choice) appends the traveler text plus [assistant].
 class ScriptedBeat {
@@ -201,8 +210,9 @@ class IntakeThread extends ChatThread {
     if (messages.length >= 2) {
       final question = messages[messages.length - 2];
       if (question.role == ChatRole.assistant && question.choices.isNotEmpty) {
-        final isClarification =
-            _clarificationToQuestion.containsKey(question.id);
+        final isClarification = _clarificationToQuestion.containsKey(
+          question.id,
+        );
         final resolvedId = _clarificationToQuestion[question.id] ?? question.id;
         if (!isClarification && _needsClarification(question, text)) {
           _emitClarification(question);
@@ -286,9 +296,9 @@ class IntakeThread extends ChatThread {
             : beat.assistant.summary,
         proposal: isProposal
             ? beat.assistant.proposal ??
-                (beat.assistant.id == kItineraryProposalId
-                    ? _buildItineraryProposal()
-                    : buildFinalProposal())
+                  (beat.assistant.id == kItineraryProposalId
+                      ? _buildItineraryProposal()
+                      : buildFinalProposal())
             : beat.assistant.proposal,
         placeCard: beat.assistant.placeCard,
         transport: beat.assistant.transport,
@@ -296,8 +306,7 @@ class IntakeThread extends ChatThread {
       ),
     );
     scriptIndex++;
-    final requiresInput =
-        beat.assistant.choices.isNotEmpty || isProposal;
+    final requiresInput = beat.assistant.choices.isNotEmpty || isProposal;
     if (requiresInput) return true;
     if (scriptIndex >= script.length) return true;
     return advance();
@@ -308,10 +317,7 @@ class IntakeThread extends ChatThread {
   void _queueRefinement() {
     final destinationId = journey!.destinationIds.first;
     script.addAll(
-      ChatFirstDemoData.refinementBeats(
-        destinationId,
-        journeyCity(journey!),
-      ),
+      ChatFirstDemoData.refinementBeats(destinationId, journeyCity(journey!)),
     );
   }
 
@@ -347,9 +353,7 @@ class IntakeThread extends ChatThread {
       final stay = answer == 'Consigliami tu'
           ? ChatFirstDemoData.preferredStayFor(journey!.destinationIds.first)
           : answer;
-      summary = summary.copyWith(
-        snapshot: _snapshot().copyWith(stay: stay),
-      );
+      summary = summary.copyWith(snapshot: _snapshot().copyWith(stay: stay));
     }
   }
 
@@ -395,10 +399,10 @@ class IntakeThread extends ChatThread {
   /// The daily items count from the intake pace answer, reusing the same
   /// mapping as [buildFinalProposal].
   int _f5ItemsPerDay() => switch (answers['q-pace']) {
-        'Rilassato: un paio di tappe al giorno' => 1,
-        'Pieno, ma con pause vere' => 3,
-        _ => 2,
-      };
+    'Rilassato: un paio di tappe al giorno' => 1,
+    'Pieno, ma con pause vere' => 3,
+    _ => 2,
+  };
 
   /// The concrete F5 edit Iter proposes before saving: a gentle closing walk
   /// on the last day. Built from the curated thread state, so accepting both
@@ -456,7 +460,8 @@ class IntakeThread extends ChatThread {
       _ => 'Treno, metro e qualche camminata',
     };
     final stay = switch (answers['q-base']) {
-      'Quartiere vissuto, più locale' => 'Quartiere vissuto, fuori dal classico',
+      'Quartiere vissuto, più locale' =>
+        'Quartiere vissuto, fuori dal classico',
       'Consigliami tu' => ChatFirstDemoData.preferredStayFor(destinationId),
       _ => 'Base nel centro, tutto a piedi',
     };
@@ -470,8 +475,10 @@ class IntakeThread extends ChatThread {
       take: dayCount * itemsPerDay,
     );
     final days = ChatFirstDemoData.intakeDays(places, itemsPerDay: itemsPerDay);
-    final placeLabels =
-        places.take(3).map((place) => place.name).toList(growable: false);
+    final placeLabels = places
+        .take(3)
+        .map((place) => place.name)
+        .toList(growable: false);
     return PlanProposal(
       changeLabel:
           'Bozza: $city, $durationLabel, $stay, $transport, $budgetNote.',
@@ -496,12 +503,9 @@ class IntakeThread extends ChatThread {
 String journeyCity(JourneyRoute journey) =>
     journey.stops.isNotEmpty ? journey.stops.first : journey.title;
 
-/// A conversation started from the traveler's own words, with no destination
-/// pinned up front. The opening message is a free ask; the first free-text
-/// reply is captured as the wish and echoed back before the destination is
-/// offered as choices. Once pinned, the thread behaves like the guided
-/// [IntakeThread]: same question order, same answers map, same final proposal
-/// and the F5 refinement modules. Deterministic end to end.
+/// A conversation started from the traveler's own words before a destination is
+/// named. It first reflects the clues, asks for one missing constraint, then
+/// offers an editable recap. Only an explicit confirmation emits a proposal.
 class FreeTalkThread extends IntakeThread {
   FreeTalkThread({
     required this.viewDestinations,
@@ -510,117 +514,135 @@ class FreeTalkThread extends IntakeThread {
     super.openedWith,
   });
 
-  /// The trend journeys offered as destination choices.
+  /// Deterministic catalog used only after the traveler confirms the recap.
   final List<JourneyRoute> viewDestinations;
 
   /// The traveler's free-form wish, captured from the first reply.
   String? _wish;
 
-  /// True once the destination answer has been seen, so the guided tail is
-  /// never queued twice.
-  bool _destinationResolved = false;
+  String? _missingConstraint;
+  var _confirmed = false;
+  var _correctionRequested = false;
+  var _showRevisedSummary = false;
 
-  /// Captures the free wish on the first reply, and resolves [journey] only
-  /// when the destination question is the prompt right before the reply, so a
-  /// wish that merely mentions a city never pins it prematurely. An explicit
-  /// "Consigliami tu" answer, or an unrecognized text, falls back to the first
-  /// offered destination so the thread never stalls.
   @override
   ChatMessage travelerMessage(String text) {
     final message = super.travelerMessage(text);
-    if (_destinationResolved) return message;
+    final prompt = messages.length >= 2 ? messages[messages.length - 2] : null;
     _wish ??= text.trim();
-    if (journey == null) {
-      final prompt = messages.length >= 2
-          ? messages[messages.length - 2]
-          : null;
-      if (prompt?.id == 'ft-destination') {
-        final resolved = _matchDestination(text);
-        if (resolved != null ||
-            text.trim().toLowerCase() == 'consigliami tu') {
-          _destinationResolved = true;
-          journey = resolved ?? viewDestinations.first;
-          summary = summary.copyWith(title: journeyCity(journey!));
-          _queueGuided();
-        }
-      }
+    if (prompt?.id == kFreeTalkMissingId) {
+      _missingConstraint = text.trim();
+    } else if (prompt?.id == kFreeTalkSummaryId ||
+        prompt?.id == 'free-talk-summary-revised') {
+      _confirmed = text.trim() == 'Conferma';
+      _correctionRequested = text.trim() == 'Correggi';
+    } else if (prompt?.id == 'free-talk-correction') {
+      _missingConstraint = text.trim();
+      _showRevisedSummary = true;
     }
     return message;
   }
 
-  /// Points the wish echo (the first script beat, a plain transition beat) at
-  /// the captured wish. The echo is consumed automatically right after the
-  /// traveler's free reply, so the destination offer follows immediately.
   @override
   bool advance() {
-    if (script.isNotEmpty &&
-        script.first.assistant.id == kFreeTalkAckId &&
-        script.first.assistant.text.isEmpty) {
-      final wish = _wish ?? 'la tua idea';
-      final preview = wish.length > 42 ? '${wish.substring(0, 42)}…' : wish;
-      script[0] = ScriptedBeat(
+    if (_correctionRequested) {
+      _correctionRequested = false;
+      _emit(
+        ChatMessage(
+          id: 'free-talk-correction',
+          role: ChatRole.assistant,
+          kind: ChatMessageKind.text,
+          text:
+              'Cosa vuoi cambiare? Aggiorno il riepilogo, poi lo confermi tu.',
+          sentAt: DateTime(2026, 10, 16, 10, 3),
+        ),
+      );
+      return true;
+    }
+    if (_showRevisedSummary) {
+      _showRevisedSummary = false;
+      _emit(_summaryBeat(id: 'free-talk-summary-revised'));
+      return true;
+    }
+    if (scriptIndex >= script.length) return false;
+    final beat = script[scriptIndex++].assistant;
+    if (beat.id == kFreeTalkAckId) {
+      _emit(
         ChatMessage(
           id: kFreeTalkAckId,
           role: ChatRole.assistant,
           kind: ChatMessageKind.text,
-          text: 'Ho sentito: “$preview”. Mi sembra una bella direzione.',
-          sentAt: DateTime(2026, 10, 16, 10, 0),
+          text: 'Ho capito: ${_cluePreview(_wish)}.',
+          sentAt: beat.sentAt,
         ),
       );
+      return true;
     }
-    return super.advance();
-  }
-
-  /// Matches [text] (exact choice label, or a typed city/stops name) to one of
-  /// the offered destinations, case-insensitive.
-  JourneyRoute? _matchDestination(String text) {
-    final normalized = text.toLowerCase().trim();
-    for (final destination in viewDestinations) {
-      if (journeyCity(destination).toLowerCase() == normalized) {
-        return destination;
-      }
-      for (final stop in destination.stops) {
-        if (stop.toLowerCase() == normalized) return destination;
-      }
-      if (destination.title.toLowerCase() == normalized) return destination;
+    if (beat.id == kFreeTalkSummaryId) {
+      _emit(_summaryBeat(id: kFreeTalkSummaryId));
+      return true;
     }
-    return null;
-  }
-
-  /// Appends the guided intake beats (duration first, then the standard
-  /// questions and the final proposal) so the tail matches the classic intake.
-  void _queueGuided() {
-    final city = journeyCity(journey!);
-    script.addAll(<ScriptedBeat>[
-      ScriptedBeat(
+    if (beat.id == kFreeTalkProposalId && !_confirmed) return false;
+    if (beat.id == kFreeTalkProposalId && viewDestinations.isNotEmpty) {
+      journey = viewDestinations.first;
+      summary = summary.copyWith(title: journeyCity(journey!));
+      _emit(
         ChatMessage(
-          id: 'q-duration',
+          id: kFreeTalkProposalId,
           role: ChatRole.assistant,
-          kind: ChatMessageKind.text,
-          text: 'Prima di tutto: quanti giorni vuoi dedicare a $city?',
-          sentAt: DateTime(2026, 10, 16, 10, 1),
-          choices: const <ChatChoice>[
-            ChatChoice(label: 'Un weekend, 3 giorni'),
-            ChatChoice(label: '4–5 giorni, senza fretta'),
-            ChatChoice(label: 'Una settimana o più'),
-          ],
+          kind: ChatMessageKind.planProposal,
+          text: 'Ecco una prima proposta per ${journeyCity(journey!)}.',
+          sentAt: beat.sentAt,
+          proposal: buildFinalProposal(),
         ),
-      ),
-      ...ChatFirstDemoData.restIntakeScript(journey!),
-    ]);
+      );
+      return true;
+    }
+    _emit(beat);
+    return true;
+  }
+
+  ChatMessage _summaryBeat({required String id}) => ChatMessage(
+    id: id,
+    role: ChatRole.assistant,
+    kind: ChatMessageKind.choices,
+    text:
+        'Riepilogo: ${_cluePreview(_wish)}; ${_missingConstraint ?? 'un vincolo da precisare'}. Confermi?',
+    sentAt: DateTime(2026, 10, 16, 10, 2),
+    choices: const <ChatChoice>[
+      ChatChoice(label: 'Conferma'),
+      ChatChoice(label: 'Correggi'),
+    ],
+  );
+
+  String _cluePreview(String? value) {
+    var preview = value?.trim() ?? 'la tua idea';
+    for (final destination in viewDestinations) {
+      preview = preview.replaceAll(
+        RegExp(RegExp.escape(journeyCity(destination)), caseSensitive: false),
+        '',
+      );
+    }
+    preview = preview.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+    return preview.isEmpty ? 'la tua idea' : preview;
+  }
+
+  void _emit(ChatMessage message) {
+    messages.add(message);
   }
 }
 
 /// Deterministic demo content for the chat-first prototype.
 abstract final class ChatFirstDemoData {
-  static List<ChatThread> seedThreads() => List<ChatThread>.of(
-        <ChatThread>[_planningPorto(), _activeRoma()],
-        growable: true,
-      );
+  static List<ChatThread> seedThreads() => List<ChatThread>.of(<ChatThread>[
+    _planningPorto(),
+    _activeRoma(),
+  ], growable: true);
 
   /// Trend destinations shown on the Home. Each gets an editorial city sheet
   /// and an "Organizza un viaggio" entry that opens a fresh planning thread.
-  static List<JourneyRoute> trendJourneys() => MockData.journeys.take(4).toList();
+  static List<JourneyRoute> trendJourneys() =>
+      MockData.journeys.take(4).toList();
 
   /// Opens the guided intake for a home destination trend: one question at a
   /// time as messages with [ChatChoice]s (duration, pace, base, transport,
@@ -706,7 +728,8 @@ abstract final class ChatFirstDemoData {
           id: 'k-free-open',
           role: ChatRole.assistant,
           kind: ChatMessageKind.text,
-          text: 'Raccontami il viaggio che hai in mente: un periodo, un '
+          text:
+              'Raccontami il viaggio che hai in mente: un periodo, un '
               'desiderio, un luogo che ti chiama. Quello che viene.',
           sentAt: DateTime(2026, 10, 16, 10, 0),
         ),
@@ -723,17 +746,29 @@ abstract final class ChatFirstDemoData {
         ),
         ScriptedBeat(
           ChatMessage(
-            id: 'ft-destination',
+            id: kFreeTalkMissingId,
             role: ChatRole.assistant,
             kind: ChatMessageKind.text,
-            text: 'Guardando le mete che ti somigliano: dove ti porta questo '
-                'viaggio?',
+            text: 'Mi manca solo una cosa: qual è il vincolo più importante?',
             sentAt: DateTime(2026, 10, 16, 10, 1),
-            choices: <ChatChoice>[
-              for (final journey in journeys)
-                ChatChoice(label: journeyCity(journey)),
-              const ChatChoice(label: 'Consigliami tu'),
-            ],
+          ),
+        ),
+        ScriptedBeat(
+          ChatMessage(
+            id: kFreeTalkSummaryId,
+            role: ChatRole.assistant,
+            kind: ChatMessageKind.choices,
+            text: '',
+            sentAt: DateTime(2026, 10, 16, 10, 2),
+          ),
+        ),
+        ScriptedBeat(
+          ChatMessage(
+            id: kFreeTalkProposalId,
+            role: ChatRole.assistant,
+            kind: ChatMessageKind.planProposal,
+            text: '',
+            sentAt: DateTime(2026, 10, 16, 10, 3),
           ),
         ),
       ],
@@ -830,7 +865,7 @@ abstract final class ChatFirstDemoData {
           kind: ChatMessageKind.operational,
           text:
               'Ho salvato il piano come bozza. Potremo rifinirlo qui quando '
-                  'vuoi.',
+              'vuoi.',
           sentAt: DateTime(2026, 10, 16, 10, 7),
         ),
       ),
@@ -847,10 +882,13 @@ abstract final class ChatFirstDemoData {
   /// The destination's stay zones ordered by average walk minutes, shortest
   /// first. The first is the recommended one; the second is the alternative.
   static List<StayZone> _stayZonesSorted(String destinationId) {
-    final zones = MockData.stayZones
-        .where((zone) => zone.destinationId == destinationId)
-        .toList(growable: false)
-      ..sort((a, b) => a.averageWalkMinutes.compareTo(b.averageWalkMinutes));
+    final zones =
+        MockData.stayZones
+            .where((zone) => zone.destinationId == destinationId)
+            .toList(growable: false)
+          ..sort(
+            (a, b) => a.averageWalkMinutes.compareTo(b.averageWalkMinutes),
+          );
     return zones;
   }
 
@@ -891,10 +929,7 @@ abstract final class ChatFirstDemoData {
   /// curation (places one at a time), transport comparison, stay zone, then
   /// the visual itinerary with the final edit proposal. Deterministic for the
   /// same destination.
-  static List<ScriptedBeat> refinementBeats(
-    String destinationId,
-    String city,
-  ) {
+  static List<ScriptedBeat> refinementBeats(String destinationId, String city) {
     final places = topPlacesFor(destinationId, take: 6);
     final zones = _stayZonesSorted(destinationId);
     final hasZones = zones.isNotEmpty;
@@ -910,7 +945,7 @@ abstract final class ChatFirstDemoData {
           kind: ChatMessageKind.text,
           text:
               'Bene. Ora rifiniamo il piano: ti mostro i luoghi di $city uno '
-                  'alla volta e mi dici come trattarli.',
+              'alla volta e mi dici come trattarli.',
           sentAt: DateTime(2026, 10, 16, 10, 8),
         ),
       ),
@@ -938,7 +973,8 @@ abstract final class ChatFirstDemoData {
           id: 'f5-transport',
           role: ChatRole.assistant,
           kind: ChatMessageKind.transport,
-          text: 'Come arrivi a $city? Ecco tre opzioni demo, con prezzi e '
+          text:
+              'Come arrivi a $city? Ecco tre opzioni demo, con prezzi e '
               'durata indicativi.',
           sentAt: DateTime(2026, 10, 16, 10, 15),
           transport: TransportCompare(options: options),
@@ -952,7 +988,8 @@ abstract final class ChatFirstDemoData {
           id: 'f5-stay',
           role: ChatRole.assistant,
           kind: ChatMessageKind.stayZone,
-          text: 'Dove dormire a $city? Ti consiglio '
+          text:
+              'Dove dormire a $city? Ti consiglio '
               '${recommended?.name ?? 'un quartiere vissuto'} per atmosfera e '
               'tempi a piedi. Prezzi e durate dei mezzi sono dimostrativi: non '
               'prenotiamo niente.',
@@ -970,7 +1007,8 @@ abstract final class ChatFirstDemoData {
           id: kItineraryProposalId,
           role: ChatRole.assistant,
           kind: ChatMessageKind.planProposal,
-          text: 'Prima di salvare, un ritocco: chiudo il piano con una '
+          text:
+              'Prima di salvare, un ritocco: chiudo il piano con una '
               'passeggiata finale senza orari fissi.',
           sentAt: DateTime(2026, 10, 16, 10, 18),
         ),
@@ -980,7 +1018,8 @@ abstract final class ChatFirstDemoData {
           id: 'f5-operational',
           role: ChatRole.assistant,
           kind: ChatMessageKind.operational,
-          text: 'Il piano è pronto e resta qui: quando vuoi, proponiamo il '
+          text:
+              'Il piano è pronto e resta qui: quando vuoi, proponiamo il '
               'prossimo ritocco.',
           sentAt: DateTime(2026, 10, 16, 10, 19),
         ),
@@ -990,30 +1029,31 @@ abstract final class ChatFirstDemoData {
 
   /// Light view of a catalog [Place] for the in-chat curation card.
   static PlaceCard placeCardFor(Place place, {String? imageAsset}) => PlaceCard(
-        id: place.id,
-        name: place.name,
-        category: place.category,
-        neighborhood: place.neighborhood,
-        durationMinutes: place.durationMinutes,
-        whyFits: place.whyItFits,
-        bestMoment: place.bestMoment,
-        imageAsset: imageAsset,
-      );
+    id: place.id,
+    name: place.name,
+    category: place.category,
+    neighborhood: place.neighborhood,
+    durationMinutes: place.durationMinutes,
+    whyFits: place.whyItFits,
+    bestMoment: place.bestMoment,
+    imageAsset: imageAsset,
+  );
 
   /// Light view of a catalog [StayZone] for the in-chat zone context.
   static StayZoneInfo stayZoneInfoFor(StayZone zone) => StayZoneInfo(
-        name: zone.name,
-        summary: zone.summary,
-        whyFits: zone.whyItFits,
-        averageWalkMinutes: zone.averageWalkMinutes,
-      );
+    name: zone.name,
+    summary: zone.summary,
+    whyFits: zone.whyItFits,
+    averageWalkMinutes: zone.averageWalkMinutes,
+  );
 
   /// The highest-scoring places of a destination, used to shape the proposal.
   static List<Place> topPlacesFor(String destinationId, {required int take}) {
-    final places = MockData.places
-        .where((place) => place.destinationId == destinationId)
-        .toList(growable: false)
-      ..sort((a, b) => b.matchScore.compareTo(a.matchScore));
+    final places =
+        MockData.places
+            .where((place) => place.destinationId == destinationId)
+            .toList(growable: false)
+          ..sort((a, b) => b.matchScore.compareTo(a.matchScore));
     return places.take(take).toList(growable: false);
   }
 
@@ -1033,9 +1073,11 @@ abstract final class ChatFirstDemoData {
     ];
     const times = <String>['09:30', '13:00', '16:30', '19:30'];
     final days = <TripDaySnapshot>[];
-    for (var day = 0;
-        day * itemsPerDay < places.length && day < themes.length;
-        day++) {
+    for (
+      var day = 0;
+      day * itemsPerDay < places.length && day < themes.length;
+      day++
+    ) {
       final start = day * itemsPerDay;
       final end = start + itemsPerDay < places.length
           ? start + itemsPerDay
@@ -1079,7 +1121,9 @@ abstract final class ChatFirstDemoData {
         title: journeyCity(journey),
         subtitle: 'Nuovo piano',
         avatar: ChatAvatar(
-          posters.isNotEmpty ? posters.first : 'assets/images/travel/rail_coast.jpg',
+          posters.isNotEmpty
+              ? posters.first
+              : 'assets/images/travel/rail_coast.jpg',
           label: journeyCity(journey),
         ),
         timestamp: DateTime(2026, 10, 16, 10, 0),
@@ -1094,8 +1138,8 @@ abstract final class ChatFirstDemoData {
           kind: ChatMessageKind.text,
           text:
               '${journeyCity(journey)}. Mi sembra che ti stia bene ritmo lento, '
-                  'tavole locali e un viaggio che resta aperto. Da dove vuoi partire '
-                  'a raccontarmelo?',
+              'tavole locali e un viaggio che resta aperto. Da dove vuoi partire '
+              'a raccontarmelo?',
           sentAt: DateTime(2026, 10, 16, 10, 0),
           choices: const <ChatChoice>[
             ChatChoice(label: 'Ho un paio di giorni liberi'),
@@ -1112,7 +1156,7 @@ abstract final class ChatFirstDemoData {
             kind: ChatMessageKind.text,
             text:
                 'Perfetto. Tengo da parte due o tre giornate libere e un ritmo '
-                    'senza orari fissi. Ti buttiamo giù una prima struttura.',
+                'senza orari fissi. Ti buttiamo giù una prima struttura.',
             sentAt: DateTime(2026, 10, 16, 10, 5),
             choices: <ChatChoice>[
               ChatChoice(label: 'Mostra il piano'),
@@ -1127,10 +1171,11 @@ abstract final class ChatFirstDemoData {
             kind: ChatMessageKind.planProposal,
             text:
                 'Ecco la prima struttura che ho preparato. Se ti va, la '
-                    'imposto come bozza del piano.',
+                'imposto come bozza del piano.',
             sentAt: DateTime(2026, 10, 16, 10, 6),
             proposal: PlanProposal(
-              changeLabel: 'Bozza: Porto 4–5 giorni, base vicino alla Ribeira, tre tappe.',
+              changeLabel:
+                  'Bozza: Porto 4–5 giorni, base vicino alla Ribeira, tre tappe.',
               snapshot: TripSnapshot(
                 destinationTitle: 'Porto',
                 country: 'Portogallo',
@@ -1202,7 +1247,7 @@ abstract final class ChatFirstDemoData {
             kind: ChatMessageKind.operational,
             text:
                 'Ho salvato il piano come bozza. Potremo aprirlo dall’icona del '
-                    'piano in questa conversazione quando vuoi.',
+                'piano in questa conversazione quando vuoi.',
             sentAt: DateTime(2026, 10, 16, 10, 8),
           ),
         ),
@@ -1290,7 +1335,7 @@ abstract final class ChatFirstDemoData {
           kind: ChatMessageKind.text,
           text:
               'Buongiorno! Sei a Roma, oggi hai il Foro al mattino e la serata '
-                  'libera. Come vuoi gestire la giornata?',
+              'libera. Come vuoi gestire la giornata?',
           sentAt: DateTime(2026, 10, 16, 9, 45),
           choices: <ChatChoice>[
             ChatChoice(label: 'Rallenta la mattina'),
@@ -1307,11 +1352,12 @@ abstract final class ChatFirstDemoData {
             kind: ChatMessageKind.planProposal,
             text:
                 'Vorrei rendere la mattinata più lenta: un solo sito '
-                    'archeologico e il resto del tempo libero per una '
-                    'passeggiata senza fretta.',
+                'archeologico e il resto del tempo libero per una '
+                'passeggiata senza fretta.',
             sentAt: DateTime(2026, 10, 16, 9, 48),
             proposal: PlanProposal(
-              changeLabel: 'Foro Romano alle 10:30, passeggiata ai Fori alle 14:00.',
+              changeLabel:
+                  'Foro Romano alle 10:30, passeggiata ai Fori alle 14:00.',
               snapshot: TripSnapshot(
                 destinationTitle: 'Roma',
                 country: 'Italia',
@@ -1400,12 +1446,12 @@ abstract final class ChatFirstDemoData {
   }
 
   static ChatMessage closingReply() => ChatMessage(
-        id: 'closing',
-        role: ChatRole.assistant,
-        kind: ChatMessageKind.text,
-        text:
-            'Ricevuto. Il piano resta aperto qui: quando vuoi, apri l’icona del '
-                'piano per vederlo e continuiamo da lì.',
-        sentAt: DateTime(2026, 10, 16, 10, 30),
-      );
+    id: 'closing',
+    role: ChatRole.assistant,
+    kind: ChatMessageKind.text,
+    text:
+        'Ricevuto. Il piano resta aperto qui: quando vuoi, apri l’icona del '
+        'piano per vederlo e continuiamo da lì.',
+    sentAt: DateTime(2026, 10, 16, 10, 30),
+  );
 }

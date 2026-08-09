@@ -27,10 +27,7 @@ void main() {
       expect(roma.summary.unread, 2);
       controller.openConversation(roma.summary.id);
       expect(controller.unread, 0);
-      expect(
-        controller.threadOf(roma.summary.id).summary.unread,
-        0,
-      );
+      expect(controller.threadOf(roma.summary.id).summary.unread, 0);
     });
 
     test('sendText avanza lo script e aggiunge messaggio viaggiatore', () {
@@ -44,10 +41,7 @@ void main() {
       final thread = controller.threadOf(roma.summary.id);
       expect(thread.messages.length, before + 2);
       expect(thread.messages[before].role, ChatRole.traveler);
-      expect(
-        thread.messages[before + 1].kind,
-        ChatMessageKind.planProposal,
-      );
+      expect(thread.messages[before + 1].kind, ChatMessageKind.planProposal);
     });
 
     test('choose confermante prosegue, non confermante non crea messaggi', () {
@@ -93,7 +87,10 @@ void main() {
       );
       controller.openConversation(porto.summary.id);
       final before = controller.threadOf(porto.summary.id).messages.length;
-      controller.sendMedia(asset: 'assets/images/travel/porto_river.jpg', isVideo: false);
+      controller.sendMedia(
+        asset: 'assets/images/travel/porto_river.jpg',
+        isVideo: false,
+      );
       final thread = controller.threadOf(porto.summary.id);
       expect(thread.messages[before].kind, ChatMessageKind.media);
       expect(thread.messages[before].media?.isVideo, isFalse);
@@ -137,8 +134,9 @@ void main() {
 
       controller.openConversation(roma.summary.id);
       controller.sendText('Rallenta la mattina');
-      final proposal = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      final proposal = thread.messages.lastWhere(
+        (m) => m.kind == ChatMessageKind.planProposal,
+      );
       expect(proposal.proposal?.outcome, isNull);
 
       controller.acceptProposal(roma.summary.id, proposal.id);
@@ -159,8 +157,9 @@ void main() {
 
       controller.openConversation(roma.summary.id);
       controller.sendText('Rallenta la mattina');
-      final proposal = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      final proposal = thread.messages.lastWhere(
+        (m) => m.kind == ChatMessageKind.planProposal,
+      );
 
       controller.rejectProposal(roma.summary.id, proposal.id);
       expect(
@@ -179,8 +178,9 @@ void main() {
 
       controller.openConversation(roma.summary.id);
       controller.sendText('Rallenta la mattina');
-      final proposal = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      final proposal = thread.messages.lastWhere(
+        (m) => m.kind == ChatMessageKind.planProposal,
+      );
       final beforeAccept = thread.messages.length;
       controller.acceptProposal(roma.summary.id, proposal.id);
       final afterAccept = thread.messages.length;
@@ -200,12 +200,14 @@ void main() {
 
       controller.openConversation(roma.summary.id);
       controller.sendText('Rallenta la mattina');
-      final proposal = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      final proposal = thread.messages.lastWhere(
+        (m) => m.kind == ChatMessageKind.planProposal,
+      );
       controller.acceptProposal(roma.summary.id, proposal.id);
 
-      final summaries = thread.messages
-          .where((m) => m.kind == ChatMessageKind.tripSummary);
+      final summaries = thread.messages.where(
+        (m) => m.kind == ChatMessageKind.tripSummary,
+      );
       final lastSummary = summaries.last;
       expect(lastSummary.summary?.days.first.theme, 'Mattina più lenta');
       expect(lastSummary.summary?.days.first.items.first.time, '10:30');
@@ -262,8 +264,9 @@ void main() {
 
       _answerIntake(controller, id);
 
-      final proposalMessage = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      final proposalMessage = thread.messages.lastWhere(
+        (m) => m.kind == ChatMessageKind.planProposal,
+      );
       final snapshot = proposalMessage.proposal!.snapshot;
       expect(proposalMessage.proposal?.outcome, isNull);
       expect(snapshot.destinationTitle, journey.stops.first);
@@ -271,7 +274,10 @@ void main() {
       expect(snapshot.stay, isNotEmpty);
       expect(snapshot.placeLabels, isNotEmpty);
       expect(snapshot.days, isNotEmpty);
-      expect(proposalMessage.proposal?.changeLabel, contains(journey.stops.first));
+      expect(
+        proposalMessage.proposal?.changeLabel,
+        contains(journey.stops.first),
+      );
     });
 
     test('il ritmo scelto cambia il numero di tappe al giorno', () {
@@ -286,37 +292,47 @@ void main() {
         relaxedThread.summary.id,
         pace: 'Rilassato: un paio di tappe al giorno',
       );
-      _answerIntake(busy, busyThread.summary.id, pace: 'Pieno, ma con pause vere');
+      _answerIntake(
+        busy,
+        busyThread.summary.id,
+        pace: 'Pieno, ma con pause vere',
+      );
 
-      final relaxedProposal = relaxedThread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
-      final busyProposal = busyThread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      final relaxedProposal = relaxedThread.messages.lastWhere(
+        (m) => m.kind == ChatMessageKind.planProposal,
+      );
+      final busyProposal = busyThread.messages.lastWhere(
+        (m) => m.kind == ChatMessageKind.planProposal,
+      );
       expect(
         relaxedProposal.proposal!.snapshot.days.first.items.length,
         lessThan(busyProposal.proposal!.snapshot.days.first.items.length),
       );
     });
 
-    test('accettare la proposta aggiorna lo snapshot e persiste il piano', () async {
-      final source = _TripSpyDataSource();
-      final controller = ChatFirstPrototypeController(dataSource: source);
-      final journey = controller.trendJourneys.first;
-      final thread = controller.startFromJourney(journey);
-      final id = thread.summary.id;
+    test(
+      'accettare la proposta aggiorna lo snapshot e persiste il piano',
+      () async {
+        final source = _TripSpyDataSource();
+        final controller = ChatFirstPrototypeController(dataSource: source);
+        final journey = controller.trendJourneys.first;
+        final thread = controller.startFromJourney(journey);
+        final id = thread.summary.id;
 
-      _answerIntake(controller, id, duration: 'Un weekend, 3 giorni');
-      final proposal = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
-      controller.acceptProposal(id, proposal.id);
+        _answerIntake(controller, id, duration: 'Un weekend, 3 giorni');
+        final proposal = thread.messages.lastWhere(
+          (m) => m.kind == ChatMessageKind.planProposal,
+        );
+        controller.acceptProposal(id, proposal.id);
 
-      await Future<void>.delayed(Duration.zero);
-      expect(thread.summary.snapshot?.destinationTitle, journey.stops.first);
-      expect(thread.summary.snapshot?.durationLabel, '3 giorni');
-      expect(proposal.proposal?.outcome, PlanProposalOutcome.accepted);
-      expect(source.savedVersions.length, 1);
-      expect(source.savedVersions.single.snapshot.durationLabel, '3 giorni');
-    });
+        await Future<void>.delayed(Duration.zero);
+        expect(thread.summary.snapshot?.destinationTitle, journey.stops.first);
+        expect(thread.summary.snapshot?.durationLabel, '3 giorni');
+        expect(proposal.proposal?.outcome, PlanProposalOutcome.accepted);
+        expect(source.savedVersions.length, 1);
+        expect(source.savedVersions.single.snapshot.durationLabel, '3 giorni');
+      },
+    );
 
     test('il riepilogo dopo l’accettazione riflette il piano accettato', () {
       final controller = ChatFirstPrototypeController();
@@ -325,12 +341,14 @@ void main() {
       final id = thread.summary.id;
 
       _answerIntake(controller, id);
-      final proposal = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      final proposal = thread.messages.lastWhere(
+        (m) => m.kind == ChatMessageKind.planProposal,
+      );
       controller.acceptProposal(id, proposal.id);
 
-      final summaries = thread.messages
-          .where((m) => m.kind == ChatMessageKind.tripSummary);
+      final summaries = thread.messages.where(
+        (m) => m.kind == ChatMessageKind.tripSummary,
+      );
       final lastSummary = summaries.last;
       expect(lastSummary.summary?.destinationTitle, journey.stops.first);
       expect(lastSummary.summary?.placeLabels, isNotEmpty);
@@ -338,31 +356,36 @@ void main() {
   });
 
   group('Moduli F5 (curation, trasporto, zona, itinerario)', () {
-    test('accettata l’intake il thread avanza da solo alla prima card luogo',
-        () {
-      final controller = ChatFirstPrototypeController();
-      final journey = controller.trendJourneys.first;
-      final thread = controller.startFromJourney(journey);
-      final id = thread.summary.id;
-      _startF5(controller, id);
+    test(
+      'accettata l’intake il thread avanza da solo alla prima card luogo',
+      () {
+        final controller = ChatFirstPrototypeController();
+        final journey = controller.trendJourneys.first;
+        final thread = controller.startFromJourney(journey);
+        final id = thread.summary.id;
+        _startF5(controller, id);
 
-      final summary = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.tripSummary);
-      expect(summary.summary?.destinationTitle, journey.stops.first);
-      expect(
-        thread.messages.any(
-          (m) => m.kind == ChatMessageKind.operational &&
-              m.text.contains('salvato'),
-        ),
-        isTrue,
-      );
-      expect(thread.messages.last.kind, ChatMessageKind.placeCard);
-      expect(thread.messages.last.placeCard, isNotNull);
-      expect(
-        thread.messages.last.choices.map((c) => c.label),
-        <String>['Passa', 'Salva', 'Irrinunciabile'],
-      );
-    });
+        final summary = thread.messages.lastWhere(
+          (m) => m.kind == ChatMessageKind.tripSummary,
+        );
+        expect(summary.summary?.destinationTitle, journey.stops.first);
+        expect(
+          thread.messages.any(
+            (m) =>
+                m.kind == ChatMessageKind.operational &&
+                m.text.contains('salvato'),
+          ),
+          isTrue,
+        );
+        expect(thread.messages.last.kind, ChatMessageKind.placeCard);
+        expect(thread.messages.last.placeCard, isNotNull);
+        expect(thread.messages.last.choices.map((c) => c.label), <String>[
+          'Passa',
+          'Salva',
+          'Irrinunciabile',
+        ]);
+      },
+    );
 
     test('Salva porta il luogo in placeLabels e giorni dello snapshot', () {
       final controller = ChatFirstPrototypeController();
@@ -439,8 +462,9 @@ void main() {
         _tapChoice(controller, id, 'Passa');
       }
       _tapChoice(controller, id, 'Aereo diretto');
-      final stayMessage = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.stayZone);
+      final stayMessage = thread.messages.lastWhere(
+        (m) => m.kind == ChatMessageKind.stayZone,
+      );
       final zoneName = stayMessage.stayZone!.name;
 
       _tapChoice(controller, id, zoneName);
@@ -466,76 +490,84 @@ void main() {
           .name;
       _tapChoice(controller, id, zoneName);
 
-      final proposal = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      final proposal = thread.messages.lastWhere(
+        (m) => m.kind == ChatMessageKind.planProposal,
+      );
       final snapshot = proposal.proposal!.snapshot;
       expect(snapshot.placeLabels.length, 2);
       expect(snapshot.transport, 'Aereo diretto · 1h 30m');
       expect(snapshot.stay, zoneName);
     });
 
-    test('accettare la proposta itinerario persiste una seconda versione',
-        () async {
-      final source = _TripSpyDataSource();
-      final controller = ChatFirstPrototypeController(dataSource: source);
-      final journey = controller.trendJourneys.first;
-      final thread = controller.startFromJourney(journey);
-      final id = thread.summary.id;
-      _startF5(controller, id);
-      for (var i = 0; i < 6; i++) {
-        _tapChoice(controller, id, 'Passa');
-      }
-      _tapChoice(controller, id, 'Aereo diretto');
-      final zoneName = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.stayZone)
-          .stayZone!
-          .name;
-      _tapChoice(controller, id, zoneName);
+    test(
+      'accettare la proposta itinerario persiste una seconda versione',
+      () async {
+        final source = _TripSpyDataSource();
+        final controller = ChatFirstPrototypeController(dataSource: source);
+        final journey = controller.trendJourneys.first;
+        final thread = controller.startFromJourney(journey);
+        final id = thread.summary.id;
+        _startF5(controller, id);
+        for (var i = 0; i < 6; i++) {
+          _tapChoice(controller, id, 'Passa');
+        }
+        _tapChoice(controller, id, 'Aereo diretto');
+        final zoneName = thread.messages
+            .lastWhere((m) => m.kind == ChatMessageKind.stayZone)
+            .stayZone!
+            .name;
+        _tapChoice(controller, id, zoneName);
 
-      final proposal = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
-      expect(
-        proposal.proposal!.snapshot.days.last.items.last.title,
-        'Passeggiata finale',
-      );
-      controller.acceptProposal(id, proposal.id);
+        final proposal = thread.messages.lastWhere(
+          (m) => m.kind == ChatMessageKind.planProposal,
+        );
+        expect(
+          proposal.proposal!.snapshot.days.last.items.last.title,
+          'Passeggiata finale',
+        );
+        controller.acceptProposal(id, proposal.id);
 
-      await Future<void>.delayed(Duration.zero);
-      expect(source.savedVersions.length, 2);
-      expect(
-        source.savedVersions.last.snapshot.days.last.items.last.title,
-        'Passeggiata finale',
-      );
-    });
+        await Future<void>.delayed(Duration.zero);
+        expect(source.savedVersions.length, 2);
+        expect(
+          source.savedVersions.last.snapshot.days.last.items.last.title,
+          'Passeggiata finale',
+        );
+      },
+    );
 
-    test('annullare la proposta itinerario non persiste e non modifica', () async {
-      final source = _TripSpyDataSource();
-      final controller = ChatFirstPrototypeController(dataSource: source);
-      final journey = controller.trendJourneys.first;
-      final thread = controller.startFromJourney(journey);
-      final id = thread.summary.id;
-      _startF5(controller, id);
-      for (var i = 0; i < 6; i++) {
-        _tapChoice(controller, id, 'Passa');
-      }
-      _tapChoice(controller, id, 'In auto');
-      final zoneName = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.stayZone)
-          .stayZone!
-          .name;
-      _tapChoice(controller, id, zoneName);
+    test(
+      'annullare la proposta itinerario non persiste e non modifica',
+      () async {
+        final source = _TripSpyDataSource();
+        final controller = ChatFirstPrototypeController(dataSource: source);
+        final journey = controller.trendJourneys.first;
+        final thread = controller.startFromJourney(journey);
+        final id = thread.summary.id;
+        _startF5(controller, id);
+        for (var i = 0; i < 6; i++) {
+          _tapChoice(controller, id, 'Passa');
+        }
+        _tapChoice(controller, id, 'In auto');
+        final zoneName = thread.messages
+            .lastWhere((m) => m.kind == ChatMessageKind.stayZone)
+            .stayZone!
+            .name;
+        _tapChoice(controller, id, zoneName);
 
-      final proposal = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
-      controller.rejectProposal(id, proposal.id);
+        final proposal = thread.messages.lastWhere(
+          (m) => m.kind == ChatMessageKind.planProposal,
+        );
+        controller.rejectProposal(id, proposal.id);
 
-      await Future<void>.delayed(Duration.zero);
-      expect(source.savedVersions.length, 1);
-      expect(
-        thread.summary.snapshot!.days.last.items.last.title,
-        isNot('Passeggiata finale'),
-      );
-    });
+        await Future<void>.delayed(Duration.zero);
+        expect(source.savedVersions.length, 1);
+        expect(
+          thread.summary.snapshot!.days.last.items.last.title,
+          isNot('Passeggiata finale'),
+        );
+      },
+    );
 
     test('un testo libero non riconosciuto su una card luogo chiarisce e non '
         'avanza', () {
@@ -567,7 +599,8 @@ void main() {
 
       _tapChoice(controller, id, 'Salva');
       final cardMessage = thread.messages.firstWhere(
-        (m) => m.kind == ChatMessageKind.placeCard && m.placeCard!.id == place.id,
+        (m) =>
+            m.kind == ChatMessageKind.placeCard && m.placeCard!.id == place.id,
       );
       controller.choose(
         cardMessage.choices.firstWhere((c) => c.label == 'Salva'),
@@ -607,13 +640,16 @@ void main() {
 
     test('le operazioni di scrittura sono no-op', () async {
       final source = MockDataSource();
-      await source.insertMessage('c-roma-active', ChatMessage(
-        id: 'm-1',
-        role: ChatRole.traveler,
-        kind: ChatMessageKind.text,
-        text: 'Ciao',
-        sentAt: DateTime(2026, 10, 16, 10, 30),
-      ));
+      await source.insertMessage(
+        'c-roma-active',
+        ChatMessage(
+          id: 'm-1',
+          role: ChatRole.traveler,
+          kind: ChatMessageKind.text,
+          text: 'Ciao',
+          sentAt: DateTime(2026, 10, 16, 10, 30),
+        ),
+      );
       await source.setConversationRead('c-roma-active');
       await source.incrementUnread('c-roma-active');
       expect(await source.fetchConversations(), isEmpty);
@@ -630,7 +666,9 @@ void main() {
     });
 
     test('restoreConversations su mock non altera i seed', () async {
-      final controller = ChatFirstPrototypeController(dataSource: MockDataSource());
+      final controller = ChatFirstPrototypeController(
+        dataSource: MockDataSource(),
+      );
       await controller.restoreConversations();
       expect(controller.threads.length, 2);
       expect(controller.unread, 2);
@@ -648,8 +686,9 @@ void main() {
 
       controller.openConversation(roma.summary.id);
       controller.sendText('Rallenta la mattina');
-      final proposal = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      final proposal = thread.messages.lastWhere(
+        (m) => m.kind == ChatMessageKind.planProposal,
+      );
       controller.acceptProposal(roma.summary.id, proposal.id);
 
       await Future<void>.delayed(Duration.zero);
@@ -670,8 +709,9 @@ void main() {
 
       controller.openConversation(roma.summary.id);
       controller.sendText('Rallenta la mattina');
-      final proposal = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      final proposal = thread.messages.lastWhere(
+        (m) => m.kind == ChatMessageKind.planProposal,
+      );
       controller.rejectProposal(roma.summary.id, proposal.id);
 
       await Future<void>.delayed(Duration.zero);
@@ -688,8 +728,9 @@ void main() {
 
       controller.openConversation(roma.summary.id);
       controller.sendText('Rallenta la mattina');
-      final proposal = thread.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
+      final proposal = thread.messages.lastWhere(
+        (m) => m.kind == ChatMessageKind.planProposal,
+      );
       controller.acceptProposal(roma.summary.id, proposal.id);
       controller.acceptProposal(roma.summary.id, proposal.id);
 
@@ -721,7 +762,9 @@ void main() {
     });
 
     test('loadProfile su mock mantiene tema chiaro e tag demo', () async {
-      final controller = ChatFirstPrototypeController(dataSource: MockDataSource());
+      final controller = ChatFirstPrototypeController(
+        dataSource: MockDataSource(),
+      );
       expect(controller.themeMode, ThemeMode.light);
       expect(controller.memoryTags, isNotEmpty);
       await controller.loadProfile();
@@ -909,8 +952,7 @@ void main() {
       expect(restored.stayZone?.averageWalkMinutes, 13);
       expect(restored.stayZone?.name, 'Chiado');
     });
-
-    });
+  });
 
   group('Free talk (nuovo viaggio parlando)', () {
     test('startFreeTalk crea il thread libero e riusa quello esistente', () {
@@ -926,83 +968,132 @@ void main() {
       expect(controller.threads.length, 3);
     });
 
-    test('free talk: il desiderio non pinna la destinazione e viene echeggiato',
-        () {
+    test('free talk reflects clues before naming any destination', () {
       final controller = ChatFirstPrototypeController();
       final thread = controller.startFreeTalk();
       controller.openConversation(thread.summary.id);
       final freeTalk = controller.threadOf(thread.summary.id) as FreeTalkThread;
-
-      expect(freeTalk.journey, isNull);
-
-      controller.sendText('Vorrei un fine settimana lento, tipo Lisbona');
-      expect(freeTalk.journey, isNull, reason: 'il desiderio non deve bloccare');
-      final ack = freeTalk.messages.lastWhere(
-        (m) => m.id == kFreeTalkAckId,
+      const forbiddenDestinations = <String>{'Lisbona', 'Porto', 'Roma'};
+      expect(
+        controller.trendJourneys.map(journeyCity).toSet(),
+        containsAll(forbiddenDestinations),
       );
+
+      controller.sendText(
+        'Vorrei quattro giorni lenti a fine settembre, tipo Lisbona, con cibo',
+      );
+      final ack = freeTalk.messages.lastWhere((m) => m.id == kFreeTalkAckId);
       expect(ack.kind, ChatMessageKind.text);
+      expect(ack.text, contains('quattro giorni lenti'));
+
+      controller.sendText('Il budget è intorno a 500 euro.');
       expect(
-        freeTalk.messages.any((m) => m.id == 'ft-destination'),
+        _assistantTexts(
+          freeTalk,
+        ).where((text) => forbiddenDestinations.any(text.contains)),
+        isEmpty,
+      );
+    });
+
+    test('free talk asks one missing constraint at a time', () {
+      final controller = ChatFirstPrototypeController();
+      final thread = controller.startFreeTalk();
+      controller.openConversation(thread.summary.id);
+      final freeTalk = controller.threadOf(thread.summary.id) as FreeTalkThread;
+
+      controller.sendText('Vorrei un weekend con calma.');
+      controller.sendText('A ottobre.');
+
+      expect(
+        freeTalk.messages.where((message) => message.id == kFreeTalkMissingId),
+        hasLength(1),
+      );
+      expect(
+        freeTalk.messages.where(
+          (message) =>
+              message.role == ChatRole.assistant && message.choices.isNotEmpty,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('free talk names a destination only after summary confirmation', () {
+      final controller = ChatFirstPrototypeController();
+      final thread = controller.startFreeTalk();
+      controller.openConversation(thread.summary.id);
+      final freeTalk = controller.threadOf(thread.summary.id) as FreeTalkThread;
+      const forbiddenDestinations = <String>{'Lisbona', 'Porto', 'Roma'};
+
+      controller.sendText('Vorrei quattro giorni lenti, con buon cibo.');
+      controller.sendText('A fine settembre.');
+      controller.sendText('Con circa 500 euro.');
+
+      final summary = freeTalk.messages.lastWhere(
+        (message) => message.id == kFreeTalkSummaryId,
+      );
+      expect(summary.choices.map((choice) => choice.label), <String>[
+        'Conferma',
+        'Correggi',
+      ]);
+      expect(
+        _assistantTexts(
+          freeTalk,
+        ).where((text) => forbiddenDestinations.any(text.contains)),
+        isEmpty,
+      );
+
+      controller.choose(
+        summary.choices.first,
+        conversationId: thread.summary.id,
+        messageId: summary.id,
+      );
+      final proposal = freeTalk.messages.lastWhere(
+        (message) => message.id == kFreeTalkProposalId,
+      );
+      expect(proposal.kind, ChatMessageKind.planProposal);
+      expect(forbiddenDestinations.any(proposal.text.contains), isTrue);
+    });
+
+    test('free talk keeps typed input when persistence fails', () async {
+      final controller = ChatFirstPrototypeController(
+        dataSource: _FailingPersistenceDataSource(),
+      );
+      final thread = controller.startFreeTalk();
+      controller.openConversation(thread.summary.id);
+
+      controller.sendText('Vorrei partire senza correre.');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        controller
+            .threadOf(thread.summary.id)
+            .messages
+            .any(
+              (message) =>
+                  message.role == ChatRole.traveler &&
+                  message.text == 'Vorrei partire senza correre.',
+            ),
         isTrue,
-      );
-      expect(freeTalk.answers.containsKey('q-duration'), isFalse);
-    });
-
-    test('freeTalk: scelta meta avvia l\u2019intake e converge sullo stesso percorso',
-        () {
-      final controller = ChatFirstPrototypeController();
-      final thread = controller.startFreeTalk();
-      controller.openConversation(thread.summary.id);
-      final freeTalk = controller.threadOf(thread.summary.id) as FreeTalkThread;
-
-      controller.sendText('Vorrei il mare e fare lunghe colazioni');
-
-      final journey = controller.trendJourneys.first;
-      final label = journeyCity(journey);
-      controller.choose(
-        ChatChoice(label: label),
-        conversationId: thread.summary.id,
-      );
-      expect(freeTalk.journey, isNotNull);
-      expect(freeTalk.summary.title, journeyCity(journey));
-
-      _answerIntake(controller, thread.summary.id);
-      final proposal = freeTalk.messages
-          .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
-      expect(proposal.proposal?.snapshot.destinationTitle, journeyCity(journey));
-
-      controller.acceptProposal(thread.summary.id, proposal.id);
-      expect(
-        controller.threadOf(thread.summary.id).summary.snapshot!.destinationTitle,
-        journeyCity(journey),
-      );
-    });
-
-    test('freeTalk: "Consigliami tu" sceglie la prima meta', () {
-      final controller = ChatFirstPrototypeController();
-      final thread = controller.startFreeTalk();
-      controller.openConversation(thread.summary.id);
-      final freeTalk = controller.threadOf(thread.summary.id) as FreeTalkThread;
-
-      controller.sendText('Sono indeciso, dimmi dove andare');
-      controller.choose(
-        const ChatChoice(label: 'Consigliami tu'),
-        conversationId: thread.summary.id,
-      );
-      expect(
-        freeTalk.journey,
-        isNotNull,
-        reason: 'la scelta ricade sulla prima destinazione',
       );
     });
   });
 }
 
+Iterable<String> _assistantTexts(ChatThread thread) => thread.messages
+    .where((message) => message.role == ChatRole.assistant)
+    .expand(
+      (message) => <String>[
+        message.text,
+        ...message.choices.map((choice) => choice.label),
+      ],
+    );
+
 /// Records `saveTripVersion` calls so tests can assert what the controller
 /// persists after a proposal decision without touching a real database.
 class _TripSpyDataSource extends MockDataSource {
   final List<({String conversationId, String title, TripSnapshot snapshot})>
-      savedVersions = <({String conversationId, String title, TripSnapshot snapshot})>[];
+  savedVersions =
+      <({String conversationId, String title, TripSnapshot snapshot})>[];
 
   @override
   Future<ConversationRow?> createConversation(Conversation summary) async =>
@@ -1018,7 +1109,11 @@ class _TripSpyDataSource extends MockDataSource {
     required String title,
     required TripSnapshot snapshot,
   }) async {
-    savedVersions.add((conversationId: conversationId, title: title, snapshot: snapshot));
+    savedVersions.add((
+      conversationId: conversationId,
+      title: title,
+      snapshot: snapshot,
+    ));
   }
 }
 
@@ -1037,8 +1132,27 @@ class _ProfileSpyDataSource extends MockDataSource {
   Future<ProfileRow?> fetchProfile() async => profile;
 
   @override
-  Future<void> upsertProfile({ThemeMode? themeMode, List<String>? memoryTags}) async {
+  Future<void> upsertProfile({
+    ThemeMode? themeMode,
+    List<String>? memoryTags,
+  }) async {
     upserts.add((themeMode: themeMode, memoryTags: memoryTags));
+  }
+}
+
+/// Fully inherits the mock boundary and fails only message persistence.
+class _FailingPersistenceDataSource extends MockDataSource {
+  @override
+  Future<ConversationRow?> createConversation(Conversation summary) async =>
+      ConversationRow(
+        id: 'failing-conversation',
+        conversation: summary,
+        updatedAt: DateTime(2026, 10, 16, 10, 30),
+      );
+
+  @override
+  Future<void> insertMessage(String conversationId, ChatMessage message) async {
+    throw StateError('persistence unavailable');
   }
 }
 
@@ -1064,12 +1178,11 @@ void _answerIntake(
 
 /// Answers the intake, accepts its proposal, then lets the thread auto-advance
 /// through the transition tail, landing on the first F5 curation place card.
-void _startF5(
-  ChatFirstPrototypeController controller,
-  String conversationId,
-) {
+void _startF5(ChatFirstPrototypeController controller, String conversationId) {
   _answerIntake(controller, conversationId);
-  final proposal = controller.threadOf(conversationId).messages
+  final proposal = controller
+      .threadOf(conversationId)
+      .messages
       .lastWhere((m) => m.kind == ChatMessageKind.planProposal);
   controller.acceptProposal(conversationId, proposal.id);
 }
@@ -1082,8 +1195,9 @@ void _tapChoice(
   String label,
 ) {
   final thread = controller.threadOf(conversationId);
-  final message = thread.messages
-      .lastWhere((m) => m.choices.any((c) => c.label == label));
+  final message = thread.messages.lastWhere(
+    (m) => m.choices.any((c) => c.label == label),
+  );
   final choice = message.choices.firstWhere((c) => c.label == label);
   controller.choose(choice, conversationId: conversationId);
 }
