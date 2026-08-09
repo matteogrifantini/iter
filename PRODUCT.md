@@ -30,10 +30,40 @@ Calm, curious and decisive. Iter feels like a well-prepared travel companion: it
 
 ### Home
 
-- Start a new trip from one clear primary action.
-- Resume one unfinished trip without having to recreate context; the full archive lives in **Viaggi**.
-- Open **Scopri** for a video-led selection of complete routes, not a wall of cities or generic metrics.
-- Optionally record availability or work shifts. This is a lightweight availability signal in the MVP; there is no document upload or automatic calendar import.
+Home is adaptive and AI-led, not a city catalog. It turns an incomplete wish
+into a readable route one question at a time, while keeping the product
+navigable and every material change confirmable. It has three states:
+
+- **Nessun viaggio:** the manifesto and free composer are the one dominant
+  action. The person can send text, demo voice or mock media; up to three
+  quick seeds can express time, feeling or budget. No city, trend, itinerary or
+  affinity percentage appears before Iter has understood enough context.
+- **Pianificazione aperta:** show one missing decision, three concise facts
+  Iter has understood, and **Continua il viaggio** as the primary action.
+  **Inizia un altro viaggio** remains quiet; the complete archive stays in
+  **Viaggi**.
+- **Viaggio in corso:** show the journey, current day and a short upcoming
+  timeline. A possible operational update is proposed but never applied; **Apri
+  il piano di oggi** is primary. Chat and composer remain reachable without
+  replacing the timeline.
+
+When several items exist, priority is: active trip today, changed or pending
+planning, most recent draft, then a new-trip entry. Home never shows more than
+one resumable item.
+
+Quick seeds only prefill or append semantic text to the composer. A tap never
+chooses a city, creates a conversation or starts a trip; the first explicit
+send creates or opens the FreeTalk thread. After that send, understood signals
+such as `4 giorni`, `fine settembre`, `ritmo lento`, `cibo` or `500 €` are
+visible and editable or removable. Iter asks one missing constraint at a time,
+then shows an editable summary before a complete proposal. Choosing or changing
+a proposal, and every material itinerary change, requires explicit
+confirmation.
+
+The Material navigation labels are **Oggi** (adaptive Home), **Viaggi**
+(conversation/trip archive) and **Tu** (Profile). Availability remains an
+optional, lightweight MVP signal: no document upload or automatic calendar
+import.
 
 ### Discover a journey
 

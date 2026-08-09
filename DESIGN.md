@@ -8,28 +8,57 @@ Someone is planning from a phone between everyday commitments: a free evening, a
 
 Iter ships as a Flutter app for Android. Its interaction model follows Material 3: navigation, top app bars, system back, tonal elevation and expanded layouts that graduate to a navigation rail on larger screens. The app respects safe areas, light/dark appearance, device text scale and reduced motion.
 
-Do not recreate a website inside a phone. Brand is carried through content, a restrained accent, map/route context and the way a plan changes — not through bespoke navigation or ornamental chrome.
+Do not recreate a website inside a phone. Brand is carried through content,
+route context and the way a plan changes — not through bespoke navigation or
+ornamental chrome.
 
 ## Visual Direction
 
-The direction is **Neutro System Blue**: a quiet native travel planner that refuses the travel-brand rut of warm creams and editorial terracotta. The product is a tool on the phone, not a magazine inside it.
+The direction is **Rotta viva**: cartografia affettiva and orientation systems
+for an AI-guided travel planner. The Home is a manifesto operativo — a human
+question, a free input and a route made from understood signals — rather than a
+photographic catalog or a permanent chat transcript. Its approved composition
+is **Manifesto + input**: wordmark and a discreet conversation shortcut,
+dominant question **Che viaggio ti farebbe bene adesso?**, promise
+**Raccontami il momento. Alla destinazione penso io.**, one dark composer, up
+to three quick signals, and a route line leading to subsequent content.
 
-The default light theme uses iOS-style neutral grey surfaces: a grouped light background, white raised surfaces and hairline separators. Text uses two greys — near-black ink and a muted secondary — and System Blue is the single decision colour: primary actions, active selection and the route marker. Vernal red marks a committed decision, current signal or destructive action; green is used sparingly for positive status. The dark theme is a first-class pure-black surface ramp, not an inversion of light. There are no gradients, glass panels, neon glows or oversized decorative radii.
+Rotta viva uses this controlled five-role palette. Tokens live in `ColorScheme`
+and `IterColorRoles`; widgets do not own raw colors.
 
-In Flutter, define these through `ColorScheme` semantic roles rather than scattering raw colours through widgets:
+| Role | Light | Dark | Use |
+| --- | --- | --- | --- |
+| Ink | `#18204B` | `#F9F7EF` | primary text; decisive light/dark surfaces |
+| Rotta | `#2D63FF` | `#7EA0FF` | primary action, active state, route line |
+| Segnale | `#FF5C42` | `#FF7A63` | arrow, attention, decision awaiting confirmation |
+| Possibilità | `#E7FF67` | `#E7FF67` | new signal, opportunity, positive progress |
+| Canvas | `#F9F7EF` | `#0B1028` | mineral page background |
 
-- `primary` / `onPrimary`: the one decisive action or active selection.
-- `surface`, `surfaceContainer`, `onSurface`, `outline`: itinerary structure, lists and route context.
-- `secondaryContainer`: non-blocking suggestions and personal-fit explanations.
-- `tertiary` or `error`: warnings, conflicts and irreversible actions only.
-
-The theme owns the light and dark schemes. No screen invents an ad-hoc colour, shadow or typography scale.
+Dark also uses `#141C3B` for surface. Light contrast is fixed: Ink on Canvas
+`14.53:1`, Rotta on Canvas `4.51:1`, white on Rotta `4.84:1`, Ink on Segnale
+`5.09:1`, Ink on Possibilità `14.03:1`. Segnale never carries normal white
+text; use Ink or treat it as a graphic signal. Color fills a meaningful field
+or communicates state, never a scatter of decorative accents. No gradients,
+glass panels, neon glows or oversized radii.
 
 ## Content Architecture
 
 ### Home
 
-Open with a personal greeting, a single proposition — **Partiamo da come vuoi sentirti** — and one unambiguous action: **Inizia un viaggio**. Show at most one current journey and one quiet availability entry point. The archive, trends and profile each have their own bottom-navigation destination; the home must never become a dashboard wall.
+The adaptive Home has three product-led states, not a selectable visual mode.
+With no trip, the manifesto and composer dominate; cities, affinity percentages
+and destination carousels do not appear. With open planning, show exactly one
+missing decision, three understood signals and **Continua il viaggio**; a new
+trip is quiet. With an active trip, show the current day and a short timeline;
+**Apri il piano di oggi** is primary and any operational alternative remains a
+proposal. Priority is active trip today, pending planning, recent draft, then a
+new trip; only one resumable item is visible.
+
+The bottom navigation is Material and has three destinations: **Oggi** for
+Home, **Viaggi** for the archive, and **Tu** for Profile. The route line is
+wide enough to be recognizable but never obstructs text or touch targets. It
+links actual signals and states: a first waypoint after send, an extended trace
+for another signal, and an arrow for the complete proposal.
 
 ### Destination discovery
 
@@ -93,10 +122,27 @@ The day plan is a visual travel strip. A short video hero contains arrivals and 
 - Every action has default, disabled, loading, error and success feedback. Empty states teach the next action.
 - Video is content, not decoration: bundled clips loop silently, have a pause action and fall back to a semantic route illustration when playback is unavailable.
 - Corner radii stop at 14 dp for components, 16 dp for cards. Route progress, typography and media provide character; containers do not need to look like bubbles. Hairline separators, not shadows, define structure.
+- The proprietary route glyph is only a continuous rounded stroke, waypoint and
+  direction arrow. It marks start, progress and passage from signal to proposal;
+  it never replaces familiar Android icons.
+- Standard actions use Material rounded/outlined icons with an approximately
+  `1.8 dp` visual stroke, a minimum `48 dp` target, and a label or tooltip.
+  Icons do not sit in decorative tiles or change family by surface.
+- Emoji are labeled semantic seeds, not decoration: `🌊 Voglio respirare`,
+  `📅 Ho pochi giorni`, `💶 Ho 500 €`, `🐢 Voglio rallentare`. They remain out
+  of semantics when adjacent text already says the meaning; never use them for
+  bottom navigation, icon-only controls or title ornament.
 
 ## Typography
 
-Use the Android system family and Flutter `TextTheme` styles. Body copy, labels and controls stay within the native type scale and respect font-size settings. Headings are clear and slightly tracked; they do not compete with a second display face. Italian labels use sentence case.
+**Bricolage Grotesque** is the local variable-font asset for the lowercase
+`iter` wordmark, display, headlines and decisive questions. **Figtree** is the
+local variable-font asset for body, labels, controls, chat, results and
+itineraries. Map both through `TextTheme`; do not load fonts remotely at
+runtime. Bricolage never enters body copy or dense lists; Figtree remains the
+operational fallback for large text and long Italian content. Display may use
+strong weight, compact line-height and negative tracking only; labels, buttons
+and copy use sentence case without decorative all-caps.
 
 ## Motion
 
@@ -106,7 +152,12 @@ Motion communicates a planning result:
 - An accepted AI patch updates the relevant day and preserves the surrounding context.
 - Navigation uses platform transitions; temporary tasks use native sheets.
 
-Most transitions are 150–250 ms with a calm ease-out. Never make a traveller wait for choreography, bounce an itinerary, or hide content behind a loader. When reduced motion is enabled, crossfade or update immediately.
+Most transitions are 150–250 ms with a calm ease-out. The Rotta viva trace uses
+`180–260 ms`, ease-out and one main transformation: waypoint after first send,
+extension for a new signal, arrow for the proposal. Never loop, glow, fake
+type, bounce an itinerary or hide content behind an AI loader. With
+`disableAnimations` or reduced motion, the trace reaches its final state by
+crossfade or immediate update.
 
 ## Appearance setting
 
@@ -114,8 +165,18 @@ Light is the default on first launch. The profile contains an explicit two-way *
 
 ## Accessibility Checklist
 
-- Minimum 48 dp targets, with labelled alternatives to gestures.
+- Minimum `48×48 dp` targets, with at least `8 dp` spacing and labelled
+  alternatives to gestures.
+- Semantic order follows context, question, composer, signals, primary action,
+  secondary content, then navigation. After an update, screen-reader focus
+  moves to the new signal or next question.
+- At `360 dp`, `390 dp` and the minimum compact Android width, and with large
+  text, headline, composer and signals flow vertically; the route line never
+  fixes their height. The keyboard never obscures the input, error or send
+  action.
 - Semantic labels for personal-fit scores, route changes, locked stops and outbound booking links.
 - Text and state never rely on colour alone; maintain contrast in both themes.
 - Screen-reader order follows the visible decision order.
 - Spatial diagrams are supplemental; the textual day timeline remains complete.
+- System Back closes a media sheet or keyboard before leaving the flow and
+  preserves composed text. Light and dark themes are both first-class.
