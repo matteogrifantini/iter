@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../models/trip_models.dart' show JourneyRoute;
+import 'adaptive_home_model.dart';
 import 'chat_first_controller.dart';
 import 'chat_first_data.dart';
 import 'chat_first_home_screen.dart';
@@ -41,14 +41,15 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
             index: _tabIndex,
             children: <Widget>[
               ChatFirstHomeScreen(
-                journeys: controller.trendJourneys,
-                resumable: controller.threads.take(2).toList(growable: false),
-                onStartChat: (journey) => _startFromJourney(context, journey),
-                onStartFreeTalk: () => _startFreeTalk(context),
-                onResume: (thread) => _openThread(context, thread),
-                onOpenChats: () => setState(() => _tabIndex = 1),
+                model: resolveAdaptiveHome(controller.threads),
+                onSubmitIntent: (intent) =>
+                    _startFreeTalkWithText(context, intent),
+                onVoiceIntent: () => _startFreeTalkWithVoice(context),
+                onPhotoIntent: (asset) =>
+                    _startFreeTalkWithPhoto(context, asset),
+                onOpenThread: (thread) => _openThread(context, thread),
+                onOpenTrips: () => setState(() => _tabIndex = 1),
                 unread: controller.unread,
-                poisLoader: controller.poisFor,
               ),
               ChatFirstListScreen(
                 controller: controller,
@@ -72,14 +73,22 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
     );
   }
 
-  void _startFromJourney(BuildContext context, JourneyRoute journey) {
-    final thread = widget.controller.startFromJourney(journey);
-    _openThread(context, thread);
-  }
-
-  void _startFreeTalk(BuildContext context) {
+  void _startFreeTalkWithText(BuildContext context, String intent) {
     final thread = widget.controller.startFreeTalk();
     _openThread(context, thread);
+    widget.controller.sendText(intent);
+  }
+
+  void _startFreeTalkWithVoice(BuildContext context) {
+    final thread = widget.controller.startFreeTalk();
+    _openThread(context, thread);
+    widget.controller.sendAudio();
+  }
+
+  void _startFreeTalkWithPhoto(BuildContext context, String asset) {
+    final thread = widget.controller.startFreeTalk();
+    _openThread(context, thread);
+    widget.controller.sendMedia(asset: asset, isVideo: false);
   }
 
   void _openThread(BuildContext context, ChatThread thread) {
@@ -128,12 +137,12 @@ class _ChatBottomNavigation extends StatelessWidget {
         NavigationDestination(
           icon: _UnreadIcon(unread: unread, icon: Icons.chat_bubble_outline),
           selectedIcon: _UnreadIcon(unread: unread, icon: Icons.chat_bubble),
-          label: 'Chat',
+          label: 'Viaggi',
         ),
         const NavigationDestination(
           icon: Icon(Icons.person_outline),
           selectedIcon: Icon(Icons.person),
-          label: 'Profilo',
+          label: 'Tu',
         ),
       ],
     );
@@ -158,6 +167,9 @@ class _UnreadIcon extends StatelessWidget {
         child: child,
       );
     }
-    return child;
+    return Semantics(
+      label: unread > 0 ? 'Viaggi, $unread messaggi non letti' : 'Viaggi',
+      child: child,
+    );
   }
 }
