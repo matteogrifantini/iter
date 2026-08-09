@@ -360,9 +360,11 @@ class ActiveTimelineSection extends StatelessWidget {
                     children: <Widget>[
                       const Icon(Icons.notifications_active_outlined),
                       const SizedBox(width: 8),
-                      Text(
-                        'Aggiornamento da confermare',
-                        style: Theme.of(context).textTheme.titleMedium,
+                      Expanded(
+                        child: Text(
+                          'Aggiornamento da confermare',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
                       ),
                     ],
                   ),

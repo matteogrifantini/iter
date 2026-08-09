@@ -618,6 +618,154 @@ void main() {
     expect(controller.activeThread?.messages.last.role, ChatRole.assistant);
   });
 
+  testWidgets('shell lega planning e active al thread aperto dalla Home', (
+    tester,
+  ) async {
+    final seeded = ChatFirstPrototypeController();
+    final planning = seeded.threads.firstWhere(
+      (thread) => thread.summary.snapshot?.statusLabel == 'In pianificazione',
+    );
+    final planningController = ChatFirstPrototypeController(
+      seed: <ChatThread>[planning],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: IterTheme.light(),
+        home: ChatFirstShell(
+          controller: planningController,
+          themeMode: ThemeMode.light,
+          onThemeChanged: (_) {},
+        ),
+      ),
+    );
+    await tester.tap(find.text('Continua il viaggio'));
+    await tester.pumpAndSettle();
+    expect(planningController.activeThreadId, planning.summary.id);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    final active = seeded.threads.firstWhere(
+      (thread) => thread.summary.snapshot?.statusLabel == 'In viaggio',
+    );
+    final activeController = ChatFirstPrototypeController(
+      seed: <ChatThread>[active],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: IterTheme.light(),
+        home: ChatFirstShell(
+          controller: activeController,
+          themeMode: ThemeMode.light,
+          onThemeChanged: (_) {},
+        ),
+      ),
+    );
+    await tester.tap(find.text('Apri il piano di oggi'));
+    await tester.pumpAndSettle();
+    expect(activeController.activeThreadId, active.summary.id);
+  });
+
+  testWidgets(
+    'shell invia text voce e foto nel FreeTalk, non nel thread active',
+    (tester) async {
+      final controller = ChatFirstPrototypeController();
+      final active = controller.threads.firstWhere(
+        (thread) => thread.summary.snapshot?.statusLabel == 'In viaggio',
+      );
+      controller.openConversation(active.summary.id);
+      final activeMessages = active.messages.length;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: IterTheme.light(),
+          home: ChatFirstShell(
+            controller: controller,
+            themeMode: ThemeMode.light,
+            onThemeChanged: (_) {},
+          ),
+        ),
+      );
+
+      Future<void> returnToHome() async {
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.byType(TextField),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+      }
+
+      await tester.scrollUntilVisible(
+        find.byType(TextField),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.enterText(
+        find.byType(TextField),
+        'Vorrei fermarmi vicino al mare',
+      );
+      await tester.pump();
+      await tester.tap(find.byTooltip('Invia il desiderio'));
+      await tester.pumpAndSettle();
+      await returnToHome();
+
+      await tester.tap(find.byTooltip('Invia un messaggio vocale'));
+      await tester.pumpAndSettle();
+      await returnToHome();
+
+      await tester.tap(find.byTooltip('Aggiungi una foto'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Finestrino sul mare'));
+      await tester.pumpAndSettle();
+
+      final freeTalk = controller.threadOf(kFreeTalkConversationId);
+      expect(
+        freeTalk.messages
+            .where((message) => message.role == ChatRole.traveler)
+            .map((message) => message.kind),
+        containsAll(<ChatMessageKind>[
+          ChatMessageKind.text,
+          ChatMessageKind.audio,
+          ChatMessageKind.media,
+        ]),
+      );
+      expect(active.messages.length, activeMessages);
+    },
+  );
+
+  testWidgets('home active evita overflow a 320 con testo 1.5', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final controller = ChatFirstPrototypeController();
+    final active = controller.threads.firstWhere(
+      (thread) => thread.summary.snapshot?.statusLabel == 'In viaggio',
+    );
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.5)),
+        child: wrapIter(
+          ChatFirstHomeScreen(
+            model: AdaptiveHomeModel.active(thread: active),
+            unread: 0,
+            onSubmitIntent: (_) {},
+            onVoiceIntent: () {},
+            onPhotoIntent: (_) {},
+            onOpenThread: (_) {},
+            onOpenTrips: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Aggiornamento da confermare'),
+      160,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('snapshot non mostra il bottone di condivisione demo', (
     tester,
   ) async {

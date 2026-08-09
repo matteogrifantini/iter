@@ -92,6 +92,7 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
   }
 
   void _openThread(BuildContext context, ChatThread thread) {
+    widget.controller.openConversation(thread.summary.id);
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ChatFirstThreadScreen(
