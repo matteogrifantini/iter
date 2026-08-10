@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
 
+import 'plan_models.dart';
+
+export 'plan_models.dart';
+
 /// Who produced a message in a chat-first thread.
 enum ChatRole { traveler, assistant, system }
 
@@ -39,16 +43,17 @@ class PlanProposal {
   PlanProposalOutcome? outcome;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'changeLabel': changeLabel,
-        'snapshot': snapshot.toJson(),
-        'outcome': outcome?.name,
-      };
+    'changeLabel': changeLabel,
+    'snapshot': snapshot.toJson(),
+    'outcome': outcome?.name,
+  };
 
   factory PlanProposal.fromJson(Map<String, dynamic> json) {
     final proposal = PlanProposal(
       changeLabel: (json['changeLabel'] as String?) ?? '',
       snapshot: TripSnapshot.fromJson(
-        (json['snapshot'] as Map<String, dynamic>?) ?? const <String, dynamic>{},
+        (json['snapshot'] as Map<String, dynamic>?) ??
+            const <String, dynamic>{},
       ),
     );
     final outcomeName = json['outcome'] as String?;
@@ -121,8 +126,8 @@ class ConversationRow {
     final avatarAsset = conversation.avatar.asset.isEmpty
         ? (row['avatar_asset'] as String?) ?? ''
         : conversation.avatar.asset;
-    final needsPatch = title != conversation.title ||
-        avatarAsset != conversation.avatar.asset;
+    final needsPatch =
+        title != conversation.title || avatarAsset != conversation.avatar.asset;
     if (needsPatch) {
       final json = conversation.toJson();
       json['title'] = title;
@@ -139,7 +144,7 @@ class ConversationRow {
       conversation: conversation,
       updatedAt: updatedRaw is String
           ? DateTime.tryParse(updatedRaw) ??
-              DateTime.fromMillisecondsSinceEpoch(0)
+                DateTime.fromMillisecondsSinceEpoch(0)
           : DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
@@ -164,14 +169,14 @@ class ChatAvatar {
   final String? label;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'asset': asset,
-        if (label != null) 'label': label,
-      };
+    'asset': asset,
+    if (label != null) 'label': label,
+  };
 
   factory ChatAvatar.fromJson(Map<String, dynamic> json) => ChatAvatar(
-        (json['asset'] as String?) ?? '',
-        label: json['label'] as String?,
-      );
+    (json['asset'] as String?) ?? '',
+    label: json['label'] as String?,
+  );
 }
 
 /// One selectable option inside a [ChatMessageKind.choices] bubble.
@@ -186,14 +191,14 @@ class ChatChoice {
   final bool confirm;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'label': label,
-        'confirm': confirm,
-      };
+    'label': label,
+    'confirm': confirm,
+  };
 
   factory ChatChoice.fromJson(Map<String, dynamic> json) => ChatChoice(
-        label: (json['label'] as String?) ?? '',
-        confirm: (json['confirm'] as bool?) ?? true,
-      );
+    label: (json['label'] as String?) ?? '',
+    confirm: (json['confirm'] as bool?) ?? true,
+  );
 }
 
 /// A catalog place proposed one at a time during the in-chat curation,
@@ -225,26 +230,26 @@ class PlaceCard {
   final String? imageAsset;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'name': name,
-        'category': category,
-        'neighborhood': neighborhood,
-        'durationMinutes': durationMinutes,
-        'whyFits': whyFits,
-        'bestMoment': bestMoment,
-        if (imageAsset != null) 'imageAsset': imageAsset,
-      };
+    'id': id,
+    'name': name,
+    'category': category,
+    'neighborhood': neighborhood,
+    'durationMinutes': durationMinutes,
+    'whyFits': whyFits,
+    'bestMoment': bestMoment,
+    if (imageAsset != null) 'imageAsset': imageAsset,
+  };
 
   factory PlaceCard.fromJson(Map<String, dynamic> json) => PlaceCard(
-        id: (json['id'] as String?) ?? '',
-        name: (json['name'] as String?) ?? '',
-        category: (json['category'] as String?) ?? '',
-        neighborhood: (json['neighborhood'] as String?) ?? '',
-        durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
-        whyFits: (json['whyFits'] as String?) ?? '',
-        bestMoment: (json['bestMoment'] as String?) ?? '',
-        imageAsset: json['imageAsset'] as String?,
-      );
+    id: (json['id'] as String?) ?? '',
+    name: (json['name'] as String?) ?? '',
+    category: (json['category'] as String?) ?? '',
+    neighborhood: (json['neighborhood'] as String?) ?? '',
+    durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
+    whyFits: (json['whyFits'] as String?) ?? '',
+    bestMoment: (json['bestMoment'] as String?) ?? '',
+    imageAsset: json['imageAsset'] as String?,
+  );
 }
 
 /// One demo transport option shown in the in-chat comparison: reaching the
@@ -264,11 +269,11 @@ class TransportOptionView {
   final bool isRecommended;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'label': label,
-        'priceLabel': priceLabel,
-        'durationLabel': durationLabel,
-        'isRecommended': isRecommended,
-      };
+    'label': label,
+    'priceLabel': priceLabel,
+    'durationLabel': durationLabel,
+    'isRecommended': isRecommended,
+  };
 
   factory TransportOptionView.fromJson(Map<String, dynamic> json) =>
       TransportOptionView(
@@ -287,13 +292,17 @@ class TransportCompare {
   final List<TransportOptionView> options;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'options': options.map((o) => o.toJson()).toList(growable: false),
-      };
+    'options': options.map((o) => o.toJson()).toList(growable: false),
+  };
 
   factory TransportCompare.fromJson(Map<String, dynamic> json) =>
       TransportCompare(
-        options: (json['options'] as List<dynamic>?)
-                ?.map((o) => TransportOptionView.fromJson(o as Map<String, dynamic>))
+        options:
+            (json['options'] as List<dynamic>?)
+                ?.map(
+                  (o) =>
+                      TransportOptionView.fromJson(o as Map<String, dynamic>),
+                )
                 .toList(growable: false) ??
             const <TransportOptionView>[],
       );
@@ -316,18 +325,18 @@ class StayZoneInfo {
   final int averageWalkMinutes;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'name': name,
-        'summary': summary,
-        'whyFits': whyFits,
-        'averageWalkMinutes': averageWalkMinutes,
-      };
+    'name': name,
+    'summary': summary,
+    'whyFits': whyFits,
+    'averageWalkMinutes': averageWalkMinutes,
+  };
 
   factory StayZoneInfo.fromJson(Map<String, dynamic> json) => StayZoneInfo(
-        name: (json['name'] as String?) ?? '',
-        summary: (json['summary'] as String?) ?? '',
-        whyFits: (json['whyFits'] as String?) ?? '',
-        averageWalkMinutes: (json['averageWalkMinutes'] as num?)?.toInt() ?? 0,
-      );
+    name: (json['name'] as String?) ?? '',
+    summary: (json['summary'] as String?) ?? '',
+    whyFits: (json['whyFits'] as String?) ?? '',
+    averageWalkMinutes: (json['averageWalkMinutes'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// A media attachment shown inside a thread. Videos reuse the local vertical
@@ -340,157 +349,14 @@ class ChatMedia {
   final bool isVideo;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'asset': asset,
-        'isVideo': isVideo,
-      };
+    'asset': asset,
+    'isVideo': isVideo,
+  };
 
   factory ChatMedia.fromJson(Map<String, dynamic> json) => ChatMedia(
-        asset: (json['asset'] as String?) ?? '',
-        isVideo: (json['isVideo'] as bool?) ?? false,
-      );
-}
-
-/// A read-only snapshot of the trip tied to a conversation. The prototype never
-/// writes to the legacy [IterStore]: everything here is deterministic demo data.
-@immutable
-class TripSnapshot {
-  const TripSnapshot({
-    required this.destinationTitle,
-    required this.country,
-    required this.durationLabel,
-    required this.statusLabel,
-    required this.dates,
-    required this.transport,
-    required this.stay,
-    required this.placeLabels,
-    required this.days,
-  });
-
-  final String destinationTitle;
-  final String country;
-  final String durationLabel;
-
-  /// e.g. 'In pianificazione' or 'In viaggio'.
-  final String statusLabel;
-
-  /// Short human date range, e.g. '14–17 ottobre'.
-  final String dates;
-  final String transport;
-  final String stay;
-  final List<String> placeLabels;
-  final List<TripDaySnapshot> days;
-
-  TripSnapshot copyWith({
-    String? destinationTitle,
-    String? country,
-    String? durationLabel,
-    String? statusLabel,
-    String? dates,
-    String? transport,
-    String? stay,
-    List<String>? placeLabels,
-    List<TripDaySnapshot>? days,
-  }) {
-    return TripSnapshot(
-      destinationTitle: destinationTitle ?? this.destinationTitle,
-      country: country ?? this.country,
-      durationLabel: durationLabel ?? this.durationLabel,
-      statusLabel: statusLabel ?? this.statusLabel,
-      dates: dates ?? this.dates,
-      transport: transport ?? this.transport,
-      stay: stay ?? this.stay,
-      placeLabels: placeLabels ?? this.placeLabels,
-      days: days ?? this.days,
-    );
-  }
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'destinationTitle': destinationTitle,
-        'country': country,
-        'durationLabel': durationLabel,
-        'statusLabel': statusLabel,
-        'dates': dates,
-        'transport': transport,
-        'stay': stay,
-        'placeLabels': placeLabels,
-        'days': days.map((d) => d.toJson()).toList(growable: false),
-      };
-
-  factory TripSnapshot.fromJson(Map<String, dynamic> json) => TripSnapshot(
-        destinationTitle: (json['destinationTitle'] as String?) ?? '',
-        country: (json['country'] as String?) ?? '',
-        durationLabel: (json['durationLabel'] as String?) ?? '',
-        statusLabel: (json['statusLabel'] as String?) ?? '',
-        dates: (json['dates'] as String?) ?? '',
-        transport: (json['transport'] as String?) ?? '',
-        stay: (json['stay'] as String?) ?? '',
-        placeLabels: (json['placeLabels'] as List<dynamic>?)
-                ?.whereType<String>()
-                .toList(growable: false) ??
-            const <String>[],
-        days: (json['days'] as List<dynamic>?)
-                ?.map((d) => TripDaySnapshot.fromJson(d as Map<String, dynamic>))
-                .toList(growable: false) ??
-            const <TripDaySnapshot>[],
-      );
-}
-
-@immutable
-class TripDaySnapshot {
-  const TripDaySnapshot({
-    required this.label,
-    required this.theme,
-    required this.items,
-  });
-
-  final String label;
-  final String theme;
-  final List<TripItemSnapshot> items;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'label': label,
-        'theme': theme,
-        'items': items.map((i) => i.toJson()).toList(growable: false),
-      };
-
-  factory TripDaySnapshot.fromJson(Map<String, dynamic> json) => TripDaySnapshot(
-        label: (json['label'] as String?) ?? '',
-        theme: (json['theme'] as String?) ?? '',
-        items: (json['items'] as List<dynamic>?)
-                ?.map((i) => TripItemSnapshot.fromJson(i as Map<String, dynamic>))
-                .toList(growable: false) ??
-            const <TripItemSnapshot>[],
-      );
-}
-
-@immutable
-class TripItemSnapshot {
-  const TripItemSnapshot({
-    required this.title,
-    required this.category,
-    required this.time,
-    required this.locked,
-  });
-
-  final String title;
-  final String category;
-  final String time;
-  final bool locked;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'title': title,
-        'category': category,
-        'time': time,
-        'locked': locked,
-      };
-
-  factory TripItemSnapshot.fromJson(Map<String, dynamic> json) =>
-      TripItemSnapshot(
-        title: (json['title'] as String?) ?? '',
-        category: (json['category'] as String?) ?? '',
-        time: (json['time'] as String?) ?? '',
-        locked: (json['locked'] as bool?) ?? false,
-      );
+    asset: (json['asset'] as String?) ?? '',
+    isVideo: (json['isVideo'] as bool?) ?? false,
+  );
 }
 
 /// A single message in a conversation thread.
@@ -541,54 +407,56 @@ class ChatMessage {
   bool get isIncoming => role != ChatRole.traveler;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'role': role.name,
-        'kind': kind.name,
-        'text': text,
-        'sentAt': sentAt.toIso8601String(),
-        if (media != null) 'media': media!.toJson(),
-        'choices': choices.map((c) => c.toJson()).toList(growable: false),
-        if (audioDuration != null) 'audioDuration': audioDuration,
-        if (summary != null) 'summary': summary!.toJson(),
-        if (proposal != null) 'proposal': proposal!.toJson(),
-        if (placeCard != null) 'placeCard': placeCard!.toJson(),
-        if (transport != null) 'transport': transport!.toJson(),
-        if (stayZone != null) 'stayZone': stayZone!.toJson(),
-      };
+    'id': id,
+    'role': role.name,
+    'kind': kind.name,
+    'text': text,
+    'sentAt': sentAt.toIso8601String(),
+    if (media != null) 'media': media!.toJson(),
+    'choices': choices.map((c) => c.toJson()).toList(growable: false),
+    if (audioDuration != null) 'audioDuration': audioDuration,
+    if (summary != null) 'summary': summary!.toJson(),
+    if (proposal != null) 'proposal': proposal!.toJson(),
+    if (placeCard != null) 'placeCard': placeCard!.toJson(),
+    if (transport != null) 'transport': transport!.toJson(),
+    if (stayZone != null) 'stayZone': stayZone!.toJson(),
+  };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
-        id: (json['id'] as String?) ?? '',
-        role: ChatRole.values.asNameMap()[json['role']] ?? ChatRole.assistant,
-        kind: ChatMessageKind.values.asNameMap()[json['kind']] ??
-            ChatMessageKind.text,
-        text: (json['text'] as String?) ?? '',
-        sentAt: DateTime.tryParse((json['sentAt'] as String?) ?? '') ??
-            DateTime.fromMillisecondsSinceEpoch(0),
-        media: json['media'] is Map<String, dynamic>
-            ? ChatMedia.fromJson(json['media'] as Map<String, dynamic>)
-            : null,
-        choices: (json['choices'] as List<dynamic>?)
-                ?.map((c) => ChatChoice.fromJson(c as Map<String, dynamic>))
-                .toList(growable: false) ??
-            const <ChatChoice>[],
-        audioDuration: json['audioDuration'] as String?,
-        summary: json['summary'] is Map<String, dynamic>
-            ? TripSnapshot.fromJson(json['summary'] as Map<String, dynamic>)
-            : null,
-        proposal: json['proposal'] is Map<String, dynamic>
-            ? PlanProposal.fromJson(json['proposal'] as Map<String, dynamic>)
-            : null,
-        placeCard: json['placeCard'] is Map<String, dynamic>
-            ? PlaceCard.fromJson(json['placeCard'] as Map<String, dynamic>)
-            : null,
-        transport: json['transport'] is Map<String, dynamic>
-            ? TransportCompare.fromJson(
-                json['transport'] as Map<String, dynamic>)
-            : null,
-        stayZone: json['stayZone'] is Map<String, dynamic>
-            ? StayZoneInfo.fromJson(json['stayZone'] as Map<String, dynamic>)
-            : null,
-      );
+    id: (json['id'] as String?) ?? '',
+    role: ChatRole.values.asNameMap()[json['role']] ?? ChatRole.assistant,
+    kind:
+        ChatMessageKind.values.asNameMap()[json['kind']] ??
+        ChatMessageKind.text,
+    text: (json['text'] as String?) ?? '',
+    sentAt:
+        DateTime.tryParse((json['sentAt'] as String?) ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0),
+    media: json['media'] is Map<String, dynamic>
+        ? ChatMedia.fromJson(json['media'] as Map<String, dynamic>)
+        : null,
+    choices:
+        (json['choices'] as List<dynamic>?)
+            ?.map((c) => ChatChoice.fromJson(c as Map<String, dynamic>))
+            .toList(growable: false) ??
+        const <ChatChoice>[],
+    audioDuration: json['audioDuration'] as String?,
+    summary: json['summary'] is Map<String, dynamic>
+        ? TripSnapshot.fromJson(json['summary'] as Map<String, dynamic>)
+        : null,
+    proposal: json['proposal'] is Map<String, dynamic>
+        ? PlanProposal.fromJson(json['proposal'] as Map<String, dynamic>)
+        : null,
+    placeCard: json['placeCard'] is Map<String, dynamic>
+        ? PlaceCard.fromJson(json['placeCard'] as Map<String, dynamic>)
+        : null,
+    transport: json['transport'] is Map<String, dynamic>
+        ? TransportCompare.fromJson(json['transport'] as Map<String, dynamic>)
+        : null,
+    stayZone: json['stayZone'] is Map<String, dynamic>
+        ? StayZoneInfo.fromJson(json['stayZone'] as Map<String, dynamic>)
+        : null,
+  );
 }
 
 /// A conversation owns at most one [TripSnapshot]; opening the title opens that
@@ -637,31 +505,32 @@ class Conversation {
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'title': title,
-        'subtitle': subtitle,
-        'avatar': avatar.toJson(),
-        'timestamp': timestamp.toIso8601String(),
-        'unread': unread,
-        'lastPreview': lastPreview,
-        if (snapshot != null) 'snapshot': snapshot!.toJson(),
-        'isTrending': isTrending,
-      };
+    'id': id,
+    'title': title,
+    'subtitle': subtitle,
+    'avatar': avatar.toJson(),
+    'timestamp': timestamp.toIso8601String(),
+    'unread': unread,
+    'lastPreview': lastPreview,
+    if (snapshot != null) 'snapshot': snapshot!.toJson(),
+    'isTrending': isTrending,
+  };
 
   factory Conversation.fromJson(Map<String, dynamic> json) => Conversation(
-        id: (json['id'] as String?) ?? '',
-        title: (json['title'] as String?) ?? '',
-        subtitle: (json['subtitle'] as String?) ?? '',
-        avatar: json['avatar'] is Map<String, dynamic>
-            ? ChatAvatar.fromJson(json['avatar'] as Map<String, dynamic>)
-            : ChatAvatar(''),
-        timestamp: DateTime.tryParse((json['timestamp'] as String?) ?? '') ??
-            DateTime.fromMillisecondsSinceEpoch(0),
-        unread: (json['unread'] as num?)?.toInt() ?? 0,
-        lastPreview: (json['lastPreview'] as String?) ?? '',
-        snapshot: json['snapshot'] is Map<String, dynamic>
-            ? TripSnapshot.fromJson(json['snapshot'] as Map<String, dynamic>)
-            : null,
-        isTrending: (json['isTrending'] as bool?) ?? false,
-      );
+    id: (json['id'] as String?) ?? '',
+    title: (json['title'] as String?) ?? '',
+    subtitle: (json['subtitle'] as String?) ?? '',
+    avatar: json['avatar'] is Map<String, dynamic>
+        ? ChatAvatar.fromJson(json['avatar'] as Map<String, dynamic>)
+        : ChatAvatar(''),
+    timestamp:
+        DateTime.tryParse((json['timestamp'] as String?) ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0),
+    unread: (json['unread'] as num?)?.toInt() ?? 0,
+    lastPreview: (json['lastPreview'] as String?) ?? '',
+    snapshot: json['snapshot'] is Map<String, dynamic>
+        ? TripSnapshot.fromJson(json['snapshot'] as Map<String, dynamic>)
+        : null,
+    isTrending: (json['isTrending'] as bool?) ?? false,
+  );
 }
