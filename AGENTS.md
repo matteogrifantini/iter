@@ -19,7 +19,7 @@ sono in `.codex/agents/`; le schede leggibili sono in `agents/`.
    `.agents/skills/impeccable/SKILL.md`.
 5. Controllare `git status` e preservare tutte le modifiche preesistenti.
 6. Definire `owner -> file/area -> risultato -> dipendenze -> verifica ->
-   worker -> Git owner` prima di delegare.
+   agente -> Git owner` prima di delegare.
 
 ## Strumenti obbligatori (ogni agente)
 
@@ -55,37 +55,44 @@ quality_reviewer):
 
 | Lavoro | Owner |
 | --- | --- |
-| Requisiti, flussi, copy, accessibilità, documenti prodotto | `product_ux` |
-| Dart, widget, stato, modelli, tema, test Flutter | `flutter_engineer` |
-| Android, permessi, plugin, tooling, media, integrazioni native | `platform_engineer` |
-| Review indipendente, test, build e QA UI | `quality_reviewer` |
-| Ricerca, edit meccanico o comando completamente specificato | `worker` |
+| Implementazione, test, documentazione, ricerca o verifica delimitata | `worker` |
+| Debugging difficile, refactor articolato o implementazione complessa delimitata | `worker-hard` |
+| Giudizio su requisiti, flussi, copy, accessibilità o documenti prodotto | `product_ux` |
+| Giudizio su Dart, widget, stato, modelli, tema o test Flutter | `flutter_engineer` |
+| Giudizio su Android, permessi, plugin, tooling, media o integrazioni native | `platform_engineer` |
+| Review indipendente, regressioni, build e QA UI | `quality_reviewer` |
 
-L'orchestratore mantiene decisioni trasversali, architettura, direzione UI/UX,
-scope e integrazione. Non delega queste decisioni al `worker`.
+Il routing è worker-first: ogni incarico parte da `worker`, salvo complessità o
+necessità specialistica già evidenti. Solo l'orchestratore può passare il lavoro
+a `worker-hard` o a uno specialista. L'orchestratore mantiene decisioni
+trasversali, architettura, direzione UI/UX, scope e integrazione; nessun agente
+secondario riceve questa autorità.
 
 ## Orchestrazione
 
-- Profondità: orchestratore + uno specialista + massimo due worker.
-- Ampiezza: orchestratore + due specialisti + uno slot worker residuo.
+- Struttura piatta: soltanto l'orchestratore crea e assegna agenti secondari.
+- Massimo tre agenti secondari concorrenti, scelti fra worker, worker-hard e
+  specialisti.
+- `worker` è il default; `worker-hard` è l'escalation per complessità; gli
+  specialisti sono l'escalation per giudizio di dominio.
+- Gli agenti secondari non creano altri agenti e restituiscono all'orchestratore
+  evidenze, rischi e blocchi quando serve un'escalation.
 - Parallelizzare solo attività indipendenti con file disgiunti.
 - Un file ha un solo writer; serializzare ogni file condiviso.
 - Ogni delega indica file, risultato, vincoli, dipendenze e verifica.
-- Uno specialista può chiamare `worker` entro gli slot disponibili, ma resta
-  responsabile di diff, verifica e handoff.
 - Gli specialisti comunicano direttamente solo per interfacce o blocchi
   concreti e riportano all'orchestratore ogni cambio di contratto.
 - `quality_reviewer` non corregge il codice revisionato: restituisce finding
-  allo specialista proprietario.
+  all'agente proprietario.
 - Ogni agente rientra con sintesi, file cambiati, evidenze e rischi residui;
   niente log estesi nel thread principale.
 
 ## Gate Git
 
 Per ogni batch l'orchestratore nomina un solo **Git owner**. Può essere
-l'orchestratore, uno specialista, oppure un `worker` solo quando il genitore gli
-assegna esplicitamente Git e percorsi esatti. `quality_reviewer` non è Git owner
-dei sorgenti revisionati.
+l'orchestratore, uno specialista, `worker` o `worker-hard` solo quando riceve
+esplicitamente Git e percorsi esatti. `quality_reviewer` non è Git owner dei
+sorgenti revisionati.
 
 Il Git owner può committare e pushare senza una nuova conferma soltanto dopo:
 

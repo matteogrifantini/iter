@@ -455,25 +455,31 @@ Per ora usare link esterni configurabili e dichiarare sempre chiaramente quando 
 ## Orchestrazione Codex
 
 `AGENTS.md` contiene le istruzioni persistenti per le nuove chat. Il thread
-principale mantiene requisiti e decisioni e usa il custom agent `worker` per
-ricerche o modifiche routinarie completamente specificate.
+principale è l'orchestratore, mantiene requisiti e decisioni e usa un routing
+worker-first con struttura piatta e massimo tre agenti secondari.
 
 Configurazione operativa:
 
-```text
-.codex/agents/worker.toml
-model = gpt-5.6-terra
-model_reasoning_effort = low
-description = routine edits + lookups
-```
+| Ruolo | Modello | Effort | Uso |
+| --- | --- | --- | --- |
+| Orchestratore | `gpt-5.6-sol` | `high` | Decisioni, ownership e integrazione |
+| `worker` | `gpt-5.6-luna` | `medium` | Esecuzione predefinita delimitata |
+| `worker-hard` | `gpt-5.6-luna` | `max` | Escalation per complessità |
+| Specialisti | `gpt-5.6-luna` | `max` | Escalation per giudizio di dominio |
+
+L'orchestratore assegna prima a `worker`, salvo complessità o competenza
+specialistica già evidenti. Solo l'orchestratore può passare il lavoro a
+`worker-hard`, `product_ux`, `flutter_engineer`, `platform_engineer` o
+`quality_reviewer`. Gli agenti secondari non delegano.
 
 In questo runtime opencode la configurazione è `opencode.json` con i subagent
 in `.opencode/agent/`; il provider Copilot non risolve, quindi come fallback si
 usa il modello `opencode/*` di default.
 
-La scheda umana richiesta è `agents/worker.md`. Il worker riferisce subito con
-un riepilogo breve; l'orchestratore verifica diff e test e conserva nel thread
-principale soltanto le decisioni importanti.
+Le schede leggibili sono in `agents/`; le configurazioni eseguibili in
+`.codex/agents/`. Ogni agente riferisce con un riepilogo breve; l'orchestratore
+verifica diff e test e conserva nel thread principale soltanto le decisioni
+importanti.
 
 ## Prossimo passo
 
