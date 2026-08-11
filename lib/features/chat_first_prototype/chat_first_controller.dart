@@ -401,11 +401,12 @@ class ChatFirstPrototypeController extends ChangeNotifier {
       if (dbId == null) return;
       final snapshot = thread.summary.snapshot;
       if (snapshot == null) return;
-      await dataSource.saveTripVersion(
+      final result = await dataSource.saveTripVersion(
         conversationId: dbId,
-        title: thread.summary.title,
+        conversation: thread.summary,
         snapshot: snapshot,
       );
+      if (!result.succeeded) return;
     } catch (_) {
       // Accepting a visible proposal stays authoritative in memory even when
       // the optional persistence boundary is temporarily unavailable.

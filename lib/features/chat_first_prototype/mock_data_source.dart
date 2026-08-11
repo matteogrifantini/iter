@@ -54,11 +54,11 @@ class MockDataSource implements IterDataSource {
   Future<ConversationRow?> createConversation(Conversation summary) async => null;
 
   @override
-  Future<void> saveTripVersion({
+  Future<PlanSaveResult> saveTripVersion({
     required String conversationId,
-    required String title,
+    required Conversation conversation,
     required TripSnapshot snapshot,
-  }) async {}
+  }) async => const PlanSaveResult.success();
 
   @override
   Future<ProfileRow?> fetchProfile() async => null;

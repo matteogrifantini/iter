@@ -1,10 +1,17 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
 
+import 'package:iter/app/app_config.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_controller.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_data.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_models.dart';
+import 'package:iter/features/chat_first_prototype/data_source.dart';
 import 'package:iter/features/chat_first_prototype/mock_data_source.dart';
+import 'package:iter/features/chat_first_prototype/supabase_data_source.dart';
 import 'package:iter/models/trip_models.dart' show JourneyRoute;
 
 void main() {
@@ -696,7 +703,8 @@ void main() {
       final saved = source.savedVersions.single;
       expect(saved.snapshot.days.first.theme, 'Mattina più lenta');
       expect(saved.snapshot.days.first.items.first.time, '10:30');
-      expect(saved.title, 'Roma');
+      expect(saved.conversation.title, 'Roma');
+      expect(saved.conversation.snapshot, same(saved.snapshot));
     });
 
     test('rejectProposal non salva alcuna versione', () async {
@@ -738,18 +746,90 @@ void main() {
       expect(source.savedVersions.length, 1);
     });
 
-    test('saveTripVersion su mock è un no-op sicuro', () async {
+    test('saveTripVersion su mock restituisce successo', () async {
       final source = MockDataSource();
-      final snapshot = ChatFirstPrototypeController()
+      final conversation = ChatFirstPrototypeController()
           .threadOf('c-roma-active')
-          .summary
-          .snapshot!;
-      await source.saveTripVersion(
+          .summary;
+      final result = await source.saveTripVersion(
         conversationId: 'aaa-bbb',
-        title: 'Roma',
-        snapshot: snapshot,
+        conversation: conversation,
+        snapshot: conversation.snapshot!,
       );
+      expect(result.succeeded, isTrue);
+      expect(result.errorCode, isNull);
     });
+
+    test(
+      'saveTripVersion usa la revisione esatta, aggiorna il summary e il retry '
+      'non duplica la versione',
+      () async {
+        final server = await _TripVersionPostgrestServer.start();
+        addTearDown(server.close);
+        final client = SupabaseClient(server.url, 'test-publishable-key');
+        final source = SupabaseDataSource(
+          config: AppConfig(
+            backend: 'supabase',
+            supabaseUrl: server.url,
+            supabaseAnonKey: 'test-publishable-key',
+          ),
+          client: client,
+        );
+        final conversation = ChatFirstPrototypeController()
+            .threadOf('c-roma-active')
+            .summary;
+        final snapshot = conversation.snapshot!.copyWith(revision: 7);
+        final updatedConversation = conversation.copyWith(snapshot: snapshot);
+
+        final first = await source.saveTripVersion(
+          conversationId: 'conversation-db-id',
+          conversation: updatedConversation,
+          snapshot: snapshot,
+        );
+        final retry = await source.saveTripVersion(
+          conversationId: 'conversation-db-id',
+          conversation: updatedConversation,
+          snapshot: snapshot,
+        );
+
+        expect(first.succeeded, isTrue);
+        expect(retry.succeeded, isTrue);
+        expect(server.versionSelectRevisions, <String>['eq.7', 'eq.7']);
+        expect(server.insertedVersions, <int>[7]);
+        expect(server.conversationSummaries, <Map<String, dynamic>>[
+          updatedConversation.toJson(),
+          updatedConversation.toJson(),
+        ]);
+      },
+    );
+
+    test(
+      'saveTripVersion traduce un errore PostgREST in failure osservabile',
+      () async {
+        final server = await _TripVersionPostgrestServer.start(failReads: true);
+        addTearDown(server.close);
+        final source = SupabaseDataSource(
+          config: AppConfig(
+            backend: 'supabase',
+            supabaseUrl: server.url,
+            supabaseAnonKey: 'test-publishable-key',
+          ),
+          client: SupabaseClient(server.url, 'test-publishable-key'),
+        );
+        final conversation = ChatFirstPrototypeController()
+            .threadOf('c-roma-active')
+            .summary;
+
+        final result = await source.saveTripVersion(
+          conversationId: 'conversation-db-id',
+          conversation: conversation,
+          snapshot: conversation.snapshot!,
+        );
+
+        expect(result.succeeded, isFalse);
+        expect(result.errorCode, 'XX000');
+      },
+    );
   });
 
   group('Profilo e memoria (F3)', () {
@@ -1217,9 +1297,17 @@ Iterable<String> _assistantTexts(ChatThread thread) => thread.messages
 /// Records `saveTripVersion` calls so tests can assert what the controller
 /// persists after a proposal decision without touching a real database.
 class _TripSpyDataSource extends MockDataSource {
-  final List<({String conversationId, String title, TripSnapshot snapshot})>
+  final List<
+    ({String conversationId, Conversation conversation, TripSnapshot snapshot})
+  >
   savedVersions =
-      <({String conversationId, String title, TripSnapshot snapshot})>[];
+      <
+        ({
+          String conversationId,
+          Conversation conversation,
+          TripSnapshot snapshot,
+        })
+      >[];
 
   @override
   Future<ConversationRow?> createConversation(Conversation summary) async =>
@@ -1230,16 +1318,17 @@ class _TripSpyDataSource extends MockDataSource {
       );
 
   @override
-  Future<void> saveTripVersion({
+  Future<PlanSaveResult> saveTripVersion({
     required String conversationId,
-    required String title,
+    required Conversation conversation,
     required TripSnapshot snapshot,
   }) async {
     savedVersions.add((
       conversationId: conversationId,
-      title: title,
+      conversation: conversation,
       snapshot: snapshot,
     ));
+    return const PlanSaveResult.success();
   }
 }
 
@@ -1313,12 +1402,115 @@ class _FailingTripVersionDataSource extends MockDataSource {
       );
 
   @override
-  Future<void> saveTripVersion({
+  Future<PlanSaveResult> saveTripVersion({
     required String conversationId,
-    required String title,
+    required Conversation conversation,
     required TripSnapshot snapshot,
+  }) async => const PlanSaveResult.failure('persistence_unavailable');
+}
+
+class _TripVersionPostgrestServer {
+  _TripVersionPostgrestServer._(this._server, {required this.failReads}) {
+    _server.listen(_handle);
+  }
+
+  final HttpServer _server;
+  final bool failReads;
+  bool _versionExists = false;
+  final List<String> versionSelectRevisions = <String>[];
+  final List<int> insertedVersions = <int>[];
+  final List<Map<String, dynamic>> conversationSummaries =
+      <Map<String, dynamic>>[];
+
+  String get url => 'http://${_server.address.address}:${_server.port}';
+
+  static Future<_TripVersionPostgrestServer> start({
+    bool failReads = false,
   }) async {
-    throw StateError('trip version persistence unavailable');
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    return _TripVersionPostgrestServer._(server, failReads: failReads);
+  }
+
+  Future<void> close() => _server.close(force: true);
+
+  Future<void> _handle(HttpRequest request) async {
+    final table = request.uri.pathSegments.last;
+    if (failReads && request.method == 'GET') {
+      await _json(request, HttpStatus.internalServerError, <String, dynamic>{
+        'code': 'XX000',
+        'message': 'persistence unavailable',
+        'details': null,
+        'hint': null,
+      });
+      return;
+    }
+
+    if (table == 'conversations' && request.method == 'GET') {
+      await _json(request, HttpStatus.ok, <Map<String, dynamic>>[
+        <String, dynamic>{'trip_id': 'trip-1'},
+      ]);
+      return;
+    }
+    if (table == 'trips' && request.method == 'PATCH') {
+      await _empty(request, HttpStatus.noContent);
+      return;
+    }
+    if (table == 'trip_versions' && request.method == 'GET') {
+      versionSelectRevisions.add(
+        request.uri.queryParameters['version_number'] ?? '',
+      );
+      await _json(
+        request,
+        HttpStatus.ok,
+        _versionExists
+            ? <Map<String, dynamic>>[
+                <String, dynamic>{'version_number': 7},
+              ]
+            : const <Map<String, dynamic>>[],
+      );
+      return;
+    }
+    if (table == 'trip_versions' && request.method == 'POST') {
+      final body = await _body(request);
+      insertedVersions.add((body['version_number'] as num).toInt());
+      _versionExists = true;
+      await _empty(request, HttpStatus.created);
+      return;
+    }
+    if (table == 'conversations' && request.method == 'PATCH') {
+      final body = await _body(request);
+      final summary = body['summary'];
+      if (summary is Map<String, dynamic>) {
+        conversationSummaries.add(summary);
+      }
+      await _empty(request, HttpStatus.noContent);
+      return;
+    }
+
+    await _json(request, HttpStatus.notFound, <String, dynamic>{
+      'code': 'PGRST205',
+      'message': 'unexpected test request',
+      'details': '${request.method} ${request.uri}',
+      'hint': null,
+    });
+  }
+
+  Future<Map<String, dynamic>> _body(HttpRequest request) async {
+    final text = await utf8.decoder.bind(request).join();
+    return (jsonDecode(text) as Map).cast<String, dynamic>();
+  }
+
+  Future<void> _json(HttpRequest request, int status, Object body) async {
+    request.response
+      ..statusCode = status
+      ..headers.contentType = ContentType.json
+      ..write(jsonEncode(body));
+    await request.response.close();
+  }
+
+  Future<void> _empty(HttpRequest request, int status) async {
+    request.response.statusCode = status;
+    await request.response.close();
   }
 }
 

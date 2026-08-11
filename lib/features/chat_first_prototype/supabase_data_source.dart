@@ -18,12 +18,17 @@ import 'data_source.dart';
 /// Live source backed by the Supabase `iter` project. Only used when the build
 /// was started with `--dart-define=ITER_BACKEND=supabase` plus a URL and key.
 class SupabaseDataSource implements IterDataSource {
-  SupabaseDataSource({required this.config});
+  SupabaseDataSource({required this.config, SupabaseClient? client})
+    : _providedClient = client;
 
   final AppConfig config;
+  final SupabaseClient? _providedClient;
+
+  SupabaseClient get _client => _providedClient ?? Supabase.instance.client;
 
   @override
   Future<void> init() async {
+    if (_providedClient != null) return;
     if (Supabase.instance.isInitialized) return;
     await Supabase.initialize(
       url: config.supabaseUrl,
@@ -34,7 +39,7 @@ class SupabaseDataSource implements IterDataSource {
   @override
   Future<List<JourneyRoute>> fetchJourneys() async {
     try {
-      final rows = await Supabase.instance.client
+      final rows = await _client
           .from('destinations')
           .select()
           .order('match_score', ascending: false);
@@ -47,7 +52,7 @@ class SupabaseDataSource implements IterDataSource {
   @override
   Future<List<DestinationPoint>> fetchPois(String destinationSlug) async {
     try {
-      final client = Supabase.instance.client;
+      final client = _client;
       final destination = await client
           .from('destinations')
           .select('id')
@@ -68,7 +73,7 @@ class SupabaseDataSource implements IterDataSource {
   @override
   Future<List<ConversationRow>> fetchConversations() async {
     try {
-      final rows = await Supabase.instance.client
+      final rows = await _client
           .from('conversations')
           .select()
           .order('updated_at', ascending: false);
@@ -81,7 +86,7 @@ class SupabaseDataSource implements IterDataSource {
   @override
   Future<List<ChatMessage>> fetchMessages(String conversationId) async {
     try {
-      final rows = await Supabase.instance.client
+      final rows = await _client
           .from('messages')
           .select()
           .eq('conversation_id', conversationId)
@@ -100,7 +105,7 @@ class SupabaseDataSource implements IterDataSource {
   @override
   Future<void> insertMessage(String conversationId, ChatMessage message) async {
     try {
-      await Supabase.instance.client.from('messages').insert(<String, dynamic>{
+      await _client.from('messages').insert(<String, dynamic>{
         'conversation_id': conversationId,
         'role': _roleColumn(message.role),
         'kind': _kindColumn(message),
@@ -117,7 +122,7 @@ class SupabaseDataSource implements IterDataSource {
   @override
   Future<void> setConversationRead(String conversationId) async {
     try {
-      await Supabase.instance.client
+      await _client
           .from('conversations')
           .update(<String, dynamic>{'unread': 0})
           .eq('id', conversationId);
@@ -127,7 +132,7 @@ class SupabaseDataSource implements IterDataSource {
   @override
   Future<void> incrementUnread(String conversationId) async {
     try {
-      final client = Supabase.instance.client;
+      final client = _client;
       final rows = await client
           .from('conversations')
           .select('unread')
@@ -145,11 +150,10 @@ class SupabaseDataSource implements IterDataSource {
   @override
   Future<ConversationRow?> createConversation(Conversation summary) async {
     try {
-      final rows = await Supabase.instance.client
+      final rows = await _client
           .from('conversations')
           .insert(<String, dynamic>{
-            'user_id':
-                Supabase.instance.client.auth.currentUser?.id,
+            'user_id': _client.auth.currentUser?.id,
             'title': summary.title,
             'avatar_asset': summary.avatar.asset,
             'unread': summary.unread,
@@ -164,66 +168,84 @@ class SupabaseDataSource implements IterDataSource {
   }
 
   @override
-  Future<void> saveTripVersion({
+  Future<PlanSaveResult> saveTripVersion({
     required String conversationId,
-    required String title,
+    required Conversation conversation,
     required TripSnapshot snapshot,
   }) async {
     try {
-      final client = Supabase.instance.client;
-      final conversation = await client
+      final client = _client;
+      final conversationRows = await client
           .from('conversations')
           .select('trip_id')
           .eq('id', conversationId)
-          .maybeSingle();
-      if (conversation == null) return;
+          .limit(1);
+      if (conversationRows.isEmpty) {
+        return const PlanSaveResult.failure('conversation_not_found');
+      }
+      final conversationRow = conversationRows.first;
 
-      String? tripId = conversation['trip_id'] as String?;
+      String? tripId = conversationRow['trip_id'] as String?;
       final status = snapshot.statusLabel == 'In viaggio' ? 'active' : 'draft';
       if (tripId == null) {
-        final rows = await client.from('trips').insert(<String, dynamic>{
-          'user_id': client.auth.currentUser?.id,
-          'title': title,
-          'status': status,
-          'snapshot': snapshot.toJson(),
-        }).select('id');
-        if (rows.isEmpty) return;
+        final rows = await client
+            .from('trips')
+            .insert(<String, dynamic>{
+              'user_id': client.auth.currentUser?.id,
+              'title': conversation.title,
+              'status': status,
+              'snapshot': snapshot.toJson(),
+            })
+            .select('id');
+        if (rows.isEmpty) {
+          return const PlanSaveResult.failure('trip_not_created');
+        }
         tripId = rows.first['id'] as String;
         await client
             .from('conversations')
             .update(<String, dynamic>{'trip_id': tripId})
             .eq('id', conversationId);
       } else {
-        await client.from('trips').update(<String, dynamic>{
-          'title': title,
-          'status': status,
-          'snapshot': snapshot.toJson(),
-          'updated_at': DateTime.now().toIso8601String(),
-        }).eq('id', tripId);
+        await client
+            .from('trips')
+            .update(<String, dynamic>{
+              'title': conversation.title,
+              'status': status,
+              'snapshot': snapshot.toJson(),
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', tripId);
       }
 
-      final latest = await client
+      final existing = await client
           .from('trip_versions')
           .select('version_number')
           .eq('trip_id', tripId)
-          .order('version_number', ascending: false)
-          .limit(1)
-          .maybeSingle();
-      final nextVersion = ((latest?['version_number'] as num?)?.toInt() ?? 0) + 1;
-      await client.from('trip_versions').insert(<String, dynamic>{
-        'trip_id': tripId,
-        'version_number': nextVersion,
-        'draft': snapshot.toJson(),
-      });
+          .eq('version_number', snapshot.revision)
+          .limit(1);
+      if (existing.isEmpty) {
+        await client.from('trip_versions').insert(<String, dynamic>{
+          'trip_id': tripId,
+          'version_number': snapshot.revision,
+          'draft': snapshot.toJson(),
+        });
+      }
+      await client
+          .from('conversations')
+          .update(<String, dynamic>{'summary': conversation.toJson()})
+          .eq('id', conversationId);
+      return const PlanSaveResult.success();
+    } on PostgrestException catch (error) {
+      return PlanSaveResult.failure(error.code);
     } catch (_) {
-      // Best effort: the conversation and its messages stay authoritative.
+      return const PlanSaveResult.failure('unexpected');
     }
   }
 
   @override
   Future<ProfileRow?> fetchProfile() async {
     try {
-      final client = Supabase.instance.client;
+      final client = _client;
       final userId = client.auth.currentUser?.id;
       if (userId == null) return null;
       final row = await client
@@ -247,7 +269,7 @@ class SupabaseDataSource implements IterDataSource {
   @override
   Future<void> upsertProfile({ThemeMode? themeMode, List<String>? memoryTags}) async {
     try {
-      final client = Supabase.instance.client;
+      final client = _client;
       final userId = client.auth.currentUser?.id;
       if (userId == null) return;
       final themeModeColumn = themeMode == null ? null : _themeModeColumn(themeMode);

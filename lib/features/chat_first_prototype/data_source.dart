@@ -14,6 +14,17 @@ import 'chat_first_models.dart'
 import 'mock_data_source.dart';
 import 'supabase_data_source.dart';
 
+/// Observable outcome of an accepted-plan persistence attempt.
+@immutable
+class PlanSaveResult {
+  const PlanSaveResult.success() : succeeded = true, errorCode = null;
+
+  const PlanSaveResult.failure(this.errorCode) : succeeded = false;
+
+  final bool succeeded;
+  final String? errorCode;
+}
+
 /// Storage seam for the chat-first prototype. The controller talks to this
 /// interface and never to a database directly. [MockDataSource] is the default
 /// in debug and tests; [SupabaseDataSource] takes over only when the build was
@@ -52,13 +63,12 @@ abstract class IterDataSource {
   /// when the insert failed.
   Future<ConversationRow?> createConversation(Conversation summary);
 
-  /// Persists an accepted plan for [conversationId]: upserts the linked `trips`
-  /// row (creating it on first use) and appends a new `trip_versions` entry so
-  /// the plan survives restarts and reverts stay verifiable. No-op on the mock
-  /// path, best effort on the live path.
-  Future<void> saveTripVersion({
+  /// Persists an accepted plan for [conversationId], including the updated
+  /// conversation summary. [TripSnapshot.revision] is the stable version key,
+  /// so retrying an already-saved revision does not append a duplicate.
+  Future<PlanSaveResult> saveTripVersion({
     required String conversationId,
-    required String title,
+    required Conversation conversation,
     required TripSnapshot snapshot,
   });
 
