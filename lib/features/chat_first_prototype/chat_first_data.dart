@@ -1195,7 +1195,7 @@ abstract final class ChatFirstDemoData {
                   'Miradouro da Vitória',
                   'Jardins do Palácio de Cristal',
                 ],
-                days: const <TripDaySnapshot>[
+                days: <TripDaySnapshot>[
                   TripDaySnapshot(
                     label: 'Giorno 1',
                     theme: 'Arrivo senza fretta',

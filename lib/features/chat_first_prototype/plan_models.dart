@@ -180,9 +180,9 @@ class StayPlanSelection {
 @immutable
 class PlanCostSummary {
   const PlanCostSummary({
-    this.currencyCode = 'EUR',
+    String currencyCode = 'EUR',
     this.projectedTotalCents = 0,
-  });
+  }) : currencyCode = 'EUR';
 
   final String currencyCode;
   final int projectedTotalCents;
@@ -194,7 +194,6 @@ class PlanCostSummary {
 
   factory PlanCostSummary.fromJson(Map<String, dynamic> json) =>
       PlanCostSummary(
-        currencyCode: (json['currencyCode'] as String?) ?? 'EUR',
         projectedTotalCents:
             (json['projectedTotalCents'] as num?)?.toInt() ?? 0,
       );
@@ -292,14 +291,14 @@ class TripItemSnapshot {
 
 @immutable
 class TripDaySnapshot {
-  const TripDaySnapshot({
+  TripDaySnapshot({
     this.id = '',
     DateTime? date,
     required this.label,
     required this.theme,
     List<TripItemSnapshot> items = const <TripItemSnapshot>[],
   }) : _date = date,
-       _items = items;
+       _items = List<TripItemSnapshot>.unmodifiable(items);
 
   final String id;
   final DateTime? _date;
@@ -310,8 +309,7 @@ class TripDaySnapshot {
   DateTime get date =>
       _date ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
 
-  List<TripItemSnapshot> get items =>
-      List<TripItemSnapshot>.unmodifiable(_items);
+  List<TripItemSnapshot> get items => _items;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'id': id,

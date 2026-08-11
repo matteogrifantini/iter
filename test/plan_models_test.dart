@@ -141,4 +141,46 @@ void main() {
       throwsUnsupportedError,
     );
   });
+
+  test('cost summaries normalize non-EUR JSON currency', () {
+    final summary = PlanCostSummary.fromJson(<String, dynamic>{
+      'currencyCode': 'USD',
+      'projectedTotalCents': 4500,
+    });
+
+    expect(summary.currencyCode, 'EUR');
+    expect(summary.toJson()['currencyCode'], 'EUR');
+    expect(summary.projectedTotalCents, 4500);
+  });
+
+  test('day snapshots defensively copy input items', () {
+    final suppliedItems = <TripItemSnapshot>[
+      const TripItemSnapshot(
+        id: 'original',
+        title: 'Ribeira',
+        category: 'Quartiere',
+        time: '10:00',
+        locked: false,
+      ),
+    ];
+    final day = TripDaySnapshot(
+      label: 'Giorno 1',
+      theme: 'Fiume',
+      items: suppliedItems,
+    );
+
+    suppliedItems
+      ..clear()
+      ..add(
+        const TripItemSnapshot(
+          id: 'later',
+          title: 'Foz',
+          category: 'Mare',
+          time: '14:00',
+          locked: false,
+        ),
+      );
+
+    expect(day.items.single.id, 'original');
+  });
 }
