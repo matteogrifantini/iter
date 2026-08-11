@@ -210,8 +210,12 @@ class AdaptivePlanningSection extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         Card(
-          color: colors.primaryContainer,
+          color: colors.surfaceContainerLow,
           margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: colors.outlineVariant),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(

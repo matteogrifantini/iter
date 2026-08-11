@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
 
 import 'package:iter/app/app_config.dart';
+import 'package:iter/data/mock_data.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_controller.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_data.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_models.dart';
@@ -1853,7 +1854,7 @@ void main() {
       expect(controller.threads.length, 3);
     });
 
-    test('free talk reflects clues before naming any destination', () {
+    test('free talk reflects clues and offers trend metas as explicit choices', () {
       final controller = ChatFirstPrototypeController();
       final thread = controller.startFreeTalk();
       controller.openConversation(thread.summary.id);
@@ -1870,14 +1871,20 @@ void main() {
       final ack = freeTalk.messages.lastWhere((m) => m.id == kFreeTalkAckId);
       expect(ack.kind, ChatMessageKind.text);
       expect(ack.text, contains('quattro giorni lenti'));
+      // The echo strips destination names; the destination question offers the
+      // trend metas as explicit clickable choices instead of naming them.
+      expect(ack.text, isNot(contains('Lisbona')));
 
-      controller.sendText('Il budget è intorno a 500 euro.');
-      expect(
-        _assistantTexts(
-          freeTalk,
-        ).where((text) => forbiddenDestinations.any(text.contains)),
-        isEmpty,
+      final destination = freeTalk.messages.lastWhere(
+        (m) => m.id == kFreeTalkDestinationId,
       );
+      expect(destination.kind, ChatMessageKind.text);
+      expect(destination.choices.map((c) => c.label), containsAll(<String>[
+        'Lisbona',
+        'Porto',
+        'Roma',
+        'Consigliami tu',
+      ]));
     });
 
     test(
@@ -1899,7 +1906,7 @@ void main() {
     );
 
     test(
-      'free talk first reply emits acknowledgement then one missing question',
+      'free talk first reply emits acknowledgement then the destination choice',
       () {
         final controller = ChatFirstPrototypeController();
         final thread = controller.startFreeTalk();
@@ -1914,44 +1921,59 @@ void main() {
             .toList(growable: false);
         expect(
           assistant.map((message) => message.id),
-          containsAllInOrder(<String>[kFreeTalkAckId, kFreeTalkMissingId]),
+          containsAllInOrder(<String>[kFreeTalkAckId, kFreeTalkDestinationId]),
         );
-        expect(freeTalk.messages.last.id, kFreeTalkMissingId);
+        expect(freeTalk.messages.last.id, kFreeTalkDestinationId);
         expect(
           freeTalk.messages.where(
             (message) =>
                 message.role == ChatRole.assistant &&
                 message.choices.isNotEmpty,
           ),
-          isEmpty,
+          isNotEmpty,
         );
       },
     );
 
     test(
-      'free talk correction revises the same thread and emits one proposal',
+      'free talk converges every meta choice on the Porto proposal',
       () {
         final controller = ChatFirstPrototypeController();
         final thread = controller.startFreeTalk();
         controller.openConversation(thread.summary.id);
 
         controller.sendText('Vorrei quattro giorni lenti e buon cibo.');
-        controller.sendText('A fine settembre.');
-        _tapChoice(controller, thread.summary.id, 'Correggi');
-        controller.sendText('Meglio ottobre e 500 euro.');
-        final revised = controller
+        _tapChoice(controller, thread.summary.id, 'Lisbona');
+        _answerIntake(controller, thread.summary.id);
+        final proposal = controller
             .threadOf(thread.summary.id)
             .messages
-            .lastWhere((message) => message.id == 'free-talk-summary-revised');
-        expect(revised.text, contains('Meglio ottobre e 500 euro.'));
+            .lastWhere((message) => message.kind == ChatMessageKind.planProposal);
+        expect(proposal.proposal?.snapshot.destinationTitle, 'Porto');
+        expect(proposal.text, contains('Porto'));
+        // F1: the free talk honestly discloses the demo convergence on Porto.
+        expect(proposal.text, contains('Per la demo convergo su Porto'));
+        expect(proposal.text, contains('volo, hotel e mete sono reali'));
+        expect(controller.threadOf(thread.summary.id).summary.title, 'Porto');
+      },
+    );
 
-        _tapChoice(controller, thread.summary.id, 'Conferma');
-        final messages = controller.threadOf(thread.summary.id).messages;
-        expect(
-          messages.where((message) => message.id == kFreeTalkProposalId),
-          hasLength(1),
-        );
-        expect(controller.threadOf(thread.summary.id), same(thread));
+    test(
+      'free talk "Consigliami tu" also converges on the Porto route',
+      () {
+        final controller = ChatFirstPrototypeController();
+        final thread = controller.startFreeTalk();
+        controller.openConversation(thread.summary.id);
+
+        controller.sendText('Vorrei partire senza una meta fissa.');
+        _tapChoice(controller, thread.summary.id, 'Consigliami tu');
+        _answerIntake(controller, thread.summary.id);
+        final proposal = controller
+            .threadOf(thread.summary.id)
+            .messages
+            .lastWhere((message) => message.kind == ChatMessageKind.planProposal);
+        expect(proposal.proposal?.snapshot.destinationTitle, 'Porto');
+        expect(controller.threadOf(thread.summary.id).summary.title, 'Porto');
       },
     );
 
@@ -1971,7 +1993,7 @@ void main() {
           hasLength(1),
         );
         expect(
-          failed.messages.where((m) => m.id == kFreeTalkMissingId),
+          failed.messages.where((m) => m.id == kFreeTalkDestinationId),
           hasLength(1),
         );
 
@@ -1988,46 +2010,47 @@ void main() {
           hasLength(1),
         );
         expect(
-          thread.messages.where((m) => m.id == kFreeTalkMissingId),
+          thread.messages.where((m) => m.id == kFreeTalkDestinationId),
           hasLength(1),
         );
       },
     );
 
-    test('free talk names a destination only after summary confirmation', () {
+    test('free talk converges the F5 tail on Porto with rich modules', () {
       final controller = ChatFirstPrototypeController();
       final thread = controller.startFreeTalk();
       controller.openConversation(thread.summary.id);
       final freeTalk = controller.threadOf(thread.summary.id) as FreeTalkThread;
-      const forbiddenDestinations = <String>{'Lisbona', 'Porto', 'Roma'};
 
       controller.sendText('Vorrei quattro giorni lenti, con buon cibo.');
-      controller.sendText('A fine settembre.');
+      _tapChoice(controller, thread.summary.id, 'Roma');
+      _answerIntake(controller, thread.summary.id);
 
-      final summary = freeTalk.messages.lastWhere(
-        (message) => message.id == kFreeTalkSummaryId,
-      );
-      expect(summary.choices.map((choice) => choice.label), <String>[
-        'Conferma',
-        'Correggi',
-      ]);
-      expect(
-        _assistantTexts(
-          freeTalk,
-        ).where((text) => forbiddenDestinations.any(text.contains)),
-        isEmpty,
-      );
-
-      controller.choose(
-        summary.choices.first,
-        conversationId: thread.summary.id,
-        messageId: summary.id,
-      );
+      // The proposal always assembles the operational Porto snapshot, so the
+      // F5 tail activates FlightCompare/StayCompare for the porto fixture.
       final proposal = freeTalk.messages.lastWhere(
-        (message) => message.id == kFreeTalkProposalId,
+        (message) => message.id == kIntakeProposalId,
       );
       expect(proposal.kind, ChatMessageKind.planProposal);
-      expect(forbiddenDestinations.any(proposal.text.contains), isTrue);
+      expect(proposal.proposal?.snapshot.destinationTitle, 'Porto');
+      controller.acceptProposal(thread.summary.id, proposal.id);
+
+      // Six porto curation cards, then the transport beat with rich flights.
+      for (var i = 0; i < 6; i++) {
+        _tapChoice(controller, thread.summary.id, 'Passa');
+      }
+      final transport = freeTalk.messages.lastWhere(
+        (message) => message.kind == ChatMessageKind.transport,
+      );
+      expect(transport.flightCompare, isNotNull);
+      expect(transport.flightCompare!.options, hasLength(4));
+      _tapChoice(controller, thread.summary.id, 'Aereo diretto');
+
+      final stay = freeTalk.messages.lastWhere(
+        (message) => message.kind == ChatMessageKind.stayZone,
+      );
+      expect(stay.stayCompare, isNotNull);
+      expect(stay.stayCompare!.options, hasLength(4));
     });
 
     test('free talk keeps typed input when persistence fails', () async {
@@ -2087,6 +2110,82 @@ void main() {
         );
       },
     );
+
+    test('la disclosure demo appare solo nella proposta free talk', () {
+      final guided = ChatFirstDemoData.intakeThreadFor(
+        MockData.journeyById('porto-slow'),
+      );
+      final guidedProposal = guided.script.firstWhere(
+        (beat) => beat.assistant.id == kIntakeProposalId,
+      );
+      expect(guidedProposal.assistant.text, isNot(contains('Per la demo')));
+
+      final free = ChatFirstDemoData.freeTalkThread(
+        ChatFirstDemoData.trendJourneys(),
+      );
+      final freeProposal = free.script.firstWhere(
+        (beat) => beat.assistant.id == kIntakeProposalId,
+      );
+      expect(freeProposal.assistant.text, contains('Per la demo convergo su Porto'));
+    });
+
+    test('free talk fallback: convergenza robusta senza catalogo porto', () {
+      final noPorto = ChatFirstDemoData.freeTalkThread(
+        <JourneyRoute>[
+          MockData.journeyById('atlantic-rail'),
+          MockData.journeyById('paris-city'),
+        ],
+      );
+      expect(noPorto.journey?.id, 'atlantic-rail');
+
+      final empty = ChatFirstDemoData.freeTalkThread(const <JourneyRoute>[]);
+      expect(empty.journey?.id, 'porto-slow');
+    });
+
+    test('startFreeTalk apre un nuovo thread dopo una chat libera conclusa', () {
+      final controller = ChatFirstPrototypeController();
+      final first = controller.startFreeTalk();
+      controller.openConversation(first.summary.id);
+
+      controller.sendText('Vorrei quattro giorni lenti, con buon cibo.');
+      _tapChoice(controller, first.summary.id, 'Roma');
+      _answerIntake(controller, first.summary.id);
+      final proposal = controller
+          .threadOf(first.summary.id)
+          .messages
+          .lastWhere((message) => message.id == kIntakeProposalId);
+      controller.acceptProposal(first.summary.id, proposal.id);
+      for (var i = 0; i < 6; i++) {
+        _tapChoice(controller, first.summary.id, 'Passa');
+      }
+      _tapChoice(controller, first.summary.id, 'Aereo diretto');
+      final stay = controller
+          .threadOf(first.summary.id)
+          .messages
+          .lastWhere((message) => message.kind == ChatMessageKind.stayZone);
+      _tapChoice(controller, first.summary.id, stay.stayZone!.name);
+      final itinerary = controller
+          .threadOf(first.summary.id)
+          .messages
+          .lastWhere((message) => message.id == kItineraryProposalId);
+      controller.acceptProposal(first.summary.id, itinerary.id);
+
+      final completed = controller.threadOf(first.summary.id);
+      expect(
+        completed.scriptIndex,
+        completed.script.length,
+        reason: 'la chat libera è conclusa: script consumato',
+      );
+
+      final second = controller.startFreeTalk();
+      expect(second.summary.id, isNot(kFreeTalkConversationId));
+      expect(second.summary.id, startsWith('$kFreeTalkConversationId-'));
+      expect(second, isNot(same(first)));
+
+      // Una chat in corso viene invece riaperta: idempotenza di sessione.
+      final again = controller.startFreeTalk();
+      expect(again.summary.id, second.summary.id);
+    });
   });
 
   group('Acquisti esterni e lifecycle', () {
@@ -2417,15 +2516,6 @@ ChatThread _planThread(String id, TripSnapshot snapshot) => ChatThread(
   ),
   script: <ScriptedBeat>[],
 );
-
-Iterable<String> _assistantTexts(ChatThread thread) => thread.messages
-    .where((message) => message.role == ChatRole.assistant)
-    .expand(
-      (message) => <String>[
-        message.text,
-        ...message.choices.map((choice) => choice.label),
-      ],
-    );
 
 /// Records `saveTripVersion` calls so tests can assert what the controller
 /// persists after a proposal decision without touching a real database.

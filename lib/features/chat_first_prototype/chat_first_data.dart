@@ -19,14 +19,9 @@ const String kFreeTalkConversationId = 'c-free-talk';
 /// time from the traveler's captured wish.
 const String kFreeTalkAckId = 'free-talk-ack';
 
-/// Stable id of the one missing-constraint question in free talk.
-const String kFreeTalkMissingId = 'free-talk-missing';
-
-/// Stable id of the editable free-talk recap.
-const String kFreeTalkSummaryId = 'free-talk-summary';
-
-/// Stable id of the first destination-bearing proposal, unlocked by confirmation.
-const String kFreeTalkProposalId = 'free-talk-proposal';
+/// Stable id of the free-talk destination question. Its answer never pins the
+/// journey: the thread converges every meta choice on the Porto route.
+const String kFreeTalkDestinationId = 'free-talk-destination';
 
 /// Typed, deterministic content for the operational plan prototype. It stays
 /// separate from live providers: prices are EUR cents and provider links are
@@ -636,118 +631,61 @@ int stayNightlyPriceCents({
 }
 
 /// A conversation started from the traveler's own words before a destination is
-/// named. It first reflects the clues, asks for one missing constraint, then
-/// offers an editable recap. Only an explicit confirmation emits a proposal.
+/// named. It first reflects the clues, asks which trend meta calls the
+/// traveler, then converges the whole intake on the Porto route: every answer
+/// to the meta question lands on the same deterministic proposal and F5 tail.
 class FreeTalkThread extends IntakeThread {
   FreeTalkThread({
     required this.viewDestinations,
+    required JourneyRoute convergenceJourney,
     required super.summary,
     required super.script,
     super.openedWith,
-  });
+  }) : super(journey: convergenceJourney);
 
-  /// Deterministic catalog used only after the traveler confirms the recap.
+  /// Trend catalog shown as the meta question choices and used to strip
+  /// destination names from the wish echo.
   final List<JourneyRoute> viewDestinations;
 
   /// The traveler's free-form wish, captured from the first reply.
   String? _wish;
 
-  String? _missingConstraint;
-  var _confirmed = false;
-  var _correctionRequested = false;
-  var _showRevisedSummary = false;
-
   @override
   ChatMessage travelerMessage(String text) {
     final message = super.travelerMessage(text);
-    final prompt = messages.length >= 2 ? messages[messages.length - 2] : null;
     _wish ??= text.trim();
-    if (prompt?.id == kFreeTalkMissingId) {
-      _missingConstraint = text.trim();
-    } else if (prompt?.id == kFreeTalkSummaryId ||
-        prompt?.id == 'free-talk-summary-revised') {
-      _confirmed = text.trim() == 'Conferma';
-      _correctionRequested = text.trim() == 'Correggi';
-    } else if (prompt?.id == 'free-talk-correction') {
-      _missingConstraint = text.trim();
-      _showRevisedSummary = true;
-    }
     return message;
   }
 
   @override
   bool advance() {
-    if (_correctionRequested) {
-      _correctionRequested = false;
-      _emit(
-        ChatMessage(
-          id: 'free-talk-correction',
-          role: ChatRole.assistant,
-          kind: ChatMessageKind.text,
-          text:
-              'Cosa vuoi cambiare? Aggiorno il riepilogo, poi lo confermi tu.',
-          sentAt: DateTime(2026, 10, 16, 10, 3),
-        ),
-      );
-      return true;
-    }
-    if (_showRevisedSummary) {
-      _showRevisedSummary = false;
-      _emit(_summaryBeat(id: 'free-talk-summary-revised'));
-      return true;
-    }
     if (scriptIndex >= script.length) return false;
-    final beat = script[scriptIndex++].assistant;
-    if (beat.id == kFreeTalkAckId) {
+    final beat = script[scriptIndex];
+    if (beat.assistant.id == kFreeTalkAckId) {
+      scriptIndex++;
       _emit(
         ChatMessage(
           id: kFreeTalkAckId,
           role: ChatRole.assistant,
           kind: ChatMessageKind.text,
           text: 'Ho capito: ${_cluePreview(_wish)}.',
-          sentAt: beat.sentAt,
+          sentAt: beat.assistant.sentAt,
         ),
       );
-      // The first intent earns both the acknowledgement and the one missing
+      // The first intent earns both the acknowledgement and the next guarded
       // question. Do not require an unexplained extra traveler message.
       return advance();
     }
-    if (beat.id == kFreeTalkSummaryId) {
-      _emit(_summaryBeat(id: kFreeTalkSummaryId));
-      return true;
+    final advanced = super.advance();
+    if (advanced && journey != null) {
+      final last = messages.isNotEmpty ? messages.last : null;
+      if (last?.kind == ChatMessageKind.planProposal &&
+          last!.proposal?.outcome == null) {
+        summary = summary.copyWith(title: journeyCity(journey!));
+      }
     }
-    if (beat.id == kFreeTalkProposalId && !_confirmed) return false;
-    if (beat.id == kFreeTalkProposalId && viewDestinations.isNotEmpty) {
-      journey = viewDestinations.first;
-      summary = summary.copyWith(title: journeyCity(journey!));
-      _emit(
-        ChatMessage(
-          id: kFreeTalkProposalId,
-          role: ChatRole.assistant,
-          kind: ChatMessageKind.planProposal,
-          text: 'Ecco una prima proposta per ${journeyCity(journey!)}.',
-          sentAt: beat.sentAt,
-          proposal: buildFinalProposal(),
-        ),
-      );
-      return true;
-    }
-    _emit(beat);
-    return true;
+    return advanced;
   }
-
-  ChatMessage _summaryBeat({required String id}) => ChatMessage(
-    id: id,
-    role: ChatRole.assistant,
-    kind: ChatMessageKind.choices,
-    text:
-        'Riepilogo: ${_cluePreview(_wish)}; ${_missingConstraint ?? 'un vincolo da precisare'}. Confermi?',
-    sentAt: DateTime(2026, 10, 16, 10, 2),
-    choices: const <ChatChoice>[
-      ChatChoice(label: 'Conferma'),
-      ChatChoice(label: 'Correggi'),
-    ],
-  );
 
   String _cluePreview(String? value) {
     var preview = value?.trim() ?? 'la tua idea';
@@ -762,7 +700,16 @@ class FreeTalkThread extends IntakeThread {
       );
     }
     preview = preview.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
-    return preview.isEmpty ? 'la tua idea' : preview;
+    // A wish that was only a meta name strips down to function words
+    // ("Vorrei andare a "): fall back gently instead of echoing the stumps.
+    final significant = preview.replaceAll(
+      RegExp(
+        r'\b(a|di|in|da|al|alla|nel|nella|per|verso|con|il|la|lo|gli|le|un|una|e|o|che|vorrei|andare)\b',
+        caseSensitive: false,
+      ),
+      ' ',
+    ).trim();
+    return significant.isEmpty ? 'la tua idea' : preview;
   }
 
   void _emit(ChatMessage message) {
@@ -1368,18 +1315,53 @@ abstract final class ChatFirstDemoData {
     );
   }
 
+  /// Picks the journey the free talk converges on, with an explicit guard:
+  /// the dedicated `porto-slow` route wins, then any porto-leading journey,
+  /// then the first catalog entry. An empty catalog falls back to the demo
+  /// `porto-slow` route instead of throwing.
+  static JourneyRoute _convergenceJourney(List<JourneyRoute> journeys) {
+    for (final journey in journeys) {
+      if (journey.id == 'porto-slow') return journey;
+    }
+    for (final journey in journeys) {
+      if (journey.destinationIds.first == 'porto') return journey;
+    }
+    if (journeys.isNotEmpty) return journeys.first;
+    return MockData.journeys.firstWhere(
+      (journey) => journey.id == 'porto-slow',
+      orElse: () => MockData.journeys.first,
+    );
+  }
+
   /// Opens a free-talk conversation: the traveler starts with their own words
-  /// (no destination pinned) and, once they name or pick a destination, the
-  /// thread converges on the classic guided intake via [FreeTalkThread].
-  static FreeTalkThread freeTalkThread(List<JourneyRoute> journeys) {
-    final first = journeys.isNotEmpty ? journeys.first : null;
-    final posters = first != null
-        ? DemoMedia.postersForDestination(first.destinationIds.first)
-        : const <String>[];
+  /// (no destination pinned) and is offered the trend metas as an explicit
+  /// choice. Whatever they pick (including "Consigliami tu"), the thread
+  /// converges on the Porto route and the classic guided intake via
+  /// [FreeTalkThread], so the final proposal always builds the operational
+  /// Porto snapshot.
+  static FreeTalkThread freeTalkThread(
+    List<JourneyRoute> journeys, {
+    String conversationId = kFreeTalkConversationId,
+  }) {
+    // The free talk always converges on Porto: its operational fixture drives
+    // the rich FlightCompare/StayCompare modules during the F5 tail. Porto must
+    // be the leading destination — atlantic-rail also touches Porto, but its
+    // home base is Lisbon, so the operational snapshot would miss the fixture.
+    final convergence = _convergenceJourney(journeys);
+    final posters = DemoMedia.postersForDestination(
+      convergence.destinationIds.first,
+    );
+    final metaChoices = <String>[];
+    for (final journey in journeys) {
+      final city = journeyCity(journey);
+      if (!metaChoices.contains(city)) metaChoices.add(city);
+    }
+    metaChoices.add('Consigliami tu');
     return FreeTalkThread(
       viewDestinations: journeys,
+      convergenceJourney: convergence,
       summary: Conversation(
-        id: kFreeTalkConversationId,
+        id: conversationId,
         title: 'Nuova idea',
         subtitle: 'Inizia libera',
         avatar: ChatAvatar(
@@ -1404,6 +1386,10 @@ abstract final class ChatFirstDemoData {
           sentAt: DateTime(2026, 10, 16, 10, 0),
         ),
       ],
+      // The destination choice never pins the journey: whatever the traveler
+      // answers, the thread keeps converging on the Porto route below, which
+      // contains the standard guided questions (duration, pace, base,
+      // transport, budget) and the final proposal.
       script: <ScriptedBeat>[
         ScriptedBeat(
           ChatMessage(
@@ -1416,30 +1402,37 @@ abstract final class ChatFirstDemoData {
         ),
         ScriptedBeat(
           ChatMessage(
-            id: kFreeTalkMissingId,
+            id: kFreeTalkDestinationId,
             role: ChatRole.assistant,
             kind: ChatMessageKind.text,
-            text: 'Mi manca solo una cosa: qual è il vincolo più importante?',
+            text:
+                'Sento che ci sono posti che ti chiamano. Quale ti suona più '
+                'giusto?',
             sentAt: DateTime(2026, 10, 16, 10, 1),
+            choices: <ChatChoice>[
+              for (final city in metaChoices) ChatChoice(label: city),
+            ],
           ),
         ),
         ScriptedBeat(
           ChatMessage(
-            id: kFreeTalkSummaryId,
+            id: 'q-duration',
             role: ChatRole.assistant,
-            kind: ChatMessageKind.choices,
-            text: '',
-            sentAt: DateTime(2026, 10, 16, 10, 2),
+            kind: ChatMessageKind.text,
+            text: 'E per quanto tempo vuoi viaggiare?',
+            sentAt: DateTime(2026, 10, 16, 10, 1),
+            choices: const <ChatChoice>[
+              ChatChoice(label: 'Un weekend, 3 giorni'),
+              ChatChoice(label: '4–5 giorni, senza fretta'),
+              ChatChoice(label: 'Una settimana o più'),
+            ],
           ),
         ),
-        ScriptedBeat(
-          ChatMessage(
-            id: kFreeTalkProposalId,
-            role: ChatRole.assistant,
-            kind: ChatMessageKind.planProposal,
-            text: '',
-            sentAt: DateTime(2026, 10, 16, 10, 3),
-          ),
+        ...restIntakeScript(
+          convergence,
+          proposalDisclosure:
+              'Per la demo convergo su ${journeyCity(convergence)}, che ha il '
+              'piano completo: da qui volo, hotel e mete sono reali.',
         ),
       ],
     );
@@ -1449,8 +1442,13 @@ abstract final class ChatFirstDemoData {
   /// transport, budget, the final intake proposal and the operational tail.
   /// Shared verbatim by [intakeThreadFor] and the [FreeTalkThread] tail, so the
   /// two flows converge on the same deterministic proposal after the
-  /// destination is pinned.
-  static List<ScriptedBeat> restIntakeScript(JourneyRoute journey) {
+  /// destination is pinned. [proposalDisclosure] is an optional honest note
+  /// appended to the proposal text; only the free talk passes it, to tell the
+  /// traveler that the demo converges on the Porto route.
+  static List<ScriptedBeat> restIntakeScript(
+    JourneyRoute journey, {
+    String? proposalDisclosure,
+  }) {
     final city = journeyCity(journey);
     return <ScriptedBeat>[
       ScriptedBeat(
@@ -1515,7 +1513,8 @@ abstract final class ChatFirstDemoData {
           role: ChatRole.assistant,
           kind: ChatMessageKind.planProposal,
           text:
-              'Ecco la prima proposta per $city, costruita sulle tue risposte.',
+              'Ecco la prima proposta per $city, costruita sulle tue risposte.'
+              '${proposalDisclosure == null ? '' : ' $proposalDisclosure'}',
           sentAt: DateTime(2026, 10, 16, 10, 5),
         ),
       ),

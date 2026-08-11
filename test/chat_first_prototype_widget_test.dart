@@ -189,6 +189,61 @@ void main() {
     expect(controller.unread, 0);
   });
 
+  testWidgets('FAB e empty state avviano la chat libera senza popup scelta', (
+    tester,
+  ) async {
+    final controller = ChatFirstPrototypeController();
+    String? opened;
+    await tester.pumpWidget(
+      wrap(
+        ChatFirstListScreen(
+          controller: controller,
+          onOpenThread: (thread) => opened = thread.summary.id,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Nuova chat'), findsOneWidget);
+    await tester.tap(find.byTooltip('Nuova chat'));
+    await tester.pumpAndSettle();
+    expect(opened, kFreeTalkConversationId);
+    expect(find.text('Con chi vuoi parlare?'), findsNothing);
+    expect(controller.threadOf(kFreeTalkConversationId), isA<FreeTalkThread>());
+  });
+
+  testWidgets('Nuova chat dopo una libera conclusa apre un nuovo thread', (
+    tester,
+  ) async {
+    final controller = ChatFirstPrototypeController();
+    String? opened;
+
+    // Una chat libera gia conclusa (script consumato) nel controller di partenza.
+    final concluded = controller.startFreeTalk();
+    final concludedThread = controller.threadOf(
+      concluded.summary.id,
+    ) as FreeTalkThread;
+    concludedThread.scriptIndex = concludedThread.script.length;
+    await tester.pumpWidget(
+      wrap(
+        ChatFirstListScreen(
+          controller: controller,
+          onOpenThread: (thread) => opened = thread.summary.id,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Nuova chat'));
+    await tester.pumpAndSettle();
+
+    expect(opened, isNot(kFreeTalkConversationId));
+    expect(opened, startsWith('$kFreeTalkConversationId-'));
+    expect(controller.threadOf(opened!), isA<FreeTalkThread>());
+    // La conclusa resta al suo posto, la nuova e separata e puo rifare la demo.
+    expect(controller.threadOf(kFreeTalkConversationId), same(concludedThread));
+  });
+
   testWidgets('thread mostra bolle, scelte e avanza su tap', (tester) async {
     final controller = ChatFirstPrototypeController();
     final roma = controller.threads.firstWhere(
@@ -552,6 +607,69 @@ void main() {
       96400,
     );
   });
+
+  testWidgets(
+    'free talk convergente su Porto completa la coda F5 con moduli rich',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 9000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final controller = ChatFirstPrototypeController();
+      final thread = controller.startFreeTalk();
+      final id = thread.summary.id;
+      await tester.pumpWidget(
+        wrap(
+          ChatFirstThreadScreen(
+            controller: controller,
+            conversationId: id,
+            onOpenSnapshot: (_) {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byType(TextField),
+        'Vorrei quattro giorni lenti, con buon cibo.',
+      );
+      await tester.pump();
+      await tester.tap(find.byTooltip('Invia'));
+      await tester.pumpAndSettle();
+      // Destination question offers the trend metas; picking Roma still
+      // converges on the Porto route below.
+      await tapLast(tester, 'Roma');
+
+      const intakeLabels = <String>[
+        '4–5 giorni, senza fretta',
+        'Bilanciato: cultura e pause',
+        'Centro, per spostarmi a piedi',
+        'Treno o metro + passi',
+        'Moderato: qualche tavola bella',
+      ];
+      for (final label in intakeLabels) {
+        await tapLast(tester, label);
+      }
+      await tapLast(tester, 'Accetta');
+
+      // Porto curation cards, then the transport beat with rich flights.
+      await tapLast(tester, 'Salva');
+      await tapLast(tester, 'Salva');
+      await tapLast(tester, 'Irrinunciabile');
+      await tapLast(tester, 'Passa');
+      await tapLast(tester, 'Passa');
+      await tapLast(tester, 'Passa');
+
+      final transport = controller
+          .threadOf(id)
+          .messages
+          .lastWhere((message) => message.kind == ChatMessageKind.transport);
+      expect(transport.flightCompare, isNotNull);
+      expect(transport.flightCompare!.options, hasLength(4));
+      expect(find.text('TAP Air Portugal'), findsOneWidget);
+      expect(find.textContaining('FCO→OPO'), findsNWidgets(4));
+    },
+  );
 
   testWidgets(
     'moduli rich: totale stepper e proposta allineati sull hotel selezionato',
@@ -919,6 +1037,49 @@ void main() {
     await tester.pump();
     expect(startedAnother, isTrue);
     expect(find.text('Ispirazioni per te'), findsNothing);
+  });
+
+  testWidgets('home pianificazione usa superficie neutra per la card scelta', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final controller = ChatFirstPrototypeController();
+    await tester.pumpWidget(
+      wrapIter(
+        ChatFirstHomeScreen(
+          model: AdaptiveHomeModel.planning(
+            thread: controller.threads.firstWhere(
+              (thread) =>
+                  thread.summary.snapshot?.statusLabel == 'In pianificazione',
+            ),
+          ),
+          onSubmitIntent: (_) {},
+          onVoiceIntent: () {},
+          onPhotoIntent: (_) {},
+          onOpenThread: (_) {},
+          onOpenTrips: () {},
+          unread: 0,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final colors = IterTheme.light().colorScheme;
+    final card = tester.widget<Card>(
+      find
+          .ancestor(
+            of: find.text('Prossima scelta'),
+            matching: find.byType(Card),
+          )
+          .first,
+    );
+    expect(card.color, colors.surfaceContainerLow);
+    expect(card.color, isNot(colors.primaryContainer));
+    final shape = card.shape! as RoundedRectangleBorder;
+    expect(shape.side, BorderSide(color: colors.outlineVariant));
   });
 
   testWidgets('home attiva apre il thread senza mutare il piano', (

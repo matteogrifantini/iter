@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../models/trip_models.dart' show JourneyRoute;
-import '../../widgets/journey_media.dart';
 import 'chat_first_controller.dart';
 import 'chat_first_data.dart';
 
@@ -25,7 +23,7 @@ class ChatFirstListScreen extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(title: const Text('Chat')),
         body: threads.isEmpty
-            ? _EmptyChats(onStart: () => _showNewChat(context))
+            ? _EmptyChats(onStart: () => _startNewChat(context))
             : ListView.separated(
                 padding: const EdgeInsets.only(bottom: 96),
                 itemCount: threads.length,
@@ -43,7 +41,7 @@ class ChatFirstListScreen extends StatelessWidget {
                 },
               ),
         floatingActionButton: FloatingActionButton(
-          onPressed: () => _showNewChat(context),
+          onPressed: () => _startNewChat(context),
           tooltip: 'Nuova chat',
           elevation: 0,
           child: const Icon(Icons.chat_outlined),
@@ -52,43 +50,10 @@ class ChatFirstListScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _showNewChat(BuildContext context) async {
-    final journey = await showModalBottomSheet<JourneyRoute>(
-      context: context,
-      builder: (context) {
-        final trends = controller.trendJourneys;
-        return SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                child: Text(
-                  'Con chi vuoi parlare?',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              for (final item in trends)
-                ListTile(
-                  leading: CircleAvatar(
-                    backgroundImage: AssetImage(
-                      DemoMedia.postersForDestination(
-                        item.destinationIds.first,
-                      ).first,
-                    ),
-                  ),
-                  title: Text(item.title),
-                  subtitle: Text(item.durationLabel),
-                  onTap: () => Navigator.of(context).pop(item),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-    if (journey == null) return;
-    final thread = controller.startFromJourney(journey);
+  /// Opens the free-talk thread directly: no destination picker, the traveler
+  /// starts with their own words. Mirrors [ChatFirstShell._startAnotherFreeTalk].
+  void _startNewChat(BuildContext context) {
+    final thread = controller.startFreeTalk();
     onOpenThread(thread);
   }
 }

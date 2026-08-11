@@ -1120,26 +1120,66 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   }
 
   /// Opens (or creates) a free-talk thread: the traveler starts from their own
-  /// words, and the destination is pinned mid-conversation. Reusing the same
-  /// client id keeps repeat entries idempotent across sessions.
+  /// words, and the destination is pinned mid-conversation. While the existing
+  /// free talk is still in progress it is reopened (idempotent for the same
+  /// session); once it is concluded — script fully consumed — a brand new
+  /// thread with a deterministic unique id lets the traveler redo the demo.
   ChatThread startFreeTalk() {
-    ChatThread? existing;
-    for (final thread in _threads) {
-      if (thread.summary.id == kFreeTalkConversationId) {
-        existing = thread;
-        break;
-      }
-    }
+    final existing = _reusableFreeTalk();
     if (existing != null) {
       openConversation(existing.summary.id);
       return existing;
     }
-    final thread = ChatFirstDemoData.freeTalkThread(trendJourneys);
+    final thread = ChatFirstDemoData.freeTalkThread(
+      trendJourneys,
+      conversationId: _nextFreeTalkId(),
+    );
     _threads.insert(0, thread);
     _activeThreadId = thread.summary.id;
     notifyListeners();
     _persistNewMessages(thread);
     return thread;
+  }
+
+  /// The free-talk thread still in progress, so repeat entries stay
+  /// idempotent within the same session. A concluded thread is skipped: it is
+  /// the demo being redone, so a fresh one is created instead.
+  ChatThread? _reusableFreeTalk() {
+    for (final thread in _threads) {
+      if (_isFreeTalk(thread) && !_isFreeTalkConcluded(thread)) return thread;
+    }
+    return null;
+  }
+
+  static bool _isFreeTalk(ChatThread thread) =>
+      thread.summary.id == kFreeTalkConversationId ||
+      thread.summary.id.startsWith('$kFreeTalkConversationId-');
+
+  /// Concluded when no script beat is left to emit. An open proposal or an
+  /// unanswered question keeps the thread in progress.
+  static bool _isFreeTalkConcluded(ChatThread thread) =>
+      thread.scriptIndex >= thread.script.length;
+
+  /// Deterministic unique id for a fresh free talk, derived from the existing
+  /// threads so repeated instances (or process reloads) never collide: the
+  /// stable base id when none exists yet, then `c-free-talk-2`, `c-free-talk-3`
+  /// after every existing free talk.
+  String _nextFreeTalkId() {
+    var maxSuffix = 0;
+    for (final thread in _threads) {
+      final id = thread.summary.id;
+      if (id == kFreeTalkConversationId) {
+        if (maxSuffix < 1) maxSuffix = 1;
+      } else if (id.startsWith('$kFreeTalkConversationId-')) {
+        final suffix = int.tryParse(
+          id.substring(kFreeTalkConversationId.length + 1),
+        );
+        if (suffix != null && suffix > maxSuffix) maxSuffix = suffix;
+      }
+    }
+    return maxSuffix == 0
+        ? kFreeTalkConversationId
+        : '$kFreeTalkConversationId-${maxSuffix + 1}';
   }
 
   /// Home uses the only awaited persistence path: its new free-talk exchange is
@@ -1153,11 +1193,11 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     var thread = _pendingHomeThread;
     if (thread == null) {
       thread =
-          _threads.cast<ChatThread?>().firstWhere(
-            (candidate) => candidate?.summary.id == kFreeTalkConversationId,
-            orElse: () => null,
-          ) ??
-          ChatFirstDemoData.freeTalkThread(trendJourneys);
+          _reusableFreeTalk() ??
+          ChatFirstDemoData.freeTalkThread(
+            trendJourneys,
+            conversationId: _nextFreeTalkId(),
+          );
       if (!_threads.contains(thread)) {
         _threads.insert(0, thread);
       }
