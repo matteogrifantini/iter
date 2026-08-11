@@ -147,33 +147,53 @@ class StayOption {
 
 @immutable
 class TravelPlanSelection {
-  const TravelPlanSelection({required this.option});
+  TravelPlanSelection({
+    required this.option,
+    List<TravelOption> alternatives = const <TravelOption>[],
+  }) : alternatives = List<TravelOption>.unmodifiable(alternatives);
 
   final TravelOption option;
+  final List<TravelOption> alternatives;
 
-  Map<String, dynamic> toJson() => <String, dynamic>{'option': option.toJson()};
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'option': option.toJson(),
+    'alternatives': alternatives
+        .map((alternative) => alternative.toJson())
+        .toList(growable: false),
+  };
 
   factory TravelPlanSelection.fromJson(Map<String, dynamic> json) =>
       TravelPlanSelection(
         option:
             _map(json['option'], TravelOption.fromJson) ??
             const TravelOption(id: '', label: ''),
+        alternatives: _list(json['alternatives'], TravelOption.fromJson),
       );
 }
 
 @immutable
 class StayPlanSelection {
-  const StayPlanSelection({required this.option});
+  StayPlanSelection({
+    required this.option,
+    List<StayOption> alternatives = const <StayOption>[],
+  }) : alternatives = List<StayOption>.unmodifiable(alternatives);
 
   final StayOption option;
+  final List<StayOption> alternatives;
 
-  Map<String, dynamic> toJson() => <String, dynamic>{'option': option.toJson()};
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'option': option.toJson(),
+    'alternatives': alternatives
+        .map((alternative) => alternative.toJson())
+        .toList(growable: false),
+  };
 
   factory StayPlanSelection.fromJson(Map<String, dynamic> json) =>
       StayPlanSelection(
         option:
             _map(json['option'], StayOption.fromJson) ??
             const StayOption(id: '', label: ''),
+        alternatives: _list(json['alternatives'], StayOption.fromJson),
       );
 }
 

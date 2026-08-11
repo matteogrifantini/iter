@@ -91,6 +91,7 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   final Map<String, _PlanSaveAttempt> _failedPlanSaves =
       <String, _PlanSaveAttempt>{};
   final Map<String, Future<void>> _planSaveQueues = <String, Future<void>>{};
+  final Map<String, int> _latestPlanSaveRevision = <String, int>{};
   final Map<String, PlanPlaceDetails> _placeComposerContexts =
       <String, PlanPlaceDetails>{};
 
@@ -101,6 +102,7 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   List<String> _memoryTags = _demoMemoryTags;
   ChatThread? _pendingHomeThread;
   String? _pendingHomeIntent;
+  bool _disposed = false;
 
   int get unread => _unread;
   String? get activeThreadId => _activeThreadId;
@@ -343,6 +345,12 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   Future<bool> retryPlanPersistence(String conversationId) async {
     final failed = _failedPlanSaves[conversationId];
     if (failed == null) return false;
+    final currentRevision = _planSnapshot(conversationId).revision;
+    if (failed.snapshot.revision != currentRevision ||
+        _latestPlanSaveRevision[conversationId] != currentRevision) {
+      _failedPlanSaves.remove(conversationId);
+      return false;
+    }
     await _enqueuePlanSave(failed);
     return true;
   }
@@ -369,9 +377,15 @@ class ChatFirstPrototypeController extends ChangeNotifier {
       optionId: optionId,
     );
     if (option == null) return false;
+    final alternatives = ChatFirstDemoData.travelOptionsFor(
+      current,
+    ).where((candidate) => candidate.id != option.id).toList(growable: false);
     final next = current.copyWith(
       transport: option.label,
-      travelSelection: TravelPlanSelection(option: option),
+      travelSelection: TravelPlanSelection(
+        option: option,
+        alternatives: alternatives,
+      ),
       revision: current.revision + 1,
       revisionMetadata: _selectionMetadata(
         conversationId,
@@ -397,9 +411,15 @@ class ChatFirstPrototypeController extends ChangeNotifier {
       optionId: optionId,
     );
     if (option == null) return false;
+    final alternatives = ChatFirstDemoData.stayOptionsFor(
+      current,
+    ).where((candidate) => candidate.id != option.id).toList(growable: false);
     final next = current.copyWith(
       stay: option.label,
-      staySelection: StayPlanSelection(option: option),
+      staySelection: StayPlanSelection(
+        option: option,
+        alternatives: alternatives,
+      ),
       revision: current.revision + 1,
       revisionMetadata: _selectionMetadata(
         conversationId,
@@ -467,12 +487,20 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   }
 
   Future<void> _enqueuePlanSave(_PlanSaveAttempt attempt) {
+    if (_disposed) return Future<void>.value();
     final conversationId = attempt.conversationId;
-    _planPersistence[conversationId] = PlanPersistenceState(
-      status: PlanPersistenceStatus.saving,
-      revision: attempt.snapshot.revision,
-    );
-    notifyListeners();
+    final latestRevision = _latestPlanSaveRevision[conversationId];
+    if (latestRevision == null || attempt.snapshot.revision > latestRevision) {
+      _latestPlanSaveRevision[conversationId] = attempt.snapshot.revision;
+    }
+    if (_planSnapshot(conversationId).revision == attempt.snapshot.revision &&
+        _latestPlanSaveRevision[conversationId] == attempt.snapshot.revision) {
+      _planPersistence[conversationId] = PlanPersistenceState(
+        status: PlanPersistenceStatus.saving,
+        revision: attempt.snapshot.revision,
+      );
+      notifyListeners();
+    }
     final previous = _planSaveQueues[conversationId] ?? Future<void>.value();
     final next = previous
         .catchError((Object _) {})
@@ -480,6 +508,7 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     _planSaveQueues[conversationId] = next;
     unawaited(
       next.whenComplete(() {
+        if (_disposed) return;
         if (identical(_planSaveQueues[conversationId], next)) {
           _planSaveQueues.remove(conversationId);
         }
@@ -492,6 +521,7 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     PlanSaveResult result;
     try {
       final dbId = await _ensureConversation(threadOf(attempt.conversationId));
+      if (_disposed) return;
       result = await dataSource.saveTripVersion(
         conversationId: dbId ?? attempt.conversationId,
         conversation: attempt.conversation,
@@ -500,16 +530,19 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     } catch (_) {
       result = const PlanSaveResult.failure('unexpected');
     }
+    if (_disposed) return;
 
     final conversationId = attempt.conversationId;
-    final visible = _planPersistence[conversationId];
+    final isCurrent =
+        _planSnapshot(conversationId).revision == attempt.snapshot.revision &&
+        _latestPlanSaveRevision[conversationId] == attempt.snapshot.revision;
     if (result.succeeded) {
       final failed = _failedPlanSaves[conversationId];
       if (failed != null &&
           failed.snapshot.revision <= attempt.snapshot.revision) {
         _failedPlanSaves.remove(conversationId);
       }
-      if (visible?.revision == attempt.snapshot.revision) {
+      if (isCurrent) {
         _planPersistence[conversationId] = PlanPersistenceState(
           status: PlanPersistenceStatus.saved,
           revision: attempt.snapshot.revision,
@@ -519,8 +552,8 @@ class ChatFirstPrototypeController extends ChangeNotifier {
       return;
     }
 
-    _failedPlanSaves[conversationId] = attempt;
-    if (visible?.revision == attempt.snapshot.revision) {
+    if (isCurrent) {
+      _failedPlanSaves[conversationId] = attempt;
       _planPersistence[conversationId] = PlanPersistenceState(
         status: PlanPersistenceStatus.failed,
         revision: attempt.snapshot.revision,
@@ -582,10 +615,33 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     }
     if (message == null) return;
     _activeThreadId = conversationId;
-    final wasSettled = message.proposal?.outcome != null;
+    final proposal = message.proposal;
+    final before = thread.summary.snapshot;
+    final appliesAcceptedPlan =
+        accept &&
+        proposal != null &&
+        proposal.outcome == null &&
+        before != null;
     thread.respondToProposal(message, accept: accept);
+    if (appliesAcceptedPlan) {
+      final revision = before.revision + 1;
+      final accepted = proposal.snapshot.copyWith(
+        revision: revision,
+        revisionMetadata: PlanRevisionMetadata(
+          id: '$conversationId-r$revision',
+          number: revision,
+          timestamp: _now().toUtc(),
+          origin: PlanChangeOrigin.chat,
+          label: proposal.changeLabel,
+        ),
+      );
+      _commitPlanRevision(
+        conversationId: conversationId,
+        before: before,
+        after: accepted,
+      );
+    }
     _persistNewMessages(thread);
-    if (accept && !wasSettled) _persistAcceptedPlan(thread);
     notifyListeners();
   }
 
@@ -767,6 +823,7 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   /// Concurrent callers share the in-flight creation future, so the row is
   /// never created twice for the same thread.
   Future<String?> _ensureConversation(ChatThread thread) async {
+    if (_disposed) return null;
     final existing = _dbIdByClientId[thread.summary.id];
     if (existing != null) return existing;
     final pending = _pendingConversation[thread.summary.id];
@@ -779,27 +836,18 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   Future<String?> _createConversation(ChatThread thread) async {
     try {
       final row = await dataSource.createConversation(thread.summary);
+      if (_disposed) return null;
       if (row == null) return null;
       _dbIdByClientId[thread.summary.id] = row.id;
       return row.id;
     } finally {
-      _pendingConversation.remove(thread.summary.id);
+      if (!_disposed) _pendingConversation.remove(thread.summary.id);
     }
   }
 
-  /// Persists accepted proposals through the same per-conversation queue used
-  /// by direct plan commands, so their writes cannot overtake each other.
-  void _persistAcceptedPlan(ChatThread thread) {
-    final snapshot = thread.summary.snapshot;
-    if (snapshot == null) return;
-    unawaited(
-      _enqueuePlanSave(
-        _PlanSaveAttempt(
-          conversationId: thread.summary.id,
-          conversation: thread.summary,
-          snapshot: snapshot,
-        ),
-      ),
-    );
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

@@ -777,10 +777,31 @@ abstract final class ChatFirstDemoData {
   static OperationalTripFixture? operationalFixtureForSnapshot(
     TripSnapshot snapshot,
   ) {
-    final destination = snapshot.destinationTitle.toLowerCase();
-    if (destination.contains('porto')) return operationalFixtureFor('porto');
-    if (destination.contains('roma')) return operationalFixtureFor('roma');
-    return null;
+    final destination = snapshot.destinationTitle
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), ' ');
+    return switch (destination) {
+      'porto' => operationalFixtureFor('porto'),
+      'roma' => operationalFixtureFor('roma'),
+      _ => null,
+    };
+  }
+
+  /// Maps every flight fixture without changing fixture order or state.
+  static List<TravelOption> travelOptionsFor(TripSnapshot snapshot) {
+    final fixture = operationalFixtureForSnapshot(snapshot);
+    if (fixture == null) return const <TravelOption>[];
+    return List<TravelOption>.unmodifiable(
+      fixture.flights.map(
+        (flight) => TravelOption(
+          id: flight.id,
+          label:
+              '${flight.provider} · ${flight.departureAirport}–${flight.arrivalAirport}',
+          priceCents: flight.priceCents,
+        ),
+      ),
+    );
   }
 
   /// Maps one flight fixture into the canonical selected-option shape.
@@ -788,19 +809,31 @@ abstract final class ChatFirstDemoData {
     required TripSnapshot snapshot,
     required String optionId,
   }) {
-    final fixture = operationalFixtureForSnapshot(snapshot);
-    if (fixture == null) return null;
-    for (final flight in fixture.flights) {
-      if (flight.id != optionId) continue;
+    for (final option in travelOptionsFor(snapshot)) {
+      if (option.id != optionId) continue;
       return TravelOption(
-        id: flight.id,
-        label:
-            '${flight.provider} · ${flight.departureAirport}–${flight.arrivalAirport}',
-        priceCents: flight.priceCents,
+        id: option.id,
+        label: option.label,
+        priceCents: option.priceCents,
         purchaseState: PurchaseState.selected,
       );
     }
     return null;
+  }
+
+  /// Maps every hotel fixture without changing fixture order or state.
+  static List<StayOption> stayOptionsFor(TripSnapshot snapshot) {
+    final fixture = operationalFixtureForSnapshot(snapshot);
+    if (fixture == null) return const <StayOption>[];
+    return List<StayOption>.unmodifiable(
+      fixture.hotels.map(
+        (hotel) => StayOption(
+          id: hotel.id,
+          label: hotel.name,
+          priceCents: hotel.priceCents,
+        ),
+      ),
+    );
   }
 
   /// Maps one hotel fixture into the canonical selected-option shape.
@@ -808,14 +841,12 @@ abstract final class ChatFirstDemoData {
     required TripSnapshot snapshot,
     required String optionId,
   }) {
-    final fixture = operationalFixtureForSnapshot(snapshot);
-    if (fixture == null) return null;
-    for (final hotel in fixture.hotels) {
-      if (hotel.id != optionId) continue;
+    for (final option in stayOptionsFor(snapshot)) {
+      if (option.id != optionId) continue;
       return StayOption(
-        id: hotel.id,
-        label: hotel.name,
-        priceCents: hotel.priceCents,
+        id: option.id,
+        label: option.label,
+        priceCents: option.priceCents,
         purchaseState: PurchaseState.selected,
       );
     }

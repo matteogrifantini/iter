@@ -99,6 +99,89 @@ void main() {
     expect(restored.costSummary.projectedTotalCents, 40500);
   });
 
+  test('plan selections round trip immutable alternatives', () {
+    final suppliedTravelAlternatives = <TravelOption>[
+      const TravelOption(id: 'flight-b', label: 'Volo B', priceCents: 12000),
+      const TravelOption(id: 'flight-c', label: 'Volo C', priceCents: 14000),
+    ];
+    final suppliedStayAlternatives = <StayOption>[
+      const StayOption(id: 'stay-b', label: 'Hotel B', priceCents: 22000),
+    ];
+    final snapshot = TripSnapshot(
+      destinationTitle: 'Porto',
+      country: 'Portogallo',
+      durationLabel: '2 giorni',
+      statusLabel: 'In pianificazione',
+      dates: '17–18 ottobre',
+      transport: 'Volo A',
+      stay: 'Hotel A',
+      travelSelection: TravelPlanSelection(
+        option: const TravelOption(
+          id: 'flight-a',
+          label: 'Volo A',
+          priceCents: 18000,
+          purchaseState: PurchaseState.selected,
+        ),
+        alternatives: suppliedTravelAlternatives,
+      ),
+      staySelection: StayPlanSelection(
+        option: const StayOption(
+          id: 'stay-a',
+          label: 'Hotel A',
+          priceCents: 30000,
+          purchaseState: PurchaseState.selected,
+        ),
+        alternatives: suppliedStayAlternatives,
+      ),
+    );
+
+    suppliedTravelAlternatives.clear();
+    suppliedStayAlternatives.clear();
+    final restored = TripSnapshot.fromJson(snapshot.toJson());
+
+    expect(snapshot.travelSelection?.option.id, 'flight-a');
+    expect(
+      snapshot.travelSelection?.alternatives.map((option) => option.id),
+      <String>['flight-b', 'flight-c'],
+    );
+    expect(
+      restored.travelSelection?.alternatives.map((option) => option.id),
+      <String>['flight-b', 'flight-c'],
+    );
+    expect(
+      restored.staySelection?.alternatives.map((option) => option.id),
+      <String>['stay-b'],
+    );
+    expect(
+      restored.travelSelection?.toJson()['option'],
+      restored.travelSelection?.option.toJson(),
+    );
+    expect(
+      () => snapshot.travelSelection!.alternatives.clear(),
+      throwsUnsupportedError,
+    );
+    expect(
+      () => snapshot.staySelection!.alternatives.clear(),
+      throwsUnsupportedError,
+    );
+  });
+
+  test('legacy plan selections default alternatives to empty', () {
+    final snapshot = TripSnapshot.fromJson(<String, dynamic>{
+      'travelSelection': <String, dynamic>{
+        'option': <String, dynamic>{'id': 'flight-a', 'label': 'Volo A'},
+      },
+      'staySelection': <String, dynamic>{
+        'option': <String, dynamic>{'id': 'stay-a', 'label': 'Hotel A'},
+      },
+    });
+
+    expect(snapshot.travelSelection?.option.id, 'flight-a');
+    expect(snapshot.travelSelection?.alternatives, isEmpty);
+    expect(snapshot.staySelection?.option.id, 'stay-a');
+    expect(snapshot.staySelection?.alternatives, isEmpty);
+  });
+
   test('unknown enums fall back safely and canonical lists are immutable', () {
     final snapshot = TripSnapshot.fromJson(<String, dynamic>{
       'revision': 1,
@@ -350,4 +433,38 @@ void main() {
     expect(fixture.flights.clear, throwsUnsupportedError);
     expect(fixture.hotels.clear, throwsUnsupportedError);
   });
+
+  test(
+    'operational fixture resolver accepts only canonical destination title',
+    () {
+      final porto = ChatFirstDemoData.operationalFixtureFor('porto').snapshot;
+
+      expect(
+        ChatFirstDemoData.operationalFixtureForSnapshot(
+          porto.copyWith(destinationTitle: '  PORTO  '),
+        )?.destinationId,
+        'porto',
+      );
+      expect(
+        ChatFirstDemoData.operationalFixtureForSnapshot(
+          porto.copyWith(destinationTitle: 'Roma'),
+        )?.destinationId,
+        'roma',
+      );
+      for (final title in <String>[
+        'Porto e Roma',
+        'Portorose',
+        'Roma Nord',
+        '',
+      ]) {
+        expect(
+          ChatFirstDemoData.operationalFixtureForSnapshot(
+            porto.copyWith(destinationTitle: title),
+          ),
+          isNull,
+          reason: title,
+        );
+      }
+    },
+  );
 }

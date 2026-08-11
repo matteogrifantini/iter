@@ -153,7 +153,8 @@ void main() {
       expect(updated.days.first.theme, 'Mattina più lenta');
       expect(updated.days.first.items.first.time, '10:30');
       expect(proposal.proposal?.outcome, PlanProposalOutcome.accepted);
-      expect(proposal.proposal?.snapshot, same(updated));
+      expect(updated.revision, original.revision + 1);
+      expect(updated.revisionMetadata?.origin, PlanChangeOrigin.chat);
     });
 
     test('rejectProposal mantiene lo snapshot e chiude la proposta', () {
@@ -1234,6 +1235,68 @@ void main() {
       expect(notifications, greaterThanOrEqualTo(2));
     });
 
+    test(
+      'proposta chat accettata crea revisione, history e restore persistito',
+      () async {
+        final source = _RestoringPlanDataSource();
+        final controller = _planController(dataSource: source);
+        const conversationId = 'c-plan-porto';
+
+        controller.previewToggleLock(
+          conversationId: conversationId,
+          itemId: 'porto-livraria-lello-stop',
+        );
+        controller.confirmPlanPatch(conversationId);
+        await source.savedCount(1);
+        final before = controller.conversationOf(conversationId).snapshot!;
+        final proposal = ChatMessage(
+          id: 'proposal-after-r2',
+          role: ChatRole.assistant,
+          kind: ChatMessageKind.planProposal,
+          text: 'Rendo il piano piu lento.',
+          sentAt: DateTime(2026, 8, 11, 12, 30),
+          proposal: PlanProposal(
+            changeLabel: 'Ritmo piu lento',
+            snapshot: before.copyWith(statusLabel: 'Piu lento'),
+          ),
+        );
+        controller.threadOf(conversationId).messages.add(proposal);
+
+        controller.acceptProposal(conversationId, proposal.id);
+        await source.savedCount(2);
+
+        final accepted = controller.conversationOf(conversationId).snapshot!;
+        expect(accepted.revision, before.revision + 1);
+        expect(accepted.statusLabel, 'Piu lento');
+        expect(accepted.revisionMetadata?.origin, PlanChangeOrigin.chat);
+        expect(
+          controller.planRevisionHistory(conversationId).last,
+          isA<PlanRevisionRecord>()
+              .having((record) => record.before.revision, 'before', 2)
+              .having(
+                (record) => record.after.revision,
+                'after',
+                before.revision + 1,
+              ),
+        );
+        expect(source.savedVersions.last.snapshot.toJson(), accepted.toJson());
+        expect(
+          source.savedVersions.last.conversation.snapshot?.toJson(),
+          accepted.toJson(),
+        );
+
+        final restored = ChatFirstPrototypeController(
+          dataSource: source,
+          seed: <ChatThread>[],
+        );
+        await restored.restoreConversations();
+        expect(
+          restored.conversationOf(conversationId).snapshot?.toJson(),
+          accepted.toJson(),
+        );
+      },
+    );
+
     test('conferma stale ricalcola e richiede una nuova conferma', () {
       final controller = _planController();
       const conversationId = 'c-plan-porto';
@@ -1332,6 +1395,14 @@ void main() {
           <int>[2, 2],
         );
         expect(
+          source.savedVersions[1].snapshot,
+          same(source.savedVersions[0].snapshot),
+        );
+        expect(
+          source.savedVersions[1].conversation,
+          same(source.savedVersions[0].conversation),
+        );
+        expect(
           controller.planPersistenceState(conversationId).status,
           PlanPersistenceStatus.saved,
         );
@@ -1341,6 +1412,80 @@ void main() {
         );
       },
     );
+
+    test(
+      'failure stale non retrocede stato e non puo essere ritentato',
+      () async {
+        final source = _ControlledPlanDataSource();
+        final controller = _planController(dataSource: source);
+        const conversationId = 'c-plan-porto';
+
+        controller.previewToggleLock(
+          conversationId: conversationId,
+          itemId: 'porto-livraria-lello-stop',
+        );
+        controller.confirmPlanPatch(conversationId);
+        controller.previewToggleLock(
+          conversationId: conversationId,
+          itemId: 'porto-livraria-lello-stop',
+        );
+        controller.confirmPlanPatch(conversationId);
+        await source.startedCount(1);
+        expect(controller.planPersistenceState(conversationId).revision, 3);
+
+        source.failNext('revision_2_failed');
+        await source.startedCount(2);
+        expect(
+          controller.planPersistenceState(conversationId),
+          isA<PlanPersistenceState>()
+              .having(
+                (state) => state.status,
+                'status',
+                PlanPersistenceStatus.saving,
+              )
+              .having((state) => state.revision, 'revision', 3)
+              .having((state) => state.errorCode, 'errorCode', isNull),
+        );
+        expect(await controller.retryPlanPersistence(conversationId), isFalse);
+
+        source.completeNext();
+        await source.completedCount(2);
+        expect(
+          controller.planPersistenceState(conversationId),
+          isA<PlanPersistenceState>()
+              .having(
+                (state) => state.status,
+                'status',
+                PlanPersistenceStatus.saved,
+              )
+              .having((state) => state.revision, 'revision', 3)
+              .having((state) => state.errorCode, 'errorCode', isNull),
+        );
+      },
+    );
+
+    test('completion persistence dopo dispose non muta stato', () async {
+      final source = _ControlledPlanDataSource();
+      final controller = _planController(dataSource: source);
+      const conversationId = 'c-plan-porto';
+      controller.previewToggleLock(
+        conversationId: conversationId,
+        itemId: 'porto-livraria-lello-stop',
+      );
+      controller.confirmPlanPatch(conversationId);
+      await source.startedCount(1);
+      final beforeDispose = controller.planPersistenceState(conversationId);
+
+      controller.dispose();
+      source.completeNext();
+      await source.completedCount(1);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        controller.planPersistenceState(conversationId),
+        same(beforeDispose),
+      );
+    });
 
     test('scritture della stessa conversazione restano serializzate', () async {
       final source = _ControlledPlanDataSource();
@@ -1448,6 +1593,12 @@ void main() {
       expect(flightSnapshot.revision, 2);
       expect(flightSnapshot.travelSelection?.option.id, fixture.flights[2].id);
       expect(
+        flightSnapshot.travelSelection?.alternatives.map((option) => option.id),
+        fixture.flights
+            .where((option) => option.id != fixture.flights[2].id)
+            .map((option) => option.id),
+      );
+      expect(
         flightSnapshot.travelSelection?.option.purchaseState,
         PurchaseState.selected,
       );
@@ -1463,6 +1614,12 @@ void main() {
       final staySnapshot = controller.conversationOf(conversationId).snapshot!;
       expect(staySnapshot.revision, 3);
       expect(staySnapshot.staySelection?.option.id, fixture.hotels[1].id);
+      expect(
+        staySnapshot.staySelection?.alternatives.map((option) => option.id),
+        fixture.hotels
+            .where((option) => option.id != fixture.hotels[1].id)
+            .map((option) => option.id),
+      );
       expect(staySnapshot.stay, fixture.hotels[1].name);
       expect(
         controller.selectTravelOption(
@@ -1842,6 +1999,21 @@ class _PlanRecordingDataSource extends MockDataSource {
   }
 }
 
+class _RestoringPlanDataSource extends _PlanRecordingDataSource {
+  @override
+  Future<List<ConversationRow>> fetchConversations() async {
+    if (savedVersions.isEmpty) return const <ConversationRow>[];
+    final latest = savedVersions.last;
+    return <ConversationRow>[
+      ConversationRow(
+        id: latest.conversationId,
+        conversation: Conversation.fromJson(latest.conversation.toJson()),
+        updatedAt: DateTime(2026, 8, 11, 12, 30),
+      ),
+    ];
+  }
+}
+
 class _RetryingPlanDataSource extends _PlanRecordingDataSource {
   final List<int> _attempt = <int>[0];
 
@@ -1913,6 +2085,13 @@ class _ControlledPlanDataSource extends MockDataSource {
       (candidate) => !candidate.isCompleted,
     );
     completer.complete(const PlanSaveResult.success());
+  }
+
+  void failNext(String errorCode) {
+    final completer = _pending.firstWhere(
+      (candidate) => !candidate.isCompleted,
+    );
+    completer.complete(PlanSaveResult.failure(errorCode));
   }
 
   void completeAll() {
