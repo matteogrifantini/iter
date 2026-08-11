@@ -174,66 +174,18 @@ class SupabaseDataSource implements IterDataSource {
     required TripSnapshot snapshot,
   }) async {
     try {
-      final client = _client;
-      final conversationRows = await client
-          .from('conversations')
-          .select('trip_id')
-          .eq('id', conversationId)
-          .limit(1);
-      if (conversationRows.isEmpty) {
-        return const PlanSaveResult.failure('conversation_not_found');
-      }
-      final conversationRow = conversationRows.first;
-
-      String? tripId = conversationRow['trip_id'] as String?;
       final status = snapshot.statusLabel == 'In viaggio' ? 'active' : 'draft';
-      if (tripId == null) {
-        final rows = await client
-            .from('trips')
-            .insert(<String, dynamic>{
-              'user_id': client.auth.currentUser?.id,
-              'title': conversation.title,
-              'status': status,
-              'snapshot': snapshot.toJson(),
-            })
-            .select('id');
-        if (rows.isEmpty) {
-          return const PlanSaveResult.failure('trip_not_created');
-        }
-        tripId = rows.first['id'] as String;
-        await client
-            .from('conversations')
-            .update(<String, dynamic>{'trip_id': tripId})
-            .eq('id', conversationId);
-      } else {
-        await client
-            .from('trips')
-            .update(<String, dynamic>{
-              'title': conversation.title,
-              'status': status,
-              'snapshot': snapshot.toJson(),
-              'updated_at': DateTime.now().toIso8601String(),
-            })
-            .eq('id', tripId);
-      }
-
-      final existing = await client
-          .from('trip_versions')
-          .select('version_number')
-          .eq('trip_id', tripId)
-          .eq('version_number', snapshot.revision)
-          .limit(1);
-      if (existing.isEmpty) {
-        await client.from('trip_versions').insert(<String, dynamic>{
-          'trip_id': tripId,
-          'version_number': snapshot.revision,
-          'draft': snapshot.toJson(),
-        });
-      }
-      await client
-          .from('conversations')
-          .update(<String, dynamic>{'summary': conversation.toJson()})
-          .eq('id', conversationId);
+      await _client.rpc(
+        'save_trip_revision',
+        params: <String, dynamic>{
+          'p_conversation_id': conversationId,
+          'p_title': conversation.title,
+          'p_status': status,
+          'p_snapshot': snapshot.toJson(),
+          'p_summary': conversation.toJson(),
+          'p_revision': snapshot.revision,
+        },
+      );
       return const PlanSaveResult.success();
     } on PostgrestException catch (error) {
       return PlanSaveResult.failure(error.code);

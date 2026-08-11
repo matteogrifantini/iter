@@ -761,8 +761,7 @@ void main() {
     });
 
     test(
-      'saveTripVersion usa la revisione esatta, aggiorna il summary e il retry '
-      'non duplica la versione',
+      'saveTripVersion invoca una sola RPC con il payload atomico completo',
       () async {
         final server = await _TripVersionPostgrestServer.start();
         addTearDown(server.close);
@@ -781,32 +780,34 @@ void main() {
         final snapshot = conversation.snapshot!.copyWith(revision: 7);
         final updatedConversation = conversation.copyWith(snapshot: snapshot);
 
-        final first = await source.saveTripVersion(
-          conversationId: 'conversation-db-id',
-          conversation: updatedConversation,
-          snapshot: snapshot,
-        );
-        final retry = await source.saveTripVersion(
+        final result = await source.saveTripVersion(
           conversationId: 'conversation-db-id',
           conversation: updatedConversation,
           snapshot: snapshot,
         );
 
-        expect(first.succeeded, isTrue);
-        expect(retry.succeeded, isTrue);
-        expect(server.versionSelectRevisions, <String>['eq.7', 'eq.7']);
-        expect(server.insertedVersions, <int>[7]);
-        expect(server.conversationSummaries, <Map<String, dynamic>>[
-          updatedConversation.toJson(),
-          updatedConversation.toJson(),
-        ]);
+        expect(result.succeeded, isTrue);
+        expect(server.requests, hasLength(1));
+        final request = server.requests.single;
+        expect(request.method, 'POST');
+        expect(request.path, '/rest/v1/rpc/save_trip_revision');
+        expect(request.body, <String, dynamic>{
+          'p_conversation_id': 'conversation-db-id',
+          'p_title': updatedConversation.title,
+          'p_status': 'active',
+          'p_snapshot': snapshot.toJson(),
+          'p_summary': updatedConversation.toJson(),
+          'p_revision': 7,
+        });
       },
     );
 
     test(
       'saveTripVersion traduce un errore PostgREST in failure osservabile',
       () async {
-        final server = await _TripVersionPostgrestServer.start(failReads: true);
+        final server = await _TripVersionPostgrestServer.start(
+          failRequests: true,
+        );
         addTearDown(server.close);
         final source = SupabaseDataSource(
           config: AppConfig(
@@ -830,6 +831,59 @@ void main() {
         expect(result.errorCode, 'XX000');
       },
     );
+
+    test('migration rende RPC atomica, monotona e policy ripetibili', () async {
+      final sql = await File(
+        'supabase/migrations/'
+        '20260810235146_add_trip_version_owner_policies.sql',
+      ).readAsString();
+      final normalized = sql.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+      final schema = await File('supabase/schema.sql').readAsString();
+      final normalizedSchema = schema.toLowerCase().replaceAll(
+        RegExp(r'\s+'),
+        ' ',
+      );
+
+      expect(normalized, contains('security invoker'));
+      expect(normalized, isNot(contains('security definer')));
+      expect(normalized, contains("set search_path = ''"));
+      expect(RegExp(r'for update').allMatches(normalized), hasLength(2));
+      expect(normalized, contains('p_revision <= v_latest_revision'));
+      expect(
+        normalized,
+        contains('on conflict (trip_id, version_number) do nothing'),
+      );
+      expect(
+        normalized,
+        contains('revoke execute on function public.save_trip_revision'),
+      );
+      expect(normalized, contains('from public, anon'));
+      expect(
+        normalized,
+        contains('grant execute on function public.save_trip_revision'),
+      );
+      expect(normalized, contains('to authenticated'));
+      expect(
+        normalized,
+        contains(
+          'drop policy if exists "trip versions owner select" '
+          'on public.trip_versions; create policy '
+          '"trip versions owner select"',
+        ),
+      );
+      expect(
+        normalized,
+        contains(
+          'drop policy if exists "trip versions owner insert" '
+          'on public.trip_versions; create policy '
+          '"trip versions owner insert"',
+        ),
+      );
+      expect(
+        _saveTripRevisionContract(normalizedSchema),
+        _saveTripRevisionContract(normalized),
+      );
+    });
   });
 
   group('Profilo e memoria (F3)', () {
@@ -1409,33 +1463,43 @@ class _FailingTripVersionDataSource extends MockDataSource {
   }) async => const PlanSaveResult.failure('persistence_unavailable');
 }
 
+String _saveTripRevisionContract(String normalizedSql) {
+  const startMarker = 'create or replace function public.save_trip_revision(';
+  const endMarker = ') to authenticated;';
+  final start = normalizedSql.indexOf(startMarker);
+  final end = normalizedSql.indexOf(endMarker, start);
+  return normalizedSql.substring(start, end + endMarker.length);
+}
+
 class _TripVersionPostgrestServer {
-  _TripVersionPostgrestServer._(this._server, {required this.failReads}) {
+  _TripVersionPostgrestServer._(this._server, {required this.failRequests}) {
     _server.listen(_handle);
   }
 
   final HttpServer _server;
-  final bool failReads;
-  bool _versionExists = false;
-  final List<String> versionSelectRevisions = <String>[];
-  final List<int> insertedVersions = <int>[];
-  final List<Map<String, dynamic>> conversationSummaries =
-      <Map<String, dynamic>>[];
+  final bool failRequests;
+  final List<({String method, String path, Map<String, dynamic> body})>
+  requests = <({String method, String path, Map<String, dynamic> body})>[];
 
   String get url => 'http://${_server.address.address}:${_server.port}';
 
   static Future<_TripVersionPostgrestServer> start({
-    bool failReads = false,
+    bool failRequests = false,
   }) async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    return _TripVersionPostgrestServer._(server, failReads: failReads);
+    return _TripVersionPostgrestServer._(server, failRequests: failRequests);
   }
 
   Future<void> close() => _server.close(force: true);
 
   Future<void> _handle(HttpRequest request) async {
-    final table = request.uri.pathSegments.last;
-    if (failReads && request.method == 'GET') {
+    final bodyText = await utf8.decoder.bind(request).join();
+    final body = bodyText.isEmpty
+        ? const <String, dynamic>{}
+        : (jsonDecode(bodyText) as Map).cast<String, dynamic>();
+    requests.add((method: request.method, path: request.uri.path, body: body));
+
+    if (failRequests) {
       await _json(request, HttpStatus.internalServerError, <String, dynamic>{
         'code': 'XX000',
         'message': 'persistence unavailable',
@@ -1445,45 +1509,9 @@ class _TripVersionPostgrestServer {
       return;
     }
 
-    if (table == 'conversations' && request.method == 'GET') {
-      await _json(request, HttpStatus.ok, <Map<String, dynamic>>[
-        <String, dynamic>{'trip_id': 'trip-1'},
-      ]);
-      return;
-    }
-    if (table == 'trips' && request.method == 'PATCH') {
-      await _empty(request, HttpStatus.noContent);
-      return;
-    }
-    if (table == 'trip_versions' && request.method == 'GET') {
-      versionSelectRevisions.add(
-        request.uri.queryParameters['version_number'] ?? '',
-      );
-      await _json(
-        request,
-        HttpStatus.ok,
-        _versionExists
-            ? <Map<String, dynamic>>[
-                <String, dynamic>{'version_number': 7},
-              ]
-            : const <Map<String, dynamic>>[],
-      );
-      return;
-    }
-    if (table == 'trip_versions' && request.method == 'POST') {
-      final body = await _body(request);
-      insertedVersions.add((body['version_number'] as num).toInt());
-      _versionExists = true;
-      await _empty(request, HttpStatus.created);
-      return;
-    }
-    if (table == 'conversations' && request.method == 'PATCH') {
-      final body = await _body(request);
-      final summary = body['summary'];
-      if (summary is Map<String, dynamic>) {
-        conversationSummaries.add(summary);
-      }
-      await _empty(request, HttpStatus.noContent);
+    if (request.method == 'POST' &&
+        request.uri.path == '/rest/v1/rpc/save_trip_revision') {
+      await _json(request, HttpStatus.ok, true);
       return;
     }
 
@@ -1495,21 +1523,11 @@ class _TripVersionPostgrestServer {
     });
   }
 
-  Future<Map<String, dynamic>> _body(HttpRequest request) async {
-    final text = await utf8.decoder.bind(request).join();
-    return (jsonDecode(text) as Map).cast<String, dynamic>();
-  }
-
   Future<void> _json(HttpRequest request, int status, Object body) async {
     request.response
       ..statusCode = status
       ..headers.contentType = ContentType.json
       ..write(jsonEncode(body));
-    await request.response.close();
-  }
-
-  Future<void> _empty(HttpRequest request, int status) async {
-    request.response.statusCode = status;
     await request.response.close();
   }
 }
