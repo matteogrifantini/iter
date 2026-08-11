@@ -264,6 +264,15 @@ void main() {
       };
 
       expect(ids.length, 16);
+      const allowedProviderHosts = <String>{
+        'www.flytap.com',
+        'www.ryanair.com',
+        'www.iberia.com',
+        'www.vueling.com',
+        'www.booking.com',
+        'www.hotels.com',
+        'www.expedia.com',
+      };
       for (final fixture in <OperationalTripFixture>[porto, roma]) {
         for (final place in fixture.placeCatalog) {
           expect(place.latitude, inInclusiveRange(-90, 90));
@@ -272,9 +281,73 @@ void main() {
         for (final option in [...fixture.flights, ...fixture.hotels]) {
           expect(option.priceCents, greaterThan(0));
           expect(option.providerUrl.scheme, 'https');
-          expect(option.providerUrl.host, isNotEmpty);
+          expect(allowedProviderHosts, contains(option.providerUrl.host));
         }
       }
     },
   );
+
+  test(
+    'flight duration matches deterministic departure and arrival instants',
+    () {
+      final flights = ChatFirstDemoData.operationalFixtureFor('porto').flights;
+
+      for (final flight in flights) {
+        expect(
+          flight.arrivalAt.difference(flight.departureAt).inMinutes,
+          flight.durationMinutes,
+          reason: flight.id,
+        );
+      }
+    },
+  );
+
+  test('Porto hotel totals match the single-night itinerary', () {
+    final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+
+    expect(fixture.snapshot.dates, '17–18 ottobre 2026');
+    expect(fixture.snapshot.durationLabel, '2 giorni');
+    for (final hotel in fixture.hotels) {
+      expect(hotel.nights, 1, reason: hotel.id);
+      expect(
+        hotel.priceCents,
+        hotel.nightlyPriceCents * hotel.nights,
+        reason: hotel.id,
+      );
+    }
+  });
+
+  test(
+    'every itinerary stop links to matching destination catalogue details',
+    () {
+      for (final destinationId in <String>['porto', 'roma']) {
+        final fixture = ChatFirstDemoData.operationalFixtureFor(destinationId);
+        final catalogById = <String, OperationalPlaceFixture>{
+          for (final place in fixture.placeCatalog) place.id: place,
+        };
+
+        for (final item in fixture.snapshot.days.expand((day) => day.items)) {
+          final details = item.place;
+          expect(details, isNotNull, reason: item.id);
+          final catalogPlace = catalogById[details!.id];
+          expect(catalogPlace, isNotNull, reason: item.id);
+          expect(details.title, catalogPlace!.name, reason: item.id);
+          expect(
+            details.description,
+            catalogPlace.description,
+            reason: item.id,
+          );
+          expect(catalogPlace.latitude, inInclusiveRange(-90, 90));
+          expect(catalogPlace.longitude, inInclusiveRange(-180, 180));
+        }
+      }
+    },
+  );
+
+  test('operational flight and hotel lists reject mutation', () {
+    final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+
+    expect(fixture.flights.clear, throwsUnsupportedError);
+    expect(fixture.hotels.clear, throwsUnsupportedError);
+  });
 }

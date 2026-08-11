@@ -32,15 +32,17 @@ const String kFreeTalkProposalId = 'free-talk-proposal';
 /// separate from live providers: prices are EUR cents and provider links are
 /// display-only demo links.
 class OperationalTripFixture {
-  const OperationalTripFixture({
+  OperationalTripFixture({
     required this.destinationId,
     required this.snapshot,
     required this.media,
-    required this.placeCatalog,
-    required this.flights,
-    required this.hotels,
+    required List<OperationalPlaceFixture> placeCatalog,
+    required List<FlightFixture> flights,
+    required List<HotelFixture> hotels,
     required this.quotedAt,
-  });
+  }) : placeCatalog = List<OperationalPlaceFixture>.unmodifiable(placeCatalog),
+       flights = List<FlightFixture>.unmodifiable(flights),
+       hotels = List<HotelFixture>.unmodifiable(hotels);
 
   final String destinationId;
   final TripSnapshot snapshot;
@@ -122,6 +124,7 @@ class HotelFixture extends OperationalPurchaseFixture {
     required this.name,
     required this.zone,
     required this.nights,
+    required this.nightlyPriceCents,
     required this.conditions,
     required this.averageWalkMinutes,
     required this.atmosphere,
@@ -130,6 +133,7 @@ class HotelFixture extends OperationalPurchaseFixture {
   final String name;
   final String zone;
   final int nights;
+  final int nightlyPriceCents;
   final String conditions;
   final int averageWalkMinutes;
   final String atmosphere;
@@ -817,6 +821,8 @@ abstract final class ChatFirstDemoData {
                 place: PlanPlaceDetails(
                   id: 'porto-livraria-lello',
                   title: 'Livraria Lello',
+                  description:
+                      'Scalone in legno e scaffali Liberty nel centro di Porto.',
                 ),
                 locked: false,
               ),
@@ -826,6 +832,11 @@ abstract final class ChatFirstDemoData {
                 category: 'Panorama',
                 startTime: '12:00',
                 durationMinutes: 60,
+                place: PlanPlaceDetails(
+                  id: 'porto-clerigos',
+                  title: 'Torre dos Clérigos',
+                  description: 'Torre barocca con vista compatta sulla città.',
+                ),
                 locked: false,
               ),
             ],
@@ -842,6 +853,12 @@ abstract final class ChatFirstDemoData {
                 category: 'Quartiere',
                 startTime: '10:30',
                 durationMinutes: 120,
+                place: PlanPlaceDetails(
+                  id: 'porto-ribeira',
+                  title: 'Ribeira',
+                  description:
+                      'Rive del Douro per una passeggiata senza fretta.',
+                ),
                 locked: false,
               ),
               TripItemSnapshot(
@@ -850,6 +867,11 @@ abstract final class ChatFirstDemoData {
                 category: 'Giardini',
                 startTime: '16:00',
                 durationMinutes: 90,
+                place: PlanPlaceDetails(
+                  id: 'porto-palacio-cristal',
+                  title: 'Jardins do Palácio de Cristal',
+                  description: 'Verde, pavoni e viste sul Douro.',
+                ),
                 locked: false,
               ),
             ],
@@ -905,7 +927,7 @@ abstract final class ChatFirstDemoData {
           departureAirport: 'FCO',
           arrivalAirport: 'OPO',
           departureAt: DateTime.utc(2026, 10, 17, 7, 15),
-          arrivalAt: DateTime.utc(2026, 10, 17, 9, 20),
+          arrivalAt: DateTime.utc(2026, 10, 17, 10, 20),
           durationMinutes: 185,
           stops: 0,
           baggage: 'Bagaglio a mano 10 kg',
@@ -919,7 +941,7 @@ abstract final class ChatFirstDemoData {
           departureAirport: 'FCO',
           arrivalAirport: 'OPO',
           departureAt: DateTime.utc(2026, 10, 17, 6, 20),
-          arrivalAt: DateTime.utc(2026, 10, 17, 8, 25),
+          arrivalAt: DateTime.utc(2026, 10, 17, 9, 25),
           durationMinutes: 185,
           stops: 0,
           baggage: 'Zaino piccolo incluso',
@@ -962,7 +984,8 @@ abstract final class ChatFirstDemoData {
           tradeoff: 'Design e vista sul fiume, prezzo più alto.',
           name: 'Torel Avantgarde',
           zone: 'Cedofeita',
-          nights: 2,
+          nights: 1,
+          nightlyPriceCents: 48200,
           conditions: 'Cancellazione gratuita fino a 7 giorni prima',
           averageWalkMinutes: 18,
           atmosphere: 'Boutique creativo',
@@ -975,7 +998,8 @@ abstract final class ChatFirstDemoData {
           tradeoff: 'Essenziale e centrale, meno atmosfera.',
           name: 'Moov Hotel Porto Centro',
           zone: 'Sé',
-          nights: 2,
+          nights: 1,
+          nightlyPriceCents: 23600,
           conditions: 'Pagamento in struttura',
           averageWalkMinutes: 13,
           atmosphere: 'Semplice e pratico',
@@ -988,7 +1012,8 @@ abstract final class ChatFirstDemoData {
           tradeoff: 'Camere compatte, posizione molto comoda.',
           name: 'YOTEL Porto',
           zone: 'Trindade',
-          nights: 2,
+          nights: 1,
+          nightlyPriceCents: 31800,
           conditions: 'Non rimborsabile',
           averageWalkMinutes: 15,
           atmosphere: 'Contemporaneo',
@@ -1001,7 +1026,8 @@ abstract final class ChatFirstDemoData {
           tradeoff: 'Sul fiume, più affollato la sera.',
           name: 'Eurostars Porto Douro',
           zone: 'Ribeira',
-          nights: 2,
+          nights: 1,
+          nightlyPriceCents: 39600,
           conditions: 'Cancellazione gratuita fino a 3 giorni prima',
           averageWalkMinutes: 8,
           atmosphere: 'Classico sul Douro',
@@ -1042,6 +1068,11 @@ abstract final class ChatFirstDemoData {
                   category: 'Archeologia',
                   startTime: '10:00',
                   durationMinutes: 120,
+                  place: PlanPlaceDetails(
+                    id: 'roma-foro-romano',
+                    title: 'Foro Romano',
+                    description: 'Il cuore archeologico della Roma antica.',
+                  ),
                   locked: true,
                 ),
               ],
@@ -1058,6 +1089,11 @@ abstract final class ChatFirstDemoData {
                   category: 'Verde',
                   startTime: '10:30',
                   durationMinutes: 120,
+                  place: PlanPlaceDetails(
+                    id: 'roma-villa-borghese',
+                    title: 'Villa Borghese',
+                    description: 'Pausa verde tra museo e belvedere.',
+                  ),
                   locked: false,
                 ),
               ],
