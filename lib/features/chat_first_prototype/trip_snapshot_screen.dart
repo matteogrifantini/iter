@@ -130,12 +130,8 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
           snapshot,
         );
         final media = snapshot.destinationMedia ?? fixture?.media;
-        final globalActionsScrollReserve =
-            _globalPlanActionsHeight +
-            _globalPlanActionsBottomSpacing +
-            MediaQuery.paddingOf(context).bottom +
-            _planContentBottomSpacing +
-            (kMinInteractiveDimension / 2);
+        const globalActionsScrollReserve =
+            _planContentBottomSpacing + (kMinInteractiveDimension / 2);
         return Scaffold(
           appBar: AppBar(
             title: Semantics(
@@ -199,6 +195,9 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
                     const SizedBox(height: 28),
                     PlanUnplacedItems(
                       items: snapshot.unplacedItems,
+                      canMove: buildPlanMoveTargets(
+                        snapshot: snapshot,
+                      ).isNotEmpty,
                       onAction: (item, action) => _handleTimelineAction(
                         snapshot: snapshot,
                         item: item,

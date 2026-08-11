@@ -141,10 +141,12 @@ class PlanUnplacedItems extends StatelessWidget {
   const PlanUnplacedItems({
     super.key,
     required this.items,
+    required this.canMove,
     required this.onAction,
   });
 
   final List<TripItemSnapshot> items;
+  final bool canMove;
   final void Function(TripItemSnapshot item, PlanTimelineAction action)
   onAction;
 
@@ -183,17 +185,17 @@ class PlanUnplacedItems extends StatelessWidget {
                   key: Key('plan-unplaced-menu-${item.id}'),
                   tooltip: 'Azioni per ${item.title}',
                   onSelected: (action) => onAction(item, action),
-                  itemBuilder: (_) =>
-                      const <PopupMenuEntry<PlanTimelineAction>>[
-                        PopupMenuItem(
-                          value: PlanTimelineAction.move,
-                          child: Text('Sposta'),
-                        ),
-                        PopupMenuItem(
-                          value: PlanTimelineAction.remove,
-                          child: Text('Rimuovi'),
-                        ),
-                      ],
+                  itemBuilder: (_) => <PopupMenuEntry<PlanTimelineAction>>[
+                    if (canMove)
+                      const PopupMenuItem(
+                        value: PlanTimelineAction.move,
+                        child: Text('Sposta'),
+                      ),
+                    const PopupMenuItem(
+                      value: PlanTimelineAction.remove,
+                      child: Text('Rimuovi'),
+                    ),
+                  ],
                 ),
               ),
           ],
@@ -221,7 +223,10 @@ class _TimelineEmptyState extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          Text('Da sistemare', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Giornata vuota',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 4),
           Text(
             'Le tappe da collocare compariranno qui.',

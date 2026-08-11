@@ -264,15 +264,17 @@ class _PlanMoveSheetState extends State<_PlanMoveSheet> {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: () {
-                  final selected = _options[_selected];
-                  Navigator.of(context).pop(
-                    PlanMoveSelection(
-                      targetDayId: selected.dayId,
-                      targetIndex: selected.targetIndex,
-                    ),
-                  );
-                },
+                onPressed: _options.isEmpty
+                    ? null
+                    : () {
+                        final selected = _options[_selected];
+                        Navigator.of(context).pop(
+                          PlanMoveSelection(
+                            targetDayId: selected.dayId,
+                            targetIndex: selected.targetIndex,
+                          ),
+                        );
+                      },
                 child: const Text('Rivedi modifica'),
               ),
             ),

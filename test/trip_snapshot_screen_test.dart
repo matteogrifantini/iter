@@ -694,6 +694,97 @@ void main() {
     );
 
     testWidgets(
+      'keeps unplaced-only plans removable without offering an invalid move',
+      (tester) async {
+        final controller = _controllerFor(_unplacedOnlySnapshot());
+        addTearDown(controller.dispose);
+        await _pumpPlan(tester, controller: controller);
+
+        final menu = find.byKey(const Key('plan-unplaced-menu-later-stop'));
+        await tester.tap(menu);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Sposta'), findsNothing);
+        expect(find.text('Rimuovi'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.text('Rimuovi'));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('plan-patch-sheet')), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'reserves normal final spacing and counts the gesture inset once',
+      (tester) async {
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final controller = _controllerFor(_romaSnapshotWithUnplaced());
+        addTearDown(controller.dispose);
+        const size = Size(390, 844);
+        await tester.binding.setSurfaceSize(size);
+
+        Future<double> pumpWithInset(double bottomInset) async {
+          await tester.pumpWidget(
+            MaterialApp(
+              key: ValueKey<double>(bottomInset),
+              builder: (context, child) => MediaQuery(
+                data: MediaQueryData(
+                  size: size,
+                  padding: EdgeInsets.only(bottom: bottomInset),
+                  viewPadding: EdgeInsets.only(bottom: bottomInset),
+                ),
+                child: child!,
+              ),
+              home: TripSnapshotScreen(
+                controller: controller,
+                conversationId: _conversationId,
+              ),
+            ),
+          );
+          await tester.pump();
+          final scroll = tester.state<ScrollableState>(
+            _scrollableInside(const Key('plan-scroll')),
+          );
+          scroll.position.jumpTo(scroll.position.maxScrollExtent);
+          await tester.pump();
+          expect(
+            find
+                .byKey(const Key('plan-unplaced-menu-later-stop'))
+                .hitTestable(),
+            findsOneWidget,
+          );
+          final gap =
+              tester
+                  .getTopLeft(find.byKey(const Key('plan-global-actions')))
+                  .dy -
+              tester
+                  .getBottomLeft(find.byKey(const Key('plan-unplaced-section')))
+                  .dy;
+          expect(gap, inInclusiveRange(24, 48));
+          return scroll.position.maxScrollExtent;
+        }
+
+        final withoutInset = await pumpWithInset(0);
+        final withInset = await pumpWithInset(34);
+        expect(withInset - withoutInset, closeTo(26, 0.1));
+      },
+    );
+
+    testWidgets('labels an empty selected day as Giornata vuota', (
+      tester,
+    ) async {
+      final controller = _controllerFor(_snapshotWithEmptyDay());
+      addTearDown(controller.dispose);
+      await _pumpPlan(tester, controller: controller);
+
+      await tester.tap(find.text('Giorno vuoto'));
+      await tester.pump();
+
+      expect(find.text('Giornata vuota'), findsOneWidget);
+      expect(find.text('Da sistemare'), findsNothing);
+    });
+
+    testWidgets(
       'cancels previews and requires a fresh confirmation after rebase',
       (tester) async {
         final controller = _controllerFor(
@@ -1380,6 +1471,40 @@ TripSnapshot _snapshotWithEmptyDay() => TripSnapshot(
     ),
   ],
 );
+
+TripSnapshot _unplacedOnlySnapshot() => TripSnapshot(
+  destinationTitle: 'Roma',
+  country: 'Italia',
+  durationLabel: '1 giorno',
+  statusLabel: 'In viaggio',
+  dates: '14 ottobre 2026',
+  transport: 'A piedi',
+  stay: 'Centro',
+  unplacedItems: const <TripItemSnapshot>[
+    TripItemSnapshot(
+      id: 'later-stop',
+      title: 'Da decidere',
+      category: 'Passeggiata',
+      durationMinutes: 45,
+      locked: false,
+    ),
+  ],
+);
+
+TripSnapshot _romaSnapshotWithUnplaced() {
+  final snapshot = ChatFirstDemoData.operationalFixtureFor('roma').snapshot;
+  return snapshot.copyWith(
+    unplacedItems: const <TripItemSnapshot>[
+      TripItemSnapshot(
+        id: 'later-stop',
+        title: 'Da decidere',
+        category: 'Passeggiata',
+        durationMinutes: 45,
+        locked: false,
+      ),
+    ],
+  );
+}
 
 TripSnapshot _purchasedRomaSnapshot() {
   final snapshot = ChatFirstDemoData.operationalFixtureFor('roma').snapshot;
