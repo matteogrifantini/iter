@@ -39,6 +39,23 @@ Coverr license: https://coverr.co/license
 The JPG files under `assets/images/travel/` are local still frames extracted
 from these same demo clips.
 
+## Porto — Livraria Lello local fixture
+
+- Original page: https://commons.wikimedia.org/wiki/File:Porto_-_Livraria_Lello.jpg
+- Original JPEG: https://upload.wikimedia.org/wikipedia/commons/2/2a/Porto_-_Livraria_Lello.jpg
+- Author: JaimeMSilva (own work); accessed 2026-08-11.
+- License: [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+- `assets/images/travel/porto_livraria_lello.jpg` — local hero/photo asset,
+  recompressed from the 640 × 425 original as JPEG (quality 3) without a crop;
+  103,766 bytes; SHA-256
+  `0b156d74895ae27ecae57eed9847e45b054de19db0fa8ff4e8adc2a14fc19401`.
+- `vertical/porto_livraria_lello_reel.mp4` — 4.0-second, silent, 1080 × 1920
+  H.264 demo edit made solely from that local photo: calm center pan/zoom,
+  portrait crop, no live footage and no AI-generated material; 992,472 bytes;
+  SHA-256 `ca44ccfa459405d5cd2123d246b755d36413604fd72f6eac3cea02909148ff73`.
+  This adapted reel is also distributed under CC BY-SA 4.0 with the attribution
+  above; it does not imply JaimeMSilva endorses Iter.
+
 ## Transport logos
 
 The prototype uses low-resolution company marks downloaded from Wikimedia

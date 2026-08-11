@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:iter/features/chat_first_prototype/chat_first_data.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_models.dart';
 
 void main() {
@@ -210,4 +211,70 @@ void main() {
       isEmpty,
     );
   });
+
+  test(
+    'Porto operational fixture has local attributed media and complete offers',
+    () {
+      final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+
+      expect(fixture.snapshot.days, hasLength(2));
+      expect(
+        fixture.placeCatalog.map((place) => place.name),
+        contains('Livraria Lello'),
+      );
+      expect(
+        fixture.media.imageUrl,
+        'assets/images/travel/porto_livraria_lello.jpg',
+      );
+      expect(
+        fixture.media.reelUrl,
+        'assets/videos/vertical/porto_livraria_lello_reel.mp4',
+      );
+      expect(fixture.media.photoAttribution!.author, 'JaimeMSilva');
+      expect(
+        fixture.media.photoAttribution!.sourceUrl,
+        startsWith('https://commons.wikimedia.org/'),
+      );
+      expect(
+        fixture.media.reelAttribution!.author,
+        'JaimeMSilva / Iter demo edit',
+      );
+      expect(
+        fixture.media.reelAttribution!.sourceUrl,
+        startsWith('https://commons.wikimedia.org/'),
+      );
+      expect(fixture.flights, hasLength(4));
+      expect(fixture.hotels, hasLength(4));
+      expect(fixture.quotedAt, DateTime.utc(2026, 8, 11, 9));
+    },
+  );
+
+  test(
+    'operational fixture IDs, coordinates, costs and provider URIs are valid',
+    () {
+      final porto = ChatFirstDemoData.operationalFixtureFor('porto');
+      final roma = ChatFirstDemoData.operationalFixtureFor('roma');
+      final ids = <String>{
+        ...porto.placeCatalog.map((place) => place.id),
+        ...porto.flights.map((flight) => flight.id),
+        ...porto.hotels.map((hotel) => hotel.id),
+        ...roma.placeCatalog.map((place) => place.id),
+        ...roma.flights.map((flight) => flight.id),
+        ...roma.hotels.map((hotel) => hotel.id),
+      };
+
+      expect(ids.length, 16);
+      for (final fixture in <OperationalTripFixture>[porto, roma]) {
+        for (final place in fixture.placeCatalog) {
+          expect(place.latitude, inInclusiveRange(-90, 90));
+          expect(place.longitude, inInclusiveRange(-180, 180));
+        }
+        for (final option in [...fixture.flights, ...fixture.hotels]) {
+          expect(option.priceCents, greaterThan(0));
+          expect(option.providerUrl.scheme, 'https');
+          expect(option.providerUrl.host, isNotEmpty);
+        }
+      }
+    },
+  );
 }

@@ -28,6 +28,113 @@ const String kFreeTalkSummaryId = 'free-talk-summary';
 /// Stable id of the first destination-bearing proposal, unlocked by confirmation.
 const String kFreeTalkProposalId = 'free-talk-proposal';
 
+/// Typed, deterministic content for the operational plan prototype. It stays
+/// separate from live providers: prices are EUR cents and provider links are
+/// display-only demo links.
+class OperationalTripFixture {
+  const OperationalTripFixture({
+    required this.destinationId,
+    required this.snapshot,
+    required this.media,
+    required this.placeCatalog,
+    required this.flights,
+    required this.hotels,
+    required this.quotedAt,
+  });
+
+  final String destinationId;
+  final TripSnapshot snapshot;
+  final PlanMedia media;
+  final List<OperationalPlaceFixture> placeCatalog;
+  final List<FlightFixture> flights;
+  final List<HotelFixture> hotels;
+  final DateTime quotedAt;
+}
+
+class OperationalPlaceFixture {
+  const OperationalPlaceFixture({
+    required this.id,
+    required this.destinationId,
+    required this.name,
+    required this.category,
+    required this.latitude,
+    required this.longitude,
+    required this.description,
+  });
+
+  final String id;
+  final String destinationId;
+  final String name;
+  final String category;
+  final double latitude;
+  final double longitude;
+  final String description;
+}
+
+abstract class OperationalPurchaseFixture {
+  const OperationalPurchaseFixture({
+    required this.id,
+    required this.priceCents,
+    required this.provider,
+    required this.providerUrl,
+    required this.tradeoff,
+  });
+
+  final String id;
+  final int priceCents;
+  final String provider;
+  final Uri providerUrl;
+  final String tradeoff;
+}
+
+class FlightFixture extends OperationalPurchaseFixture {
+  const FlightFixture({
+    required super.id,
+    required super.priceCents,
+    required super.provider,
+    required super.providerUrl,
+    required super.tradeoff,
+    required this.departureAirport,
+    required this.arrivalAirport,
+    required this.departureAt,
+    required this.arrivalAt,
+    required this.durationMinutes,
+    required this.stops,
+    required this.baggage,
+  });
+
+  final String departureAirport;
+  final String arrivalAirport;
+  final DateTime departureAt;
+  final DateTime arrivalAt;
+  final int durationMinutes;
+  final int stops;
+  final String baggage;
+}
+
+class HotelFixture extends OperationalPurchaseFixture {
+  const HotelFixture({
+    required super.id,
+    required super.priceCents,
+    required super.provider,
+    required super.providerUrl,
+    required super.tradeoff,
+    required this.name,
+    required this.zone,
+    required this.nights,
+    required this.conditions,
+    required this.averageWalkMinutes,
+    required this.atmosphere,
+  });
+
+  final String name;
+  final String zone;
+  final int nights;
+  final String conditions;
+  final int averageWalkMinutes;
+  final String atmosphere;
+}
+
 /// A canned exchange used to advance a thread deterministically. Sending a
 /// message (typed or via a choice) appends the traveler text plus [assistant].
 class ScriptedBeat {
@@ -640,6 +747,365 @@ class FreeTalkThread extends IntakeThread {
 
 /// Deterministic demo content for the chat-first prototype.
 abstract final class ChatFirstDemoData {
+  static final DateTime _fixtureQuotedAt = DateTime.utc(2026, 8, 11, 9);
+
+  /// Returns the complete local fixture for a supported operational destination.
+  static OperationalTripFixture operationalFixtureFor(String destinationId) {
+    switch (destinationId) {
+      case 'porto':
+        return _portoOperationalFixture();
+      case 'roma':
+        return _romaOperationalFixture();
+      default:
+        throw ArgumentError.value(destinationId, 'destinationId');
+    }
+  }
+
+  /// Place catalogue scoped to one destination; no provider or runtime fetch.
+  static List<OperationalPlaceFixture> placeCatalogFor(String destinationId) =>
+      List<OperationalPlaceFixture>.unmodifiable(
+        operationalFixtureFor(destinationId).placeCatalog,
+      );
+
+  static OperationalTripFixture _portoOperationalFixture() {
+    final media = PlanMedia(
+      imageUrl: 'assets/images/travel/porto_livraria_lello.jpg',
+      reelUrl: 'assets/videos/vertical/porto_livraria_lello_reel.mp4',
+      photoAttribution: const MediaAttribution(
+        author: 'JaimeMSilva',
+        sourceUrl:
+            'https://commons.wikimedia.org/wiki/File:Porto_-_Livraria_Lello.jpg',
+      ),
+      reelAttribution: const MediaAttribution(
+        author: 'JaimeMSilva / Iter demo edit',
+        sourceUrl:
+            'https://commons.wikimedia.org/wiki/File:Porto_-_Livraria_Lello.jpg',
+      ),
+    );
+    return OperationalTripFixture(
+      destinationId: 'porto',
+      media: media,
+      quotedAt: _fixtureQuotedAt,
+      snapshot: TripSnapshot(
+        destinationTitle: 'Porto',
+        country: 'Portogallo',
+        durationLabel: '2 giorni',
+        statusLabel: 'In pianificazione',
+        dates: '17–18 ottobre 2026',
+        transport: 'Volo da Roma',
+        stay: 'Cedofeita',
+        destinationMedia: media,
+        placeLabels: const <String>[
+          'Livraria Lello',
+          'Torre dos Clérigos',
+          'Ribeira',
+          'Jardins do Palácio de Cristal',
+        ],
+        days: <TripDaySnapshot>[
+          TripDaySnapshot(
+            id: 'porto-day-1',
+            date: DateTime.utc(2026, 10, 17),
+            label: 'Giorno 1',
+            theme: 'Libri e centro storico',
+            items: const <TripItemSnapshot>[
+              TripItemSnapshot(
+                id: 'porto-livraria-lello-stop',
+                title: 'Livraria Lello',
+                category: 'Libreria storica',
+                startTime: '10:00',
+                durationMinutes: 75,
+                place: PlanPlaceDetails(
+                  id: 'porto-livraria-lello',
+                  title: 'Livraria Lello',
+                ),
+                locked: false,
+              ),
+              TripItemSnapshot(
+                id: 'porto-clerigos-stop',
+                title: 'Torre dos Clérigos',
+                category: 'Panorama',
+                startTime: '12:00',
+                durationMinutes: 60,
+                locked: false,
+              ),
+            ],
+          ),
+          TripDaySnapshot(
+            id: 'porto-day-2',
+            date: DateTime.utc(2026, 10, 18),
+            label: 'Giorno 2',
+            theme: 'Fiume e giardini',
+            items: const <TripItemSnapshot>[
+              TripItemSnapshot(
+                id: 'porto-ribeira-stop',
+                title: 'Ribeira',
+                category: 'Quartiere',
+                startTime: '10:30',
+                durationMinutes: 120,
+                locked: false,
+              ),
+              TripItemSnapshot(
+                id: 'porto-cristal-stop',
+                title: 'Jardins do Palácio de Cristal',
+                category: 'Giardini',
+                startTime: '16:00',
+                durationMinutes: 90,
+                locked: false,
+              ),
+            ],
+          ),
+        ],
+      ),
+      placeCatalog: const <OperationalPlaceFixture>[
+        OperationalPlaceFixture(
+          id: 'porto-livraria-lello',
+          destinationId: 'porto',
+          name: 'Livraria Lello',
+          category: 'Libreria storica',
+          latitude: 41.146905,
+          longitude: -8.614732,
+          description:
+              'Scalone in legno e scaffali Liberty nel centro di Porto.',
+        ),
+        OperationalPlaceFixture(
+          id: 'porto-clerigos',
+          destinationId: 'porto',
+          name: 'Torre dos Clérigos',
+          category: 'Panorama',
+          latitude: 41.145837,
+          longitude: -8.614032,
+          description: 'Torre barocca con vista compatta sulla città.',
+        ),
+        OperationalPlaceFixture(
+          id: 'porto-ribeira',
+          destinationId: 'porto',
+          name: 'Ribeira',
+          category: 'Quartiere',
+          latitude: 41.140613,
+          longitude: -8.611019,
+          description: 'Rive del Douro per una passeggiata senza fretta.',
+        ),
+        OperationalPlaceFixture(
+          id: 'porto-palacio-cristal',
+          destinationId: 'porto',
+          name: 'Jardins do Palácio de Cristal',
+          category: 'Giardini',
+          latitude: 41.148369,
+          longitude: -8.626047,
+          description: 'Verde, pavoni e viste sul Douro.',
+        ),
+      ],
+      flights: <FlightFixture>[
+        FlightFixture(
+          id: 'porto-flight-tap-direct',
+          priceCents: 18900,
+          provider: 'TAP Air Portugal',
+          providerUrl: Uri.parse('https://www.flytap.com/'),
+          tradeoff: 'Diretto e comodo, ma non il più economico.',
+          departureAirport: 'FCO',
+          arrivalAirport: 'OPO',
+          departureAt: DateTime.utc(2026, 10, 17, 7, 15),
+          arrivalAt: DateTime.utc(2026, 10, 17, 9, 20),
+          durationMinutes: 185,
+          stops: 0,
+          baggage: 'Bagaglio a mano 10 kg',
+        ),
+        FlightFixture(
+          id: 'porto-flight-ryanair-direct',
+          priceCents: 11900,
+          provider: 'Ryanair',
+          providerUrl: Uri.parse('https://www.ryanair.com/'),
+          tradeoff: 'Prezzo migliore; orario molto presto.',
+          departureAirport: 'FCO',
+          arrivalAirport: 'OPO',
+          departureAt: DateTime.utc(2026, 10, 17, 6, 20),
+          arrivalAt: DateTime.utc(2026, 10, 17, 8, 25),
+          durationMinutes: 185,
+          stops: 0,
+          baggage: 'Zaino piccolo incluso',
+        ),
+        FlightFixture(
+          id: 'porto-flight-iberia-mad',
+          priceCents: 15600,
+          provider: 'Iberia',
+          providerUrl: Uri.parse('https://www.iberia.com/'),
+          tradeoff: 'Parte più tardi, con scalo a Madrid.',
+          departureAirport: 'FCO',
+          arrivalAirport: 'OPO',
+          departureAt: DateTime.utc(2026, 10, 17, 9, 35),
+          arrivalAt: DateTime.utc(2026, 10, 17, 14, 10),
+          durationMinutes: 275,
+          stops: 1,
+          baggage: 'Bagaglio a mano 10 kg',
+        ),
+        FlightFixture(
+          id: 'porto-flight-vueling-bcn',
+          priceCents: 14300,
+          provider: 'Vueling',
+          providerUrl: Uri.parse('https://www.vueling.com/'),
+          tradeoff: 'Buon compromesso di prezzo, con cambio a Barcellona.',
+          departureAirport: 'FCO',
+          arrivalAirport: 'OPO',
+          departureAt: DateTime.utc(2026, 10, 17, 8, 50),
+          arrivalAt: DateTime.utc(2026, 10, 17, 13, 35),
+          durationMinutes: 285,
+          stops: 1,
+          baggage: 'Bagaglio a mano 10 kg',
+        ),
+      ],
+      hotels: <HotelFixture>[
+        HotelFixture(
+          id: 'porto-hotel-torel-avantgarde',
+          priceCents: 48200,
+          provider: 'Booking.com',
+          providerUrl: Uri.parse('https://www.booking.com/'),
+          tradeoff: 'Design e vista sul fiume, prezzo più alto.',
+          name: 'Torel Avantgarde',
+          zone: 'Cedofeita',
+          nights: 2,
+          conditions: 'Cancellazione gratuita fino a 7 giorni prima',
+          averageWalkMinutes: 18,
+          atmosphere: 'Boutique creativo',
+        ),
+        HotelFixture(
+          id: 'porto-hotel-moov-centro',
+          priceCents: 23600,
+          provider: 'Booking.com',
+          providerUrl: Uri.parse('https://www.booking.com/'),
+          tradeoff: 'Essenziale e centrale, meno atmosfera.',
+          name: 'Moov Hotel Porto Centro',
+          zone: 'Sé',
+          nights: 2,
+          conditions: 'Pagamento in struttura',
+          averageWalkMinutes: 13,
+          atmosphere: 'Semplice e pratico',
+        ),
+        HotelFixture(
+          id: 'porto-hotel-yotel',
+          priceCents: 31800,
+          provider: 'Hotels.com',
+          providerUrl: Uri.parse('https://www.hotels.com/'),
+          tradeoff: 'Camere compatte, posizione molto comoda.',
+          name: 'YOTEL Porto',
+          zone: 'Trindade',
+          nights: 2,
+          conditions: 'Non rimborsabile',
+          averageWalkMinutes: 15,
+          atmosphere: 'Contemporaneo',
+        ),
+        HotelFixture(
+          id: 'porto-hotel-ribeira',
+          priceCents: 39600,
+          provider: 'Expedia',
+          providerUrl: Uri.parse('https://www.expedia.com/'),
+          tradeoff: 'Sul fiume, più affollato la sera.',
+          name: 'Eurostars Porto Douro',
+          zone: 'Ribeira',
+          nights: 2,
+          conditions: 'Cancellazione gratuita fino a 3 giorni prima',
+          averageWalkMinutes: 8,
+          atmosphere: 'Classico sul Douro',
+        ),
+      ],
+    );
+  }
+
+  static OperationalTripFixture _romaOperationalFixture() =>
+      OperationalTripFixture(
+        destinationId: 'roma',
+        quotedAt: _fixtureQuotedAt,
+        media: const PlanMedia(imageUrl: 'assets/images/travel/rome_vespa.jpg'),
+        snapshot: TripSnapshot(
+          destinationTitle: 'Roma',
+          country: 'Italia',
+          durationLabel: '2 giorni',
+          statusLabel: 'In viaggio',
+          dates: '14–15 ottobre 2026',
+          transport: 'A piedi e metro',
+          stay: 'Trastevere',
+          placeLabels: const <String>[
+            'Foro Romano',
+            'Villa Borghese',
+            'Campo de’ Fiori',
+            'Trastevere',
+          ],
+          days: <TripDaySnapshot>[
+            TripDaySnapshot(
+              id: 'roma-day-1',
+              date: DateTime.utc(2026, 10, 14),
+              label: 'Giorno 1',
+              theme: 'Fori e piazze',
+              items: const <TripItemSnapshot>[
+                TripItemSnapshot(
+                  id: 'roma-foro-stop',
+                  title: 'Foro Romano',
+                  category: 'Archeologia',
+                  startTime: '10:00',
+                  durationMinutes: 120,
+                  locked: true,
+                ),
+              ],
+            ),
+            TripDaySnapshot(
+              id: 'roma-day-2',
+              date: DateTime.utc(2026, 10, 15),
+              label: 'Giorno 2',
+              theme: 'Verde e tavola',
+              items: const <TripItemSnapshot>[
+                TripItemSnapshot(
+                  id: 'roma-borghese-stop',
+                  title: 'Villa Borghese',
+                  category: 'Verde',
+                  startTime: '10:30',
+                  durationMinutes: 120,
+                  locked: false,
+                ),
+              ],
+            ),
+          ],
+        ),
+        placeCatalog: const <OperationalPlaceFixture>[
+          OperationalPlaceFixture(
+            id: 'roma-foro-romano',
+            destinationId: 'roma',
+            name: 'Foro Romano',
+            category: 'Archeologia',
+            latitude: 41.892462,
+            longitude: 12.485325,
+            description: 'Il cuore archeologico della Roma antica.',
+          ),
+          OperationalPlaceFixture(
+            id: 'roma-villa-borghese',
+            destinationId: 'roma',
+            name: 'Villa Borghese',
+            category: 'Verde',
+            latitude: 41.914181,
+            longitude: 12.492301,
+            description: 'Pausa verde tra museo e belvedere.',
+          ),
+          OperationalPlaceFixture(
+            id: 'roma-campo-fiori',
+            destinationId: 'roma',
+            name: 'Campo de’ Fiori',
+            category: 'Mercato',
+            latitude: 41.895822,
+            longitude: 12.472241,
+            description: 'Piazza viva per mercato e cena.',
+          ),
+          OperationalPlaceFixture(
+            id: 'roma-trastevere',
+            destinationId: 'roma',
+            name: 'Trastevere',
+            category: 'Quartiere',
+            latitude: 41.889727,
+            longitude: 12.470806,
+            description: 'Vicoli e tavole per la sera.',
+          ),
+        ],
+        flights: const <FlightFixture>[],
+        hotels: const <HotelFixture>[],
+      );
+
   static List<ChatThread> seedThreads() => List<ChatThread>.of(<ChatThread>[
     _planningPorto(),
     _activeRoma(),
