@@ -107,7 +107,8 @@ class _ChatFirstThreadScreenState extends State<ChatFirstThreadScreen> {
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final message = messages[index];
-                    final showDayDivider = index == 0 ||
+                    final showDayDivider =
+                        index == 0 ||
                         messages[index - 1].sentAt.day != message.sentAt.day;
                     final interactive =
                         messages.isNotEmpty && messages.last.choices.isNotEmpty;
@@ -115,8 +116,7 @@ class _ChatFirstThreadScreenState extends State<ChatFirstThreadScreen> {
                       message: message,
                       showDayDivider: showDayDivider,
                       avatar: summary.avatar,
-                      enabled:
-                          interactive && index == messages.length - 1,
+                      enabled: interactive && index == messages.length - 1,
                       onChoice: (choice) {
                         widget.controller.choose(
                           choice,
@@ -144,6 +144,14 @@ class _ChatFirstThreadScreenState extends State<ChatFirstThreadScreen> {
                   },
                 ),
               ),
+              if (widget.controller.placeComposerContext(widget.conversationId)
+                  case final place?)
+                _PlaceComposerContext(
+                  place: place,
+                  onClear: () => widget.controller.clearPlaceComposerContext(
+                    widget.conversationId,
+                  ),
+                ),
               _Composer(
                 controller: _composer,
                 onSend: _send,
@@ -183,9 +191,9 @@ class _ThreadTitle extends StatelessWidget {
                 summary.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 2),
               Text(
@@ -234,7 +242,9 @@ class _MessageRow extends StatelessWidget {
       return _SystemDivider(text: message.text);
     }
     final isIncoming = message.isIncoming;
-    final align = isIncoming ? CrossAxisAlignment.start : CrossAxisAlignment.end;
+    final align = isIncoming
+        ? CrossAxisAlignment.start
+        : CrossAxisAlignment.end;
 
     Widget body = Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -412,10 +422,9 @@ class _MessageContent extends StatelessWidget {
       case ChatMessageKind.choices:
         return Text(
           message.text,
-          style: Theme.of(context)
-              .textTheme
-              .bodyLarge
-              ?.copyWith(color: textColor),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyLarge?.copyWith(color: textColor),
         );
       case ChatMessageKind.media:
         return _MediaContent(message: message);
@@ -424,10 +433,7 @@ class _MessageContent extends StatelessWidget {
       case ChatMessageKind.tripSummary:
         final summary = message.summary;
         if (summary == null) return const SizedBox.shrink();
-        return _SummaryCard(
-          snapshot: summary,
-          text: message.text,
-        );
+        return _SummaryCard(snapshot: summary, text: message.text);
       case ChatMessageKind.operational:
         return _OperationalContent(message: message, isIncoming: isIncoming);
       case ChatMessageKind.planProposal:
@@ -554,9 +560,9 @@ class _OperationalContent extends StatelessWidget {
         Expanded(
           child: Text(
             message.text,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: textColor,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: textColor),
           ),
         ),
       ],
@@ -565,10 +571,7 @@ class _OperationalContent extends StatelessWidget {
 }
 
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({
-    required this.snapshot,
-    this.text = '',
-  });
+  const _SummaryCard({required this.snapshot, this.text = ''});
 
   final TripSnapshot snapshot;
   final String text;
@@ -603,8 +606,7 @@ class _SummaryCard extends StatelessWidget {
             children: <Widget>[
               Row(
                 children: <Widget>[
-                  Icon(Icons.route_outlined,
-                      size: 18, color: colors.primary),
+                  Icon(Icons.route_outlined, size: 18, color: colors.primary),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -619,9 +621,9 @@ class _SummaryCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 '${summary.durationLabel} · ${summary.statusLabel}',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
               ),
               if (summary.placeLabels.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 10),
@@ -630,8 +632,11 @@ class _SummaryCard extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 4),
                     child: Row(
                       children: <Widget>[
-                        Icon(Icons.check_circle_outline,
-                            size: 15, color: colors.primary),
+                        Icon(
+                          Icons.check_circle_outline,
+                          size: 15,
+                          color: colors.primary,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
@@ -703,9 +708,9 @@ class _PlaceCardContent extends StatelessWidget {
               ],
               Text(
                 card.name,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 4),
               Row(
@@ -723,10 +728,7 @@ class _PlaceCardContent extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              Text(
-                card.whyFits,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+              Text(card.whyFits, style: Theme.of(context).textTheme.bodyMedium),
               const SizedBox(height: 8),
               Row(
                 children: <Widget>[
@@ -769,19 +771,16 @@ class _TransportContent extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
               message.text,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: colors.onSurface,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: colors.onSurface),
             ),
           ),
         if (compare != null)
           for (final option in compare.options)
             Container(
               margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: colors.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(12),
@@ -803,11 +802,8 @@ class _TransportContent extends StatelessWidget {
                           option.label,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -816,9 +812,8 @@ class _TransportContent extends StatelessWidget {
                           option.durationLabel,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: colors.onSurfaceVariant,
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: colors.onSurfaceVariant),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -827,9 +822,8 @@ class _TransportContent extends StatelessWidget {
                           option.priceLabel,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                       ),
                     ],
@@ -894,9 +888,9 @@ class _StayZoneContent extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
               message.text,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: colors.onSurface,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: colors.onSurface),
             ),
           ),
         if (zone != null)
@@ -936,7 +930,7 @@ class _StayZoneContent extends StatelessWidget {
                     Expanded(
                       child: Text(
                         '${zone.averageWalkMinutes} min a piedi dalle tappe · '
-                            '${zone.whyFits}',
+                        '${zone.whyFits}',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
@@ -977,11 +971,7 @@ class _StayZoneContent extends StatelessWidget {
 /// explicit Accetta/Annulla actions. Once settled the actions become a status
 /// line and the decision is never re-openable.
 class _ProposalCard extends StatelessWidget {
-  const _ProposalCard({
-    required this.message,
-    this.onAccept,
-    this.onReject,
-  });
+  const _ProposalCard({required this.message, this.onAccept, this.onReject});
 
   final ChatMessage message;
   final VoidCallback? onAccept;
@@ -1002,9 +992,9 @@ class _ProposalCard extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
               message.text,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: colors.onSurface,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: colors.onSurface),
             ),
           ),
         Container(
@@ -1054,9 +1044,7 @@ class _ProposalCard extends StatelessWidget {
           Row(
             children: <Widget>[
               Icon(
-                accepted
-                    ? Icons.check_circle
-                    : Icons.cancel_outlined,
+                accepted ? Icons.check_circle : Icons.cancel_outlined,
                 size: 18,
                 color: accepted ? colors.tertiary : colors.onSurfaceVariant,
               ),
@@ -1098,9 +1086,9 @@ class _SystemDivider extends StatelessWidget {
           ),
           child: Text(
             text,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: colors.onSurfaceVariant,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(color: colors.onSurfaceVariant),
           ),
         ),
       ),
@@ -1133,6 +1121,57 @@ class _DayDivider extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlaceComposerContext extends StatelessWidget {
+  const _PlaceComposerContext({required this.place, required this.onClear});
+
+  final PlanPlaceDetails place;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      container: true,
+      label: 'Contesto luogo, ${place.title}',
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 48),
+        padding: const EdgeInsets.only(left: 16, right: 8),
+        decoration: BoxDecoration(
+          color: colors.secondaryContainer,
+          border: Border(top: BorderSide(color: colors.outlineVariant)),
+        ),
+        child: Row(
+          children: <Widget>[
+            Icon(
+              Icons.place_outlined,
+              size: 20,
+              color: colors.onSecondaryContainer,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Su ${place.title}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: colors.onSecondaryContainer,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Rimuovi contesto luogo',
+              onPressed: onClear,
+              color: colors.onSecondaryContainer,
+              icon: const Icon(Icons.close),
+            ),
+          ],
         ),
       ),
     );
@@ -1182,9 +1221,7 @@ class _Composer extends StatelessWidget {
                     controller: controller,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => onSend(),
-                    decoration: InputDecoration(
-                      hintText: 'Scrivi a Iter…',
-                    ),
+                    decoration: InputDecoration(hintText: 'Scrivi a Iter…'),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1278,8 +1315,11 @@ class _AttachmentPicker extends StatelessWidget {
           children: <Widget>[
             Row(
               children: <Widget>[
-                Icon(Icons.add_photo_alternate_outlined,
-                    color: colors.primary, size: 22),
+                Icon(
+                  Icons.add_photo_alternate_outlined,
+                  color: colors.primary,
+                  size: 22,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Invia una foto o un video',
@@ -1323,10 +1363,7 @@ class _AttachmentPicker extends StatelessWidget {
 }
 
 class _PickTile extends StatelessWidget {
-  const _PickTile({
-    required this.asset,
-    required this.isVideo,
-  });
+  const _PickTile({required this.asset, required this.isVideo});
 
   final String asset;
   final bool isVideo;
@@ -1338,9 +1375,9 @@ class _PickTile extends StatelessWidget {
       label: _humanAssetLabel(asset, isVideo: isVideo),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => Navigator.of(context).pop(
-          _PickedAsset(asset: asset, isVideo: isVideo),
-        ),
+        onTap: () => Navigator.of(
+          context,
+        ).pop(_PickedAsset(asset: asset, isVideo: isVideo)),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: SizedBox(

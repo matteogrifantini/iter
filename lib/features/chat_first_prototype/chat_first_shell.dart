@@ -5,7 +5,6 @@ import 'chat_first_controller.dart';
 import 'chat_first_data.dart';
 import 'chat_first_home_screen.dart';
 import 'chat_first_list_screen.dart';
-import 'chat_first_models.dart';
 import 'chat_first_profile_screen.dart';
 import 'chat_first_thread_screen.dart';
 import 'trip_snapshot_screen.dart';
@@ -106,16 +105,19 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
         builder: (_) => ChatFirstThreadScreen(
           controller: widget.controller,
           conversationId: thread.summary.id,
-          onOpenSnapshot: (summary) => _openSnapshot(context, summary),
+          onOpenSnapshot: (_) => _openSnapshot(context, thread.summary.id),
         ),
       ),
     );
   }
 
-  void _openSnapshot(BuildContext context, TripSnapshot snapshot) {
+  void _openSnapshot(BuildContext context, String conversationId) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => TripSnapshotScreen(snapshot: snapshot),
+        builder: (_) => TripSnapshotScreen(
+          controller: widget.controller,
+          conversationId: conversationId,
+        ),
       ),
     );
   }

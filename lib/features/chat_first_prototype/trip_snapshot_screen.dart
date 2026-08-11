@@ -1,545 +1,623 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
+import 'chat_first_controller.dart';
+import 'chat_first_data.dart';
 import 'chat_first_models.dart';
+import 'place_detail_sheet.dart';
+import 'place_reel_screen.dart';
+import 'plan_external_launcher.dart';
+import 'plan_timeline.dart';
 
-/// Read-only editorial trip view bound to a conversation. The prototype never
-/// edits a snapshot directly: every change goes through the chat, and this
-/// screen only mirrors the state shared in the conversation.
-class TripSnapshotScreen extends StatelessWidget {
-  const TripSnapshotScreen({super.key, required this.snapshot});
+class TripSnapshotScreen extends StatefulWidget {
+  factory TripSnapshotScreen({
+    Key? key,
+    ChatFirstPrototypeController? controller,
+    String? conversationId,
+    PlanExternalLauncher? externalLauncher,
+    @Deprecated('Use controller and conversationId') TripSnapshot? snapshot,
+  }) {
+    assert(
+      (controller != null && conversationId != null && snapshot == null) ||
+          (controller == null && conversationId == null && snapshot != null),
+    );
+    if (controller != null && conversationId != null) {
+      return TripSnapshotScreen._(
+        key: key,
+        controller: controller,
+        conversationId: conversationId,
+        externalLauncher: externalLauncher,
+        ownsController: false,
+      );
+    }
+    final legacyController = _legacyControllerFor(snapshot!);
+    return TripSnapshotScreen._(
+      key: key,
+      controller: legacyController,
+      conversationId: _legacyConversationId,
+      externalLauncher: externalLauncher,
+      ownsController: true,
+    );
+  }
+
+  const TripSnapshotScreen._({
+    super.key,
+    required this.controller,
+    required this.conversationId,
+    required this.externalLauncher,
+    required this.ownsController,
+  });
+
+  final ChatFirstPrototypeController controller;
+  final String conversationId;
+  final PlanExternalLauncher? externalLauncher;
+  final bool ownsController;
+
+  @override
+  State<TripSnapshotScreen> createState() => _TripSnapshotScreenState();
+}
+
+class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
+  var _selectedDay = 0;
+
+  @override
+  void dispose() {
+    if (widget.ownsController) widget.controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) {
+        final snapshot = widget.controller
+            .conversationOf(widget.conversationId)
+            .snapshot;
+        if (snapshot == null) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Piano')),
+            body: const Center(child: Text('Piano non disponibile')),
+          );
+        }
+        if (_selectedDay >= snapshot.days.length) _selectedDay = 0;
+        final fixture = ChatFirstDemoData.operationalFixtureForSnapshot(
+          snapshot,
+        );
+        final media = snapshot.destinationMedia ?? fixture?.media;
+        return Scaffold(
+          appBar: AppBar(
+            title: Semantics(
+              label: 'Piano di ${snapshot.destinationTitle}',
+              header: true,
+              child: Text(
+                snapshot.destinationTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          body: ListView(
+            key: const Key('plan-scroll'),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+            children: <Widget>[
+              _DestinationHero(snapshot: snapshot, media: media),
+              const SizedBox(height: 24),
+              _PlanFacts(snapshot: snapshot),
+              if (snapshot.days.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 24),
+                _DayChips(
+                  days: snapshot.days,
+                  selectedIndex: _selectedDay,
+                  onSelected: (index) => setState(() => _selectedDay = index),
+                ),
+                const SizedBox(height: 22),
+                PlanTimeline(
+                  day: snapshot.days[_selectedDay],
+                  media: media,
+                  canOpenPlace: (item) =>
+                      _cataloguePlaceFor(fixture, item) != null ||
+                      item.place != null,
+                  onOpenPlace: (item, index) => _openPlace(
+                    snapshot: snapshot,
+                    fixture: fixture,
+                    media: media,
+                    day: snapshot.days[_selectedDay],
+                    item: item,
+                    index: index,
+                  ),
+                ),
+              ] else ...<Widget>[
+                const SizedBox(height: 28),
+                const _UnplacedSection(items: <TripItemSnapshot>[]),
+              ],
+              if (snapshot.unplacedItems.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 28),
+                _UnplacedSection(items: snapshot.unplacedItems),
+              ],
+              if (widget.ownsController) ...<Widget>[
+                if (snapshot.placeLabels.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 24),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: <Widget>[
+                      for (final label in snapshot.placeLabels)
+                        Chip(label: Text(label)),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 18),
+                Text(
+                  'Modifiche solo tramite chat nella precedente anteprima.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ],
+          ),
+          bottomNavigationBar: _GlobalPlanActions(
+            onAdd: () => _showPlannedAction(
+              'Aggiunta luoghi disponibile nel prossimo passaggio.',
+            ),
+            onAsk: () => Navigator.of(context).maybePop(),
+            onCosts: () => _showPlannedAction(
+              'Riepilogo costi disponibile nel prossimo passaggio.',
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openPlace({
+    required TripSnapshot snapshot,
+    required OperationalTripFixture? fixture,
+    required PlanMedia? media,
+    required TripDaySnapshot day,
+    required TripItemSnapshot item,
+    required int index,
+  }) async {
+    final cataloguePlace = _cataloguePlaceFor(fixture, item);
+    final place =
+        item.place ??
+        (cataloguePlace == null
+            ? null
+            : PlanPlaceDetails(
+                id: cataloguePlace.id,
+                title: cataloguePlace.name,
+                description: cataloguePlace.description,
+              ));
+    if (place == null) return;
+    final directionsUri = cataloguePlace == null
+        ? null
+        : GoogleMapsDirectionsUri.build(
+            latitude: cataloguePlace.latitude,
+            longitude: cataloguePlace.longitude,
+          );
+    final sheetData = PlanPlaceSheetData(
+      place: place,
+      category: item.category,
+      neighborhood: 'Centro di ${snapshot.destinationTitle}',
+      durationLabel: _durationLabel(item.durationMinutes),
+      costLabel: 'Ingresso da verificare',
+      bestMomentLabel: item.startTime.isEmpty
+          ? 'Momento da definire'
+          : 'Verso le ${item.startTime}',
+      whyIterRecommends:
+          'Si inserisce nel ritmo “${day.theme}” senza spezzare la sequenza della giornata.',
+      positionLabel: 'Tappa ${index + 1} di ${day.items.length} · ${day.label}',
+      distanceLabel: index == 0
+          ? 'Prima tappa della giornata'
+          : 'Distanza demo dalla tappa precedente da verificare',
+      entranceLabel: 'Ingresso e orari da verificare prima della visita',
+      accessibilityLabel: 'Accessibilità da verificare con il luogo',
+      media: media,
+      directionsAvailable: directionsUri != null,
+    );
+    final action = await showPlanPlaceDetailSheet(
+      context: context,
+      data: sheetData,
+      onOpenReel: () {
+        if (media == null) return;
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                PlaceReelScreen(placeTitle: place.title, media: media),
+          ),
+        );
+      },
+      onOpenDirections: () => _openDirections(directionsUri),
+    );
+    if (!mounted || action != PlaceDetailAction.askIter) return;
+    widget.controller.setPlaceComposerContext(widget.conversationId, place);
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _openDirections(Uri? uri) async {
+    final opened = await (widget.externalLauncher ?? PlanExternalLauncher())
+        .open(uri);
+    if (!mounted || opened) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Non riesco ad aprire le indicazioni. Riprova.'),
+      ),
+    );
+  }
+
+  void _showPlannedAction(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _DestinationHero extends StatelessWidget {
+  const _DestinationHero({required this.snapshot, required this.media});
+
+  final TripSnapshot snapshot;
+  final PlanMedia? media;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final image = media?.imageUrl;
+    return Semantics(
+      image: true,
+      label: 'Foto di ${snapshot.destinationTitle}',
+      child: AspectRatio(
+        key: const Key('plan-destination-hero'),
+        aspectRatio: 16 / 9,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              if (image == null || image.isEmpty)
+                _HeroFallback(destination: snapshot.destinationTitle)
+              else
+                ExcludeSemantics(
+                  child: Image.asset(
+                    image,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        _HeroFallback(destination: snapshot.destinationTitle),
+                  ),
+                ),
+              Align(
+                alignment: Alignment.bottomLeft,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Material(
+                    color: colors.inverseSurface.withValues(alpha: 0.88),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 9,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            '${snapshot.country} · ${snapshot.durationLabel}',
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(
+                                  color: colors.onInverseSurface,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            snapshot.dates,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: colors.onInverseSurface.withValues(
+                                    alpha: 0.82,
+                                  ),
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroFallback extends StatelessWidget {
+  const _HeroFallback({required this.destination});
+
+  final String destination;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return ColoredBox(
+      color: colors.surfaceContainerHighest,
+      child: Center(
+        child: Icon(
+          Icons.landscape_outlined,
+          semanticLabel: 'Immagine non disponibile per $destination',
+          size: 48,
+          color: colors.primary,
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanFacts extends StatelessWidget {
+  const _PlanFacts({required this.snapshot});
 
   final TripSnapshot snapshot;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final mapPlaces = snapshot.placeLabels.isNotEmpty
-        ? snapshot.placeLabels
-        : snapshot.days
-              .expand((d) => d.items)
-              .map((i) => i.title)
-              .take(4)
-              .toList();
-    return Scaffold(
-      appBar: AppBar(title: const Text('Viaggio')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children:
+          <Widget>[
+                _Fact(label: snapshot.statusLabel, icon: Icons.route_outlined),
+                _Fact(
+                  label: snapshot.transport,
+                  icon: Icons.flight_takeoff_outlined,
+                ),
+                _Fact(label: snapshot.stay, icon: Icons.bed_outlined),
+              ]
+              .map((fact) {
+                return DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: fact,
+                );
+              })
+              .toList(growable: false),
+    );
+  }
+}
+
+class _Fact extends StatelessWidget {
+  const _Fact({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              _StatusPill(label: snapshot.statusLabel),
-              const SizedBox(height: 12),
-              Text(
-                snapshot.destinationTitle,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${snapshot.country} · ${snapshot.durationLabel}',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-          if (mapPlaces.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 22),
-            _RouteMap(places: mapPlaces),
-          ],
-          const SizedBox(height: 26),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerLowest,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: colors.outlineVariant),
-            ),
-            child: Column(
-              children: <Widget>[
-                _FactRow(
-                  icon: Icons.calendar_today_outlined,
-                  label: 'Date',
-                  value: snapshot.dates,
-                ),
-                const SizedBox(height: 14),
-                _FactRow(
-                  icon: Icons.directions_outlined,
-                  label: 'Come arrivi',
-                  value: snapshot.transport,
-                ),
-                const SizedBox(height: 14),
-                _FactRow(
-                  icon: Icons.home_outlined,
-                  label: 'Dove dormi',
-                  value: snapshot.stay,
-                ),
-              ],
-            ),
-          ),
-          if (snapshot.placeLabels.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 26),
-            _SectionTitle(title: 'Luoghi salvati'),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: <Widget>[
-                for (final label in snapshot.placeLabels)
-                  Chip(
-                    avatar: Text(
-                      placeEmoji(label),
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                    label: Text(label),
-                    side: BorderSide(color: colors.outlineVariant),
-                    backgroundColor: colors.surface,
-                  ),
-              ],
-            ),
-          ],
-          if (snapshot.days.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 26),
-            _SectionTitle(title: 'Giorni'),
-            const SizedBox(height: 12),
-            for (final day in snapshot.days) _DayCard(day: day),
-          ],
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerLowest,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: colors.outlineVariant),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Icon(
-                  Icons.chat_outlined,
-                  size: 18,
-                  color: colors.primary,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Modifiche solo tramite chat: apri la conversazione e chiedi a Iter.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colors.onSurfaceVariant,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          Icon(icon, size: 18),
+          const SizedBox(width: 7),
+          Flexible(child: Text(label)),
         ],
       ),
     );
   }
 }
 
-/// Schematic route of the saved places: a dashed line with a node per place,
-/// drawn from the demo data only. It reads as a map without any live service.
-class _RouteMap extends StatelessWidget {
-  const _RouteMap({required this.places});
-
-  final List<String> places;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      height: 176,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.outlineVariant),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: CustomPaint(
-        painter: _RouteMapPainter(
-          places: places,
-          line: colors.primary.withValues(alpha: 0.55),
-          node: colors.primary,
-          label: colors.onSurfaceVariant,
-          textScaler: MediaQuery.textScalerOf(context),
-        ),
-      ),
-    );
-  }
-}
-
-class _RouteMapPainter extends CustomPainter {
-  _RouteMapPainter({
-    required this.places,
-    required this.line,
-    required this.node,
-    required this.label,
-    required this.textScaler,
+class _DayChips extends StatelessWidget {
+  const _DayChips({
+    required this.days,
+    required this.selectedIndex,
+    required this.onSelected,
   });
 
-  final List<String> places;
-  final Color line;
-  final Color node;
-  final Color label;
-  final TextScaler textScaler;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (places.isEmpty) return;
-    final n = places.length;
-    const padX = 30.0;
-    final midY = size.height * 0.42;
-
-    Offset pos(int i) {
-      final x = n == 1
-          ? size.width / 2
-          : padX + (size.width - padX * 2) * i / (n - 1);
-      final y = midY + math.sin(i * 1.05) * (size.height * 0.16);
-      return Offset(x, y);
-    }
-
-    final path = Path();
-    for (var i = 0; i < n; i++) {
-      final p = pos(i);
-      if (i == 0) {
-        path.moveTo(p.dx, p.dy);
-      } else {
-        path.lineTo(p.dx, p.dy);
-      }
-    }
-
-    const dash = 6.0;
-    const gap = 5.0;
-    final metric = path.computeMetrics().first;
-    final linePaint = Paint()
-      ..color = line
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-    var distance = 0.0;
-    while (distance < metric.length) {
-      final from = metric.getTangentForOffset(distance)!.position;
-      final to = metric
-          .getTangentForOffset(math.min(distance + dash, metric.length))!
-          .position;
-      canvas.drawLine(from, to, linePaint);
-      distance += dash + gap;
-    }
-
-    for (var i = 0; i < n; i++) {
-      final p = pos(i);
-      canvas.drawCircle(p, 15, Paint()..color = node.withValues(alpha: 0.16));
-      canvas.drawCircle(p, 4.5, Paint()..color = node);
-
-      final labelPainter = TextPainter(
-        text: TextSpan(
-          text: places[i],
-          style: TextStyle(
-            fontSize: 13,
-            color: label,
-            fontWeight: FontWeight.w600,
-            height: 1.2,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-        textScaler: textScaler,
-        textAlign: TextAlign.center,
-      )..layout(maxWidth: (size.width / n) - 8);
-      labelPainter.paint(
-        canvas,
-        Offset(p.dx - labelPainter.width / 2, p.dy + 21),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _RouteMapPainter old) {
-    return old.places != places ||
-        old.line != line ||
-        old.node != node ||
-        old.label != label ||
-        old.textScaler != textScaler;
-  }
-}
-
-/// Small deterministic map from a place label to a travel emoji.
-String placeEmoji(String label) {
-  final text = label.toLowerCase();
-  const keywords = <String, String>{
-    'foro': '🏛️',
-    'palatino': '🏛️',
-    'colosseo': '🏛️',
-    'archeolog': '🏛️',
-    'fontana': '⛲',
-    'piazza': '⛲',
-    'navona': '⛲',
-    'borghese': '🌳',
-    'giardini': '🌳',
-    'jardins': '🌳',
-    'parco': '🌳',
-    'orto': '🌳',
-    'tavola': '🍝',
-    'mercado': '🍝',
-    'bolhão': '🍝',
-    'trattoria': '🍝',
-    'cucina': '🍝',
-    'miradouro': '🌅',
-    'panorama': '🌅',
-    'belvedere': '🌅',
-    'tramonto': '🌅',
-    'ribeira': '🏘️',
-    'quartiere': '🏘️',
-    'borgo': '🏘️',
-    'foz': '🌊',
-    'mare': '🌊',
-    'spiaggia': '🌊',
-    'oceano': '🌊',
-    'cammino': '🚶',
-    'passeggiata': '🚶',
-    'museo': '🖼️',
-    'galleria': '🖼️',
-    'fiume': '🚣',
-    'canale': '🚣',
-  };
-  for (final entry in keywords.entries) {
-    if (text.contains(entry.key)) return entry.value;
-  }
-  return '📍';
-}
-
-/// Small deterministic map from a day-item category to a travel emoji.
-String categoryEmoji(String category) {
-  switch (category.toLowerCase()) {
-    case 'archeologia':
-      return '🏛️';
-    case 'cibo':
-    case 'tavola':
-      return '🍝';
-    case 'verde':
-    case 'orto':
-      return '🌳';
-    case 'passeggiata':
-    case 'cammino':
-      return '🚶';
-    case 'panorama':
-      return '🌅';
-    case 'quartiere':
-      return '🏘️';
-    case 'mare':
-      return '🌊';
-    case 'museo':
-    case 'galleria':
-      return '🖼️';
-    default:
-      return '✨';
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title});
-
-  final String title;
+  final List<TripDaySnapshot> days;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-        fontWeight: FontWeight.w800,
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: colors.primaryContainer,
-          borderRadius: BorderRadius.circular(99),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(Icons.circle, size: 8, color: colors.primary),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: colors.onPrimaryContainer,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ],
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: days.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) => ChoiceChip(
+          selected: index == selectedIndex,
+          onSelected: (_) => onSelected(index),
+          label: Text(days[index].label),
         ),
       ),
     );
   }
 }
 
-class _FactRow extends StatelessWidget {
-  const _FactRow({required this.icon, required this.label, required this.value});
+class _UnplacedSection extends StatelessWidget {
+  const _UnplacedSection({required this.items});
 
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: colors.primaryContainer,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, size: 18, color: colors.onPrimaryContainer),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 1),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DayCard extends StatelessWidget {
-  const _DayCard({required this.day});
-
-  final TripDaySnapshot day;
+  final List<TripItemSnapshot> items;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 112),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.outlineVariant),
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-            child: Row(
-              children: <Widget>[
-                Text(
-                  day.label,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      day.theme,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: colors.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          for (final item in day.items)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                children: <Widget>[
-                  Container(
-                    width: 34,
-                    height: 34,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: colors.surface,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      categoryEmoji(item.category),
-                      style: const TextStyle(fontSize: 17),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    item.time,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      item.title,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: item.locked
-                            ? FontWeight.w800
-                            : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  if (item.locked) ...<Widget>[
-                    Icon(
-                      Icons.lock_outline,
-                      size: 15,
-                      color: colors.primary,
-                    ),
-                  ],
-                ],
+          Text('Da sistemare', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 6),
+          if (items.isEmpty)
+            Text(
+              'Qui compariranno le tappe ancora senza giorno o orario.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
+            )
+          else
+            for (final item in items)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('• ${item.title}'),
               ),
-            ),
         ],
       ),
     );
   }
+}
+
+class _GlobalPlanActions extends StatelessWidget {
+  const _GlobalPlanActions({
+    required this.onAdd,
+    required this.onAsk,
+    required this.onCosts,
+  });
+
+  final VoidCallback onAdd;
+  final VoidCallback onAsk;
+  final VoidCallback onCosts;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: Material(
+        elevation: 3,
+        color: colors.surfaceContainer,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          key: const Key('plan-global-actions'),
+          height: 64,
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: _PlanAction(
+                  icon: Icons.add_location_alt_outlined,
+                  label: 'Aggiungi luogo',
+                  onTap: onAdd,
+                ),
+              ),
+              Expanded(
+                child: _PlanAction(
+                  icon: Icons.chat_outlined,
+                  label: 'Chiedi',
+                  onTap: onAsk,
+                ),
+              ),
+              Expanded(
+                child: _PlanAction(
+                  icon: Icons.receipt_long_outlined,
+                  label: 'Costi',
+                  onTap: onCosts,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanAction extends StatelessWidget {
+  const _PlanAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      label: label,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Icon(icon, size: 22, color: colors.primary),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _durationLabel(int minutes) {
+  if (minutes <= 0) return 'Durata da definire';
+  final hours = minutes ~/ 60;
+  final remaining = minutes % 60;
+  if (hours == 0) return '$remaining min';
+  if (remaining == 0) return '$hours h';
+  return '$hours h $remaining min';
+}
+
+OperationalPlaceFixture? _cataloguePlaceFor(
+  OperationalTripFixture? fixture,
+  TripItemSnapshot item,
+) {
+  final placeId = item.place?.id;
+  final itemTitle = item.title.trim().toLowerCase();
+  for (final candidate
+      in fixture?.placeCatalog ?? const <OperationalPlaceFixture>[]) {
+    if (placeId != null && candidate.id == placeId) return candidate;
+    final candidateName = candidate.name.toLowerCase();
+    if (candidateName == itemTitle ||
+        (candidateName.length > 5 && itemTitle.contains(candidateName))) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+const _legacyConversationId = 'legacy-plan-preview';
+
+ChatFirstPrototypeController _legacyControllerFor(TripSnapshot snapshot) {
+  return ChatFirstPrototypeController(
+    seed: <ChatThread>[
+      ChatThread(
+        summary: Conversation(
+          id: _legacyConversationId,
+          title: snapshot.destinationTitle,
+          subtitle: snapshot.statusLabel,
+          avatar: const ChatAvatar('', label: 'Piano'),
+          timestamp: DateTime.fromMillisecondsSinceEpoch(0),
+          lastPreview: 'Anteprima Piano',
+          snapshot: snapshot,
+        ),
+        script: const <ScriptedBeat>[],
+      ),
+    ],
+  );
 }
