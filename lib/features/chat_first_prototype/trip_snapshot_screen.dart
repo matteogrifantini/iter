@@ -8,6 +8,9 @@ import 'place_reel_screen.dart';
 import 'plan_external_launcher.dart';
 import 'plan_timeline.dart';
 
+typedef LegacyTripSnapshotControllerFactory =
+    ChatFirstPrototypeController Function(TripSnapshot snapshot);
+
 class TripSnapshotScreen extends StatefulWidget {
   factory TripSnapshotScreen({
     Key? key,
@@ -15,27 +18,20 @@ class TripSnapshotScreen extends StatefulWidget {
     String? conversationId,
     PlanExternalLauncher? externalLauncher,
     @Deprecated('Use controller and conversationId') TripSnapshot? snapshot,
+    LegacyTripSnapshotControllerFactory legacyControllerFactory =
+        _legacyControllerFor,
   }) {
     assert(
       (controller != null && conversationId != null && snapshot == null) ||
           (controller == null && conversationId == null && snapshot != null),
     );
-    if (controller != null && conversationId != null) {
-      return TripSnapshotScreen._(
-        key: key,
-        controller: controller,
-        conversationId: conversationId,
-        externalLauncher: externalLauncher,
-        ownsController: false,
-      );
-    }
-    final legacyController = _legacyControllerFor(snapshot!);
     return TripSnapshotScreen._(
       key: key,
-      controller: legacyController,
-      conversationId: _legacyConversationId,
+      controller: controller,
+      conversationId: conversationId,
+      legacySnapshot: snapshot,
+      legacyControllerFactory: legacyControllerFactory,
       externalLauncher: externalLauncher,
-      ownsController: true,
     );
   }
 
@@ -43,14 +39,16 @@ class TripSnapshotScreen extends StatefulWidget {
     super.key,
     required this.controller,
     required this.conversationId,
+    required this.legacySnapshot,
+    required this.legacyControllerFactory,
     required this.externalLauncher,
-    required this.ownsController,
   });
 
-  final ChatFirstPrototypeController controller;
-  final String conversationId;
+  final ChatFirstPrototypeController? controller;
+  final String? conversationId;
+  final TripSnapshot? legacySnapshot;
+  final LegacyTripSnapshotControllerFactory legacyControllerFactory;
   final PlanExternalLauncher? externalLauncher;
-  final bool ownsController;
 
   @override
   State<TripSnapshotScreen> createState() => _TripSnapshotScreenState();
@@ -58,21 +56,61 @@ class TripSnapshotScreen extends StatefulWidget {
 
 class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
   var _selectedDay = 0;
+  late ChatFirstPrototypeController _controller;
+  late String _conversationId;
+  var _ownsController = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _adoptConfiguration();
+  }
+
+  @override
+  void didUpdateWidget(covariant TripSnapshotScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final legacyChanged =
+        widget.legacySnapshot != null &&
+        (!identical(widget.legacySnapshot, oldWidget.legacySnapshot) ||
+            widget.legacyControllerFactory !=
+                oldWidget.legacyControllerFactory);
+    final productionChanged =
+        widget.legacySnapshot == null &&
+        (!identical(widget.controller, oldWidget.controller) ||
+            widget.conversationId != oldWidget.conversationId);
+    if (!legacyChanged && !productionChanged) return;
+    final previousController = _controller;
+    final disposedByThisWidget = _ownsController;
+    _adoptConfiguration();
+    if (disposedByThisWidget) previousController.dispose();
+    _selectedDay = 0;
+  }
+
+  void _adoptConfiguration() {
+    final legacySnapshot = widget.legacySnapshot;
+    if (legacySnapshot != null) {
+      _controller = widget.legacyControllerFactory(legacySnapshot);
+      _conversationId = _legacyConversationId;
+      _ownsController = true;
+      return;
+    }
+    _controller = widget.controller!;
+    _conversationId = widget.conversationId!;
+    _ownsController = false;
+  }
 
   @override
   void dispose() {
-    if (widget.ownsController) widget.controller.dispose();
+    if (_ownsController) _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.controller,
+      listenable: _controller,
       builder: (context, _) {
-        final snapshot = widget.controller
-            .conversationOf(widget.conversationId)
-            .snapshot;
+        final snapshot = _controller.conversationOf(_conversationId).snapshot;
         if (snapshot == null) {
           return Scaffold(
             appBar: AppBar(title: const Text('Piano')),
@@ -113,14 +151,14 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
                 const SizedBox(height: 22),
                 PlanTimeline(
                   day: snapshot.days[_selectedDay],
-                  media: media,
+                  mediaForItem: (item) =>
+                      _cataloguePlaceFor(fixture, item)?.media,
                   canOpenPlace: (item) =>
                       _cataloguePlaceFor(fixture, item) != null ||
                       item.place != null,
                   onOpenPlace: (item, index) => _openPlace(
                     snapshot: snapshot,
                     fixture: fixture,
-                    media: media,
                     day: snapshot.days[_selectedDay],
                     item: item,
                     index: index,
@@ -134,7 +172,7 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
                 const SizedBox(height: 28),
                 _UnplacedSection(items: snapshot.unplacedItems),
               ],
-              if (widget.ownsController) ...<Widget>[
+              if (_ownsController) ...<Widget>[
                 if (snapshot.placeLabels.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 24),
                   Wrap(
@@ -171,12 +209,12 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
   Future<void> _openPlace({
     required TripSnapshot snapshot,
     required OperationalTripFixture? fixture,
-    required PlanMedia? media,
     required TripDaySnapshot day,
     required TripItemSnapshot item,
     required int index,
   }) async {
     final cataloguePlace = _cataloguePlaceFor(fixture, item);
+    final media = cataloguePlace?.media;
     final place =
         item.place ??
         (cataloguePlace == null
@@ -228,7 +266,7 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
       onOpenDirections: () => _openDirections(directionsUri),
     );
     if (!mounted || action != PlaceDetailAction.askIter) return;
-    widget.controller.setPlaceComposerContext(widget.conversationId, place);
+    _controller.setPlaceComposerContext(_conversationId, place);
     Navigator.of(context).pop();
   }
 

@@ -102,7 +102,7 @@ void main() {
     });
 
     testWidgets(
-      'stays overflow-free at 320, 360 and 390 in both themes with large text',
+      'scrolls timeline and sheet accessibly at 320, 360 and 390 in both themes with large text',
       (tester) async {
         final controller = _controllerFor(
           ChatFirstDemoData.operationalFixtureFor('porto').snapshot,
@@ -119,6 +119,7 @@ void main() {
             await tester.binding.setSurfaceSize(size);
             await tester.pumpWidget(
               MaterialApp(
+                key: ValueKey<String>('$width-$brightness'),
                 theme: ThemeData(brightness: brightness, useMaterial3: true),
                 home: MediaQuery(
                   data: MediaQueryData(
@@ -139,6 +140,71 @@ void main() {
               find.byKey(const Key('plan-global-actions')),
               findsOneWidget,
             );
+
+            final lastStop = find.byKey(
+              const Key('plan-item-porto-clerigos-stop'),
+            );
+            await tester.drag(
+              _scrollableInside(const Key('plan-scroll')),
+              const Offset(0, -360),
+            );
+            await tester.pump();
+            expect(tester.takeException(), isNull);
+            await tester.scrollUntilVisible(
+              lastStop,
+              260,
+              scrollable: _scrollableInside(const Key('plan-scroll')),
+            );
+            expect(tester.takeException(), isNull);
+            await tester.drag(
+              _scrollableInside(const Key('plan-scroll')),
+              const Offset(0, -180),
+            );
+            await tester.pump();
+            expect(tester.takeException(), isNull);
+            expect(tester.getCenter(lastStop).dy, lessThan(size.height - 80));
+            await tester.tap(lastStop);
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull);
+
+            final titleFocus = find.byKey(const Key('place-sheet-title-focus'));
+            expect(
+              FocusManager.instance.primaryFocus?.context,
+              same(titleFocus.evaluate().single),
+            );
+            final semanticsHandle = tester.ensureSemantics();
+            expect(
+              tester.semantics.simulatedAccessibilityTraversal(),
+              containsAllInOrder(<Matcher>[
+                isSemantics(
+                  label: 'Immagine non disponibile per Torre dos Clérigos',
+                ),
+                isSemantics(label: 'Torre dos Clérigos'),
+                isSemantics(label: 'Panorama · Centro di Porto'),
+                isSemantics(
+                  label:
+                      'Perché Iter te la consiglia\nSi inserisce nel ritmo “Libri e centro storico” senza spezzare la sequenza della giornata.',
+                ),
+              ]),
+            );
+            await tester.drag(
+              _scrollableInside(const Key('place-sheet-scroll')),
+              const Offset(0, -520),
+            );
+            await tester.pump();
+            expect(tester.takeException(), isNull);
+            await tester.scrollUntilVisible(
+              find.text('Informazioni pratiche'),
+              260,
+              scrollable: _scrollableInside(const Key('place-sheet-scroll')),
+            );
+            expect(tester.takeException(), isNull);
+            expect(find.text('Informazioni pratiche'), findsOneWidget);
+            semanticsHandle.dispose();
+            Navigator.of(
+              tester.element(find.byType(DraggableScrollableSheet)),
+            ).pop();
+            await tester.pumpAndSettle();
           }
         }
       },
@@ -171,6 +237,7 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Vedi reel'), findsOneWidget);
+        expect(find.text('Foto: JaimeMSilva'), findsOneWidget);
         expect(find.text('Perché Iter te la consiglia'), findsOneWidget);
         await tester.scrollUntilVisible(
           find.text('Scalone in legno e scaffali Liberty nel centro di Porto.'),
@@ -284,6 +351,123 @@ void main() {
         expect(find.text('Su Livraria Lello'), findsNothing);
       },
     );
+
+    testWidgets(
+      'uses place media only for Lello and neutral fallbacks elsewhere',
+      (tester) async {
+        final controller = _controllerFor(
+          ChatFirstDemoData.operationalFixtureFor('porto').snapshot,
+        );
+        addTearDown(controller.dispose);
+        final semanticsHandle = tester.ensureSemantics();
+
+        await _pumpPlan(tester, controller: controller);
+        final lello = find.byKey(
+          const Key('plan-item-porto-livraria-lello-stop'),
+        );
+        await tester.ensureVisible(lello);
+        await tester.tap(lello);
+        await tester.pumpAndSettle();
+        expect(find.text('Vedi reel'), findsOneWidget);
+        expect(find.text('Foto: JaimeMSilva'), findsOneWidget);
+        Navigator.of(
+          tester.element(find.byType(DraggableScrollableSheet)),
+        ).pop();
+        await tester.pumpAndSettle();
+
+        final clerigos = find.byKey(const Key('plan-item-porto-clerigos-stop'));
+        await tester.scrollUntilVisible(
+          clerigos,
+          220,
+          scrollable: _scrollableInside(const Key('plan-scroll')),
+        );
+        await tester.tap(clerigos);
+        await tester.pumpAndSettle();
+        expect(find.text('Vedi reel'), findsNothing);
+        expect(find.textContaining('JaimeMSilva'), findsNothing);
+        expect(
+          find.bySemanticsLabel(
+            'Immagine non disponibile per Torre dos Clérigos',
+          ),
+          findsOneWidget,
+        );
+        semanticsHandle.dispose();
+      },
+    );
+
+    testWidgets('keeps Roma place sheets neutral without approved media', (
+      tester,
+    ) async {
+      final controller = ChatFirstPrototypeController();
+      addTearDown(controller.dispose);
+      final semanticsHandle = tester.ensureSemantics();
+
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TripSnapshotScreen(
+            controller: controller,
+            conversationId: 'c-roma-active',
+          ),
+        ),
+      );
+      final foro = find.byKey(const Key('plan-item-0'));
+      await tester.ensureVisible(foro);
+      await tester.tap(foro);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Vedi reel'), findsNothing);
+      expect(find.textContaining('JaimeMSilva'), findsNothing);
+      expect(
+        find.bySemanticsLabel('Immagine non disponibile per Foro Romano'),
+        findsOneWidget,
+      );
+      semanticsHandle.dispose();
+    });
+
+    testWidgets(
+      'legacy snapshot adapter replaces and disposes owned controllers',
+      (tester) async {
+        final created = <_TrackingLegacyController>[];
+        ChatFirstPrototypeController createController(TripSnapshot snapshot) {
+          final controller = _TrackingLegacyController(snapshot);
+          created.add(controller);
+          return controller;
+        }
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: TripSnapshotScreen(
+              key: const ValueKey<String>('legacy-plan'),
+              snapshot: ChatFirstDemoData.operationalFixtureFor(
+                'porto',
+              ).snapshot,
+              legacyControllerFactory: createController,
+            ),
+          ),
+        );
+        expect(created, hasLength(1));
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: TripSnapshotScreen(
+              key: const ValueKey<String>('legacy-plan'),
+              snapshot: ChatFirstDemoData.operationalFixtureFor(
+                'roma',
+              ).snapshot,
+              legacyControllerFactory: createController,
+            ),
+          ),
+        );
+        expect(created, hasLength(2));
+        expect(created.first.disposeCalls, 1);
+        expect(find.text('Roma'), findsWidgets);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        expect(created.last.disposeCalls, 1);
+      },
+    );
   });
 
   group('Reel luogo', () {
@@ -341,6 +525,38 @@ void main() {
         expect(find.textContaining('JaimeMSilva'), findsOneWidget);
       },
     );
+
+    testWidgets('reacts to asynchronous playback notifications without a tap', (
+      tester,
+    ) async {
+      final playback = _FakePlanReelPlaybackController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlaceReelScreen(
+            placeTitle: 'Livraria Lello',
+            media: _portoMedia(),
+            controllerFactory: (_) => playback,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Pausa'), findsOneWidget);
+
+      playback.emitPlaying(false);
+      await tester.pump();
+      expect(find.byTooltip('Riprendi'), findsOneWidget);
+
+      playback.emitError();
+      await tester.pump();
+      expect(
+        find.byKey(const Key('place-reel-photo-fallback')),
+        findsOneWidget,
+      );
+      expect(find.text('Video non disponibile'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(playback.removeListenerCalls, 1);
+    });
 
     testWidgets('does not autoplay or loop when animations are disabled', (
       tester,
@@ -542,11 +758,13 @@ class _FakePlanReelPlaybackController extends PlanReelPlaybackController {
   bool _initialized = false;
   bool _playing = false;
   bool _muted = true;
+  bool _hasError = false;
   bool looping = false;
   int playCalls = 0;
+  int removeListenerCalls = 0;
 
   @override
-  bool get hasError => failInitialization;
+  bool get hasError => failInitialization || _hasError;
 
   @override
   bool get isInitialized => _initialized;
@@ -590,5 +808,49 @@ class _FakePlanReelPlaybackController extends PlanReelPlaybackController {
   Future<void> setMuted(bool value) async {
     _muted = value;
     notifyListeners();
+  }
+
+  void emitPlaying(bool value) {
+    _playing = value;
+    notifyListeners();
+  }
+
+  void emitError() {
+    _hasError = true;
+    notifyListeners();
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    removeListenerCalls++;
+    super.removeListener(listener);
+  }
+}
+
+class _TrackingLegacyController extends ChatFirstPrototypeController {
+  _TrackingLegacyController(TripSnapshot snapshot)
+    : super(
+        seed: <ChatThread>[
+          ChatThread(
+            summary: Conversation(
+              id: 'legacy-plan-preview',
+              title: snapshot.destinationTitle,
+              subtitle: snapshot.statusLabel,
+              avatar: const ChatAvatar('', label: 'Piano'),
+              timestamp: DateTime.fromMillisecondsSinceEpoch(0),
+              lastPreview: 'Anteprima Piano',
+              snapshot: snapshot,
+            ),
+            script: const <ScriptedBeat>[],
+          ),
+        ],
+      );
+
+  int disposeCalls = 0;
+
+  @override
+  void dispose() {
+    disposeCalls++;
+    super.dispose();
   }
 }

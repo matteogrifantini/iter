@@ -98,7 +98,13 @@ class _PlaceReelScreenState extends State<PlaceReelScreen> {
     final reel = widget.media.reelUrl;
     if (reel == null || reel.isEmpty) return;
     _playback = widget.controllerFactory(reel);
+    _playback!.addListener(_handlePlaybackChanged);
     _initializePlayback();
+  }
+
+  void _handlePlaybackChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _initializePlayback() async {
@@ -107,11 +113,13 @@ class _PlaceReelScreenState extends State<PlaceReelScreen> {
     try {
       await playback.setMuted(true);
       await playback.initialize();
-      if (!mounted) return;
+      if (!mounted || playback != _playback) return;
       final reducedMotion = MediaQuery.disableAnimationsOf(context);
       await playback.setLooping(!reducedMotion);
+      if (!mounted || playback != _playback) return;
       if (!reducedMotion) await playback.play();
-      if (mounted) setState(() {});
+      if (!mounted || playback != _playback) return;
+      setState(() {});
     } catch (_) {
       if (mounted) setState(() => _initializationFailed = true);
     }
@@ -119,6 +127,7 @@ class _PlaceReelScreenState extends State<PlaceReelScreen> {
 
   @override
   void dispose() {
+    _playback?.removeListener(_handlePlaybackChanged);
     _playback?.dispose();
     super.dispose();
   }
@@ -217,7 +226,6 @@ class _PlaceReelScreenState extends State<PlaceReelScreen> {
                                   } else {
                                     await playback.play();
                                   }
-                                  if (mounted) setState(() {});
                                 }
                               : null,
                           color: colors.onInverseSurface,
@@ -234,7 +242,6 @@ class _PlaceReelScreenState extends State<PlaceReelScreen> {
                           onPressed: videoReady
                               ? () async {
                                   await playback.setMuted(!playback.isMuted);
-                                  if (mounted) setState(() {});
                                 }
                               : null,
                           color: colors.onInverseSurface,

@@ -252,57 +252,76 @@ class _PlacePhoto extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final image = media?.imageUrl;
     final reel = media?.reelUrl;
-    return Semantics(
-      image: true,
-      label: 'Foto di $placeTitle',
-      child: AspectRatio(
-        aspectRatio: 4 / 3,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
-              if (image == null || image.isEmpty)
-                ColoredBox(
-                  color: colors.surfaceContainerHighest,
-                  child: Icon(
-                    Icons.photo_outlined,
-                    size: 54,
-                    color: colors.onSurfaceVariant,
-                  ),
-                )
-              else
-                ExcludeSemantics(
-                  child: Image.asset(
-                    image,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => ColoredBox(
+    final hasImage = image != null && image.isNotEmpty;
+    final photoAttribution = media?.photoAttribution;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Semantics(
+          image: true,
+          label: hasImage
+              ? 'Foto di $placeTitle'
+              : 'Immagine non disponibile per $placeTitle',
+          child: AspectRatio(
+            aspectRatio: 4 / 3,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  if (!hasImage)
+                    ColoredBox(
                       color: colors.surfaceContainerHighest,
                       child: Icon(
                         Icons.photo_outlined,
                         size: 54,
                         color: colors.onSurfaceVariant,
                       ),
+                    )
+                  else
+                    ExcludeSemantics(
+                      child: Image.asset(
+                        image,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => ColoredBox(
+                          color: colors.surfaceContainerHighest,
+                          child: Icon(
+                            Icons.photo_outlined,
+                            size: 54,
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              if (reel != null && reel.isNotEmpty)
-                Positioned(
-                  left: 12,
-                  bottom: 12,
-                  child: FilledButton.tonalIcon(
-                    onPressed: onOpenReel,
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('Vedi reel'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(48, 48),
+                  if (reel != null && reel.isNotEmpty)
+                    Positioned(
+                      left: 12,
+                      bottom: 12,
+                      child: FilledButton.tonalIcon(
+                        onPressed: onOpenReel,
+                        icon: const Icon(Icons.play_arrow),
+                        label: const Text('Vedi reel'),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(48, 48),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-            ],
+                ],
+              ),
+            ),
           ),
         ),
-      ),
+        if (photoAttribution != null &&
+            photoAttribution.author.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 6),
+          Text(
+            'Foto: ${photoAttribution.author}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+          ),
+        ],
+      ],
     );
   }
 }

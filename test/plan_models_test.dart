@@ -332,6 +332,31 @@ void main() {
     },
   );
 
+  test('only Livraria Lello owns the approved place media', () {
+    final porto = ChatFirstDemoData.operationalFixtureFor('porto');
+    final roma = ChatFirstDemoData.operationalFixtureFor('roma');
+    final lello = porto.placeCatalog.singleWhere(
+      (place) => place.id == 'porto-livraria-lello',
+    );
+
+    expect(lello.media, same(porto.media));
+    expect(
+      lello.media!.imageUrl,
+      'assets/images/travel/porto_livraria_lello.jpg',
+    );
+    expect(
+      lello.media!.reelUrl,
+      'assets/videos/vertical/porto_livraria_lello_reel.mp4',
+    );
+    expect(
+      porto.placeCatalog
+          .where((place) => place.id != 'porto-livraria-lello')
+          .every((place) => place.media == null),
+      isTrue,
+    );
+    expect(roma.placeCatalog.every((place) => place.media == null), isTrue);
+  });
+
   test(
     'operational fixture IDs, coordinates, costs and provider URIs are valid',
     () {

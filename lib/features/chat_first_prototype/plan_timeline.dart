@@ -6,13 +6,13 @@ class PlanTimeline extends StatelessWidget {
   const PlanTimeline({
     super.key,
     required this.day,
-    required this.media,
+    required this.mediaForItem,
     required this.onOpenPlace,
     this.canOpenPlace,
   });
 
   final TripDaySnapshot day;
-  final PlanMedia? media;
+  final PlanMedia? Function(TripItemSnapshot item) mediaForItem;
   final void Function(TripItemSnapshot item, int index) onOpenPlace;
   final bool Function(TripItemSnapshot item)? canOpenPlace;
 
@@ -36,7 +36,7 @@ class PlanTimeline extends StatelessWidget {
                 item: items[index],
                 index: index,
                 isLast: index == items.length - 1,
-                imageAsset: media?.imageUrl,
+                imageAsset: mediaForItem(items[index])?.imageUrl,
                 onTap:
                     !(canOpenPlace?.call(items[index]) ??
                         items[index].place != null)
@@ -240,15 +240,21 @@ class _StopImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final asset = imageAsset;
+    final hasImage = asset != null && asset.isNotEmpty;
     return Semantics(
       image: true,
-      label: semanticsLabel,
+      label: hasImage
+          ? semanticsLabel
+          : semanticsLabel.replaceFirst(
+              'Foto di',
+              'Immagine non disponibile per',
+            ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: SizedBox(
           width: 72,
           height: 84,
-          child: asset == null || asset.isEmpty
+          child: !hasImage
               ? ColoredBox(
                   color: colors.surfaceContainerHighest,
                   child: Icon(

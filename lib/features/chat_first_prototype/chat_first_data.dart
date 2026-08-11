@@ -62,6 +62,7 @@ class OperationalPlaceFixture {
     required this.latitude,
     required this.longitude,
     required this.description,
+    this.media,
   });
 
   final String id;
@@ -71,6 +72,7 @@ class OperationalPlaceFixture {
   final double latitude;
   final double longitude;
   final String description;
+  final PlanMedia? media;
 }
 
 abstract class OperationalPurchaseFixture {
@@ -960,7 +962,7 @@ abstract final class ChatFirstDemoData {
           ),
         ],
       ),
-      placeCatalog: const <OperationalPlaceFixture>[
+      placeCatalog: <OperationalPlaceFixture>[
         OperationalPlaceFixture(
           id: 'porto-livraria-lello',
           destinationId: 'porto',
@@ -970,8 +972,9 @@ abstract final class ChatFirstDemoData {
           longitude: -8.614732,
           description:
               'Scalone in legno e scaffali Liberty nel centro di Porto.',
+          media: media,
         ),
-        OperationalPlaceFixture(
+        const OperationalPlaceFixture(
           id: 'porto-clerigos',
           destinationId: 'porto',
           name: 'Torre dos Clérigos',
@@ -980,7 +983,7 @@ abstract final class ChatFirstDemoData {
           longitude: -8.614032,
           description: 'Torre barocca con vista compatta sulla città.',
         ),
-        OperationalPlaceFixture(
+        const OperationalPlaceFixture(
           id: 'porto-ribeira',
           destinationId: 'porto',
           name: 'Ribeira',
@@ -989,7 +992,7 @@ abstract final class ChatFirstDemoData {
           longitude: -8.611019,
           description: 'Rive del Douro per una passeggiata senza fretta.',
         ),
-        OperationalPlaceFixture(
+        const OperationalPlaceFixture(
           id: 'porto-palacio-cristal',
           destinationId: 'porto',
           name: 'Jardins do Palácio de Cristal',
