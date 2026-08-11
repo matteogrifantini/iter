@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart' show ThemeMode;
+import 'package:flutter/material.dart'
+    show AppLifecycleState, ThemeMode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
 
@@ -13,6 +14,7 @@ import 'package:iter/features/chat_first_prototype/chat_first_models.dart';
 import 'package:iter/features/chat_first_prototype/data_source.dart';
 import 'package:iter/features/chat_first_prototype/mock_data_source.dart';
 import 'package:iter/features/chat_first_prototype/plan_editor.dart';
+import 'package:iter/features/chat_first_prototype/plan_external_launcher.dart';
 import 'package:iter/features/chat_first_prototype/supabase_data_source.dart';
 import 'package:iter/models/trip_models.dart' show JourneyRoute;
 
@@ -2085,6 +2087,309 @@ void main() {
         );
       },
     );
+  });
+
+  group('Acquisti esterni e lifecycle', () {
+    const cid = 'c-plan-porto';
+    PlanExternalLauncher succeedingLauncher() => PlanExternalLauncher(
+      launchExternal: (_) async => true,
+      launchBrowser: (_) async => false,
+    );
+
+    test(
+      'openExternalPurchase registra il ritorno prima del launch e marca acquisto aperto',
+      () async {
+        final controller = _planController();
+        addTearDown(controller.dispose);
+        final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+        final flight = fixture.flights[0];
+        expect(
+          controller.selectTravelOption(
+            conversationId: cid,
+            optionId: flight.id,
+          ),
+          isTrue,
+        );
+        final revisionBefore = controller.conversationOf(cid).snapshot!.revision;
+
+        final launchStarted = Completer<void>();
+        final launchResult = Completer<bool>();
+        final launcher = PlanExternalLauncher(
+          launchExternal: (_) {
+            launchStarted.complete();
+            return launchResult.future;
+          },
+          launchBrowser: (_) async => false,
+        );
+        final opening = controller.openExternalPurchase(
+          conversationId: cid,
+          kind: ExternalPurchaseKind.travel,
+          optionId: flight.id,
+          uri: flight.providerUrl,
+          launcher: launcher,
+        );
+        // While the launch is still in flight the expected return is already
+        // registered, but the selection is NOT marked "purchase opened" yet.
+        await launchStarted.future;
+        expect(controller.hasExpectedPurchaseReturn(cid), isTrue);
+        expect(
+          controller
+              .conversationOf(cid)
+              .snapshot!
+              .travelSelection!
+              .option
+              .purchaseState,
+          PurchaseState.selected,
+        );
+        launchResult.complete(true);
+        expect(await opening, isTrue);
+        final snapshot = controller.conversationOf(cid).snapshot!;
+        expect(
+          snapshot.travelSelection!.option.purchaseState,
+          PurchaseState.purchaseOpened,
+        );
+        expect(snapshot.revision, revisionBefore + 1);
+        expect(snapshot.revisionMetadata?.label, 'Acquisto avviato');
+        // The prompt stays pending until the app resumes.
+        expect(controller.pendingPurchasePrompts, isEmpty);
+      },
+    );
+
+    test('launch fallito non marca acquisto aperto e pulisce il ritorno', () async {
+      final controller = _planController();
+      addTearDown(controller.dispose);
+      final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+      final flight = fixture.flights[0];
+      controller.selectTravelOption(
+        conversationId: cid,
+        optionId: flight.id,
+      );
+      final revisionBefore = controller.conversationOf(cid).snapshot!.revision;
+      final failing = PlanExternalLauncher(
+        launchExternal: (_) async => false,
+        launchBrowser: (_) async => false,
+      );
+
+      final opened = await controller.openExternalPurchase(
+        conversationId: cid,
+        kind: ExternalPurchaseKind.travel,
+        optionId: flight.id,
+        uri: flight.providerUrl,
+        launcher: failing,
+      );
+      expect(opened, isFalse);
+      final snapshot = controller.conversationOf(cid).snapshot!;
+      expect(
+        snapshot.travelSelection!.option.purchaseState,
+        PurchaseState.selected,
+      );
+      expect(snapshot.revision, revisionBefore);
+      expect(controller.hasExpectedPurchaseReturn(cid), isFalse);
+      expect(controller.pendingPurchasePrompts, isEmpty);
+      controller.handleAppLifecycleState(AppLifecycleState.resumed);
+      expect(controller.pendingPurchasePrompts, isEmpty);
+    });
+
+    test('resume atteso mostra il prompt una volta sola e lo consuma', () async {
+      final controller = _planController();
+      addTearDown(controller.dispose);
+      final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+      final flight = fixture.flights[0];
+      controller.selectTravelOption(
+        conversationId: cid,
+        optionId: flight.id,
+      );
+      expect(
+        await controller.openExternalPurchase(
+          conversationId: cid,
+          kind: ExternalPurchaseKind.travel,
+          optionId: flight.id,
+          uri: flight.providerUrl,
+          launcher: succeedingLauncher(),
+        ),
+        isTrue,
+      );
+      expect(controller.pendingPurchasePrompts, isEmpty);
+
+      controller.handleAppLifecycleState(AppLifecycleState.resumed);
+      var pending = controller.pendingPurchasePrompts;
+      expect(pending, hasLength(1));
+      expect(pending.single.conversationId, cid);
+      expect(pending.single.kind, ExternalPurchaseKind.travel);
+      expect(pending.single.optionId, flight.id);
+
+      expect(controller.consumePurchasePrompt(cid), isTrue);
+      expect(controller.pendingPurchasePrompts, isEmpty);
+      // A second resume does not re-show the consumed prompt.
+      controller.handleAppLifecycleState(AppLifecycleState.resumed);
+      expect(controller.pendingPurchasePrompts, isEmpty);
+    });
+
+    test('resume normale o cold start non genera prompt', () async {
+      final controller = _planController();
+      addTearDown(controller.dispose);
+      expect(controller.pendingPurchasePrompts, isEmpty);
+      controller.handleAppLifecycleState(AppLifecycleState.resumed);
+      expect(controller.pendingPurchasePrompts, isEmpty);
+
+      final coldStart = ChatFirstPrototypeController();
+      addTearDown(coldStart.dispose);
+      expect(coldStart.pendingPurchasePrompts, isEmpty);
+      coldStart.handleAppLifecycleState(AppLifecycleState.resumed);
+      expect(coldStart.pendingPurchasePrompts, isEmpty);
+    });
+
+    test(
+      'confirmExternalPurchase aggiorna solo provider, opzione, prezzo, timestamp e stato',
+      () async {
+        final controller = _planController();
+        addTearDown(controller.dispose);
+        final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+        final flight = fixture.flights[0];
+        controller.selectTravelOption(
+          conversationId: cid,
+          optionId: flight.id,
+        );
+        await controller.openExternalPurchase(
+          conversationId: cid,
+          kind: ExternalPurchaseKind.travel,
+          optionId: flight.id,
+          uri: flight.providerUrl,
+          launcher: succeedingLauncher(),
+        );
+        final opened = controller.conversationOf(cid).snapshot!;
+        final openedOption = opened.travelSelection!.option;
+        final openedAlternatives = opened.travelSelection!.alternatives;
+        final openedRevision = opened.revision;
+
+        controller.confirmExternalPurchase(
+          conversationId: cid,
+          kind: ExternalPurchaseKind.travel,
+          optionId: flight.id,
+        );
+        final confirmed = controller.conversationOf(cid).snapshot!;
+        final option = confirmed.travelSelection!.option;
+        expect(option.purchaseState, PurchaseState.purchased);
+        expect(option.id, openedOption.id);
+        expect(option.label, openedOption.label);
+        expect(option.priceCents, openedOption.priceCents);
+        expect(
+          confirmed.travelSelection!.alternatives.map((item) => item.id),
+          openedAlternatives.map((item) => item.id),
+        );
+        expect(confirmed.revision, openedRevision + 1);
+        expect(confirmed.revisionMetadata?.label, 'Acquisto confermato');
+        expect(
+          confirmed.revisionMetadata!.timestamp.isAfter(
+            opened.revisionMetadata!.timestamp,
+          ),
+          isTrue,
+        );
+        // Nothing else in the plan changed.
+        expect(
+          confirmed.days.map((day) => day.toJson()).toList(),
+          opened.days.map((day) => day.toJson()).toList(),
+        );
+        expect(confirmed.staySelection?.toJson(), opened.staySelection?.toJson());
+        expect(confirmed.transport, opened.transport);
+        expect(confirmed.stay, opened.stay);
+        // The settled purchase no longer lingers as a prompt.
+        expect(controller.pendingPurchasePrompts, isEmpty);
+        expect(controller.hasExpectedPurchaseReturn(cid), isFalse);
+      },
+    );
+
+    test('dismissExternalPurchasePrompt ripristina selezionato', () async {
+      final controller = _planController();
+      addTearDown(controller.dispose);
+      final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+      final flight = fixture.flights[0];
+      controller.selectTravelOption(
+        conversationId: cid,
+        optionId: flight.id,
+      );
+      await controller.openExternalPurchase(
+        conversationId: cid,
+        kind: ExternalPurchaseKind.travel,
+        optionId: flight.id,
+        uri: flight.providerUrl,
+        launcher: succeedingLauncher(),
+      );
+      expect(
+        controller.conversationOf(cid).snapshot!.travelSelection!.option
+            .purchaseState,
+        PurchaseState.purchaseOpened,
+      );
+
+      controller.dismissExternalPurchasePrompt(
+        conversationId: cid,
+        kind: ExternalPurchaseKind.travel,
+        optionId: flight.id,
+      );
+      final snapshot = controller.conversationOf(cid).snapshot!;
+      expect(
+        snapshot.travelSelection!.option.purchaseState,
+        PurchaseState.selected,
+      );
+      expect(
+        snapshot.travelSelection!.option.purchaseState,
+        isNot(PurchaseState.purchased),
+      );
+      expect(snapshot.revisionMetadata?.label, 'Acquisto non confermato');
+      expect(controller.pendingPurchasePrompts, isEmpty);
+
+      // A dismissal for a selection that never existed leaves the plan intact.
+      final before = controller.conversationOf(cid).snapshot!.revision;
+      controller.dismissExternalPurchasePrompt(
+        conversationId: cid,
+        kind: ExternalPurchaseKind.stay,
+        optionId: 'missing',
+      );
+      expect(controller.conversationOf(cid).snapshot!.revision, before);
+    });
+
+    test('process death lascia acquisto aperto e nessun prompt', () async {
+      final source = _RestoringPlanDataSource();
+      final controllerA = _planController(dataSource: source);
+      final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+      final flight = fixture.flights[0];
+      controllerA.selectTravelOption(
+        conversationId: cid,
+        optionId: flight.id,
+      );
+      await source.savedCount(1);
+      expect(
+        await controllerA.openExternalPurchase(
+          conversationId: cid,
+          kind: ExternalPurchaseKind.travel,
+          optionId: flight.id,
+          uri: flight.providerUrl,
+          launcher: succeedingLauncher(),
+        ),
+        isTrue,
+      );
+      await source.savedCount(2);
+      expect(
+        controllerA.conversationOf(cid).snapshot!.travelSelection!.option
+            .purchaseState,
+        PurchaseState.purchaseOpened,
+      );
+      controllerA.dispose();
+
+      // New controller instance on the same persisted conversation: the
+      // purchaseOpened selection survives, the session prompt state does not.
+      final controllerB = ChatFirstPrototypeController(dataSource: source);
+      addTearDown(controllerB.dispose);
+      await controllerB.restoreConversations();
+      expect(
+        controllerB.conversationOf(cid).snapshot!.travelSelection!.option
+            .purchaseState,
+        PurchaseState.purchaseOpened,
+      );
+      expect(controllerB.pendingPurchasePrompts, isEmpty);
+      controllerB.handleAppLifecycleState(AppLifecycleState.resumed);
+      expect(controllerB.pendingPurchasePrompts, isEmpty);
+    });
   });
 }
 

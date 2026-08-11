@@ -9,25 +9,46 @@ import 'data_source.dart';
 /// Top-level app for the chat-first prototype. It reuses Iter's visual theme
 /// while keeping its own isolated controller; the theme now lives on the
 /// controller (light default on mock, persisted `profiles.theme_mode` on
-/// Supabase) instead of SharedPreferences.
+/// Supabase) instead of SharedPreferences. It observes [WidgetsBinding] so a
+/// resume after an external purchase can ask the traveler to settle it.
 class ChatFirstPrototypeApp extends StatefulWidget {
-  const ChatFirstPrototypeApp({super.key});
+  const ChatFirstPrototypeApp({super.key, this.controller});
+
+  /// Optional injected controller for tests and hosting; a null value builds
+  /// the isolated demo controller as before.
+  final ChatFirstPrototypeController? controller;
 
   @override
   State<ChatFirstPrototypeApp> createState() => _ChatFirstPrototypeAppState();
 }
 
-class _ChatFirstPrototypeAppState extends State<ChatFirstPrototypeApp> {
+class _ChatFirstPrototypeAppState extends State<ChatFirstPrototypeApp>
+    with WidgetsBindingObserver {
   late final ChatFirstPrototypeController _controller;
   var _themeMode = ThemeMode.light;
+  var _ownsController = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = ChatFirstPrototypeController(dataSource: resolveDataSource());
+    WidgetsBinding.instance.addObserver(this);
+    final injected = widget.controller;
+    if (injected != null) {
+      _controller = injected;
+    } else {
+      _controller = ChatFirstPrototypeController(
+        dataSource: resolveDataSource(),
+      );
+      _ownsController = true;
+    }
     _loadProfile();
     _controller.loadTrendJourneys();
     _controller.restoreConversations();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _controller.handleAppLifecycleState(state);
   }
 
   Future<void> _loadProfile() async {
@@ -43,7 +64,8 @@ class _ChatFirstPrototypeAppState extends State<ChatFirstPrototypeApp> {
 
   @override
   void dispose() {
-    _controller.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    if (_ownsController) _controller.dispose();
     super.dispose();
   }
 

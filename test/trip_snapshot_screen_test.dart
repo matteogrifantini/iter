@@ -7,6 +7,7 @@ import 'package:iter/features/chat_first_prototype/chat_first_data.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_models.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_thread_screen.dart';
 import 'package:iter/features/chat_first_prototype/place_reel_screen.dart';
+import 'package:iter/features/chat_first_prototype/plan_cost_sheet.dart';
 import 'package:iter/features/chat_first_prototype/plan_editor.dart';
 import 'package:iter/features/chat_first_prototype/plan_external_launcher.dart';
 import 'package:iter/features/chat_first_prototype/trip_snapshot_screen.dart';
@@ -1365,6 +1366,354 @@ void main() {
       );
 
       expect(await launcher.open(uri), isFalse);
+    });
+
+    test('canOpen rifiuta URL non HTTPS o host non allowlisted', () {
+      final launcher = PlanExternalLauncher(
+        launchExternal: (_) async => true,
+        launchBrowser: (_) async => false,
+      );
+
+      expect(launcher.canOpen(null), isFalse);
+      expect(launcher.canOpen(Uri.parse('http://www.flytap.com/')), isFalse);
+      expect(launcher.canOpen(Uri.parse('https://evil.example.com/')), isFalse);
+      expect(launcher.canOpen(Uri.parse('https://www.flytap.com/')), isTrue);
+      expect(launcher.canOpen(Uri.parse('https://www.booking.com/')), isTrue);
+    });
+
+    test('open rifiuta URL non HTTPS o host non allowlisted senza launch', () async {
+      var launched = 0;
+      final launcher = PlanExternalLauncher(
+        launchExternal: (_) async {
+          launched++;
+          return true;
+        },
+        launchBrowser: (_) async => false,
+      );
+
+      expect(
+        await launcher.open(Uri.parse('https://evil.example.com/')),
+        isFalse,
+      );
+      expect(
+        await launcher.open(Uri.parse('http://www.flytap.com/')),
+        isFalse,
+      );
+      expect(launched, 0);
+    });
+  });
+
+  group('PlanCostSheet', () {
+    test('buildPlanCostSheetData espone sezioni, stati e totale proiettato', () {
+      final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+      final snapshot = fixture.snapshot.copyWith(
+        travelSelection: TravelPlanSelection(
+          option: const TravelOption(
+            id: 'porto-flight-tap-direct',
+            label: 'TAP Air Portugal · FCO–OPO',
+            priceCents: 18900,
+            purchaseState: PurchaseState.selected,
+          ),
+        ),
+        staySelection: StayPlanSelection(
+          option: const StayOption(
+            id: 'porto-hotel-torel-avantgarde',
+            label: 'Torel Avantgarde',
+            priceCents: 48200,
+            purchaseState: PurchaseState.purchased,
+          ),
+        ),
+      );
+      final launcher = PlanExternalLauncher(
+        launchExternal: (_) async => true,
+        launchBrowser: (_) async => false,
+      );
+
+      final data = buildPlanCostSheetData(snapshot, launcher);
+      expect(data.sections, hasLength(3));
+      expect(data.sections[0].title, 'Da acquistare');
+      final purchaseRows = data.sections[0].rows;
+      expect(purchaseRows, hasLength(2));
+      final travelRow = purchaseRows.first;
+      expect(travelRow.label, 'TAP Air Portugal · FCO–OPO');
+      expect(travelRow.priceCents, 18900);
+      expect(travelRow.state, PurchaseState.selected);
+      expect(travelRow.purchaseUri, Uri.parse('https://www.flytap.com/'));
+      expect(travelRow.actionEnabled, isTrue);
+      expect(travelRow.hasAction, isTrue);
+
+      final stayRow = purchaseRows.last;
+      expect(stayRow.state, PurchaseState.purchased);
+      expect(stayRow.purchaseUri, Uri.parse('https://www.booking.com/'));
+      expect(stayRow.hasAction, isTrue);
+
+      expect(data.sections[1].title, 'Stime non acquistate');
+      final estimateRows = data.sections[1].rows;
+      expect(estimateRows, hasLength(3));
+      expect(estimateRows.first.label, 'Ingressi');
+      expect(estimateRows.first.subtitle, '2 × 18 €');
+      expect(estimateRows.first.state, PurchaseState.estimate);
+      expect(estimateRows.first.hasAction, isFalse);
+
+      final totals = data.sections[2].rows;
+      expect(data.sections[2].title, 'Totali');
+      expect(totals, hasLength(3));
+      expect(totals[0].label, 'Da acquistare fuori da Iter');
+      expect(totals[0].priceCents, 67100);
+      expect(totals[1].label, 'Stime sul posto');
+      expect(totals[1].priceCents, 12600);
+      expect(totals[2].label, 'Totale previsto');
+      expect(totals[2].priceCents, 79700);
+      expect(totals[2].emphasized, isTrue);
+    });
+
+    test('azioni esterne disabilitate per URL non HTTPS o host non allowlisted', () {
+      final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+      final snapshot = fixture.snapshot.copyWith(
+        travelSelection: TravelPlanSelection(
+          option: TravelOption(
+            id: 'porto-flight-tap-direct',
+            label: 'TAP Air Portugal · FCO–OPO',
+            priceCents: 18900,
+          ),
+        ),
+      );
+      final launcher = PlanExternalLauncher(
+        launchExternal: (_) async => true,
+        launchBrowser: (_) async => false,
+      );
+
+      final data = buildPlanCostSheetData(snapshot, launcher);
+      // Allowlisted HTTPS from the fixture stays enabled...
+      expect(data.sections[0].rows.first.actionEnabled, isTrue);
+      // ...while a hostile host or a plain-http link is refused.
+      expect(
+        launcher.canOpen(Uri.parse('https://not-a-provider.it/')),
+        isFalse,
+      );
+      expect(
+        launcher.canOpen(Uri.parse('http://www.flytap.com/')),
+        isFalse,
+      );
+    });
+
+    test('sheet non selezionato mostra stima senza azione esterna', () {
+      final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+      final launcher = PlanExternalLauncher(
+        launchExternal: (_) async => true,
+        launchBrowser: (_) async => false,
+      );
+
+      final data = buildPlanCostSheetData(fixture.snapshot, launcher);
+      final travelRow = data.sections[0].rows.first;
+      expect(travelRow.state, PurchaseState.estimate);
+      expect(travelRow.purchaseUri, isNull);
+      expect(travelRow.actionEnabled, isFalse);
+      expect(travelRow.hasAction, isFalse);
+    });
+
+    testWidgets('apre Costi e mostra sezioni, prezzi, stati e totale', (
+      tester,
+    ) async {
+      final controller = _controllerFor(
+        ChatFirstDemoData.operationalFixtureFor('porto').snapshot,
+      );
+      addTearDown(controller.dispose);
+      controller.selectTravelOption(
+        conversationId: _conversationId,
+        optionId: 'porto-flight-tap-direct',
+      );
+      controller.selectStayOption(
+        conversationId: _conversationId,
+        optionId: 'porto-hotel-torel-avantgarde',
+      );
+      await _pumpPlan(tester, controller: controller);
+
+      await tester.tap(find.text('Costi'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Costi del piano'), findsOneWidget);
+      expect(find.text('Da acquistare'), findsOneWidget);
+      expect(find.text('Stime non acquistate'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Trasporto locale'),
+        120,
+        scrollable: _scrollableInside(const Key('plan-cost-sheet-scroll')),
+      );
+      expect(find.text('189 €'), findsWidgets);
+      expect(find.text('482 €'), findsOneWidget);
+      expect(find.text('selezionato'), findsNWidgets(2));
+      expect(find.text('36 €'), findsOneWidget);
+      expect(find.text('75 €'), findsOneWidget);
+      expect(find.text('15 €'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Totale previsto'),
+        120,
+        scrollable: _scrollableInside(const Key('plan-cost-sheet-scroll')),
+      );
+      expect(find.text('Totali'), findsOneWidget);
+      expect(find.text('Da acquistare fuori da Iter'), findsOneWidget);
+      expect(find.text('Stime sul posto'), findsOneWidget);
+      expect(find.text('126 €'), findsOneWidget);
+      expect(find.text('Totale previsto'), findsOneWidget);
+      expect(find.text('797 €'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Dati demo · prezzi e disponibilità non sono in tempo reale.'),
+        120,
+        scrollable: _scrollableInside(const Key('plan-cost-sheet-scroll')),
+      );
+      expect(
+        find.text('Dati demo · prezzi e disponibilità non sono in tempo reale.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets(
+      'apre l acquirente dal foglio e marca acquisto aperto senza prompt',
+      (tester) async {
+        final controller = _controllerFor(
+          ChatFirstDemoData.operationalFixtureFor('porto').snapshot,
+        );
+        addTearDown(controller.dispose);
+        controller.selectTravelOption(
+          conversationId: _conversationId,
+          optionId: 'porto-flight-tap-direct',
+        );
+        controller.selectStayOption(
+          conversationId: _conversationId,
+          optionId: 'porto-hotel-torel-avantgarde',
+        );
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.binding.setSurfaceSize(const Size(390, 844));
+        final launcher = PlanExternalLauncher(
+          launchExternal: (_) async => true,
+          launchBrowser: (_) async => false,
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: TripSnapshotScreen(
+              controller: controller,
+              conversationId: _conversationId,
+              externalLauncher: launcher,
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.tap(find.text('Costi'));
+        await tester.pumpAndSettle();
+
+        // Both rows carry an enabled external action with announcement.
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is Semantics &&
+                widget.properties.label == 'Si apre la pagina di TAP Air Portugal',
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('Apri nel sito'), findsNWidgets(2));
+
+        await tester.tap(find.text('Apri nel sito').first);
+        await tester.pumpAndSettle();
+
+        expect(
+          controller
+              .conversationOf(_conversationId)
+              .snapshot!
+              .travelSelection!
+              .option
+              .purchaseState,
+          PurchaseState.purchaseOpened,
+        );
+        expect(find.text('acquisto aperto'), findsOneWidget);
+        // No return prompt until the app actually resumes.
+        expect(controller.pendingPurchasePrompts, isEmpty);
+      },
+    );
+
+    testWidgets('righe con link rifiutato restano inerti', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PlanCostSheet(
+              sections: const <PlanCostSectionData>[
+                PlanCostSectionData(
+                  title: 'Da acquistare',
+                  subtitle: 'Demo',
+                  rows: <PlanCostRowData>[
+                    PlanCostRowData(
+                      kind: ExternalPurchaseKind.travel,
+                      optionId: 'http-link',
+                      label: 'Provider non sicuro',
+                      priceCents: 100,
+                      state: PurchaseState.selected,
+                      purchaseUri: null,
+                      actionEnabled: false,
+                      hasAction: true,
+                    ),
+                    PlanCostRowData(
+                      kind: ExternalPurchaseKind.travel,
+                      optionId: 'host-link',
+                      label: 'Host sconosciuto',
+                      priceCents: 200,
+                      state: PurchaseState.selected,
+                      purchaseUri: null,
+                      actionEnabled: false,
+                      hasAction: true,
+                    ),
+                    PlanCostRowData(
+                      kind: ExternalPurchaseKind.travel,
+                      optionId: 'ok-link',
+                      label: 'Provider demo',
+                      priceCents: 300,
+                      state: PurchaseState.selected,
+                      purchaseUri: null,
+                      actionEnabled: true,
+                      hasAction: true,
+                    ),
+                  ],
+                ),
+                PlanCostSectionData(
+                  title: 'Totali',
+                  subtitle: '',
+                  rows: <PlanCostRowData>[
+                    PlanCostRowData(
+                      label: 'Totale previsto',
+                      priceCents: 600,
+                      state: PurchaseState.estimate,
+                      showState: false,
+                      emphasized: true,
+                    ),
+                  ],
+                ),
+              ],
+              onOpenPurchase: (_) async {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final disabledButtons = find.byWidgetPredicate(
+        (widget) =>
+            widget is OutlinedButton && widget.onPressed == null,
+      );
+      expect(disabledButtons, findsNWidgets(2));
+      final enabledButtons = find.byWidgetPredicate(
+        (widget) => widget is FilledButton && widget.onPressed != null,
+      );
+      expect(enabledButtons, findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics &&
+              widget.properties.label ==
+                  'Acquisto non disponibile per Provider non sicuro',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Totale previsto'), findsOneWidget);
+      expect(find.text('6 €'), findsOneWidget);
     });
   });
 }

@@ -30,6 +30,85 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
   var _tabIndex = 0;
 
   @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_maybeShowPurchaseReturnPrompt);
+    // Cold start: a persisted `purchaseOpened` never triggers a prompt, the
+    // launch flag is session state; this initial check is a no-op by design.
+    _maybeShowPurchaseReturnPrompt();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_maybeShowPurchaseReturnPrompt);
+    super.dispose();
+  }
+
+  /// Consumes the first pending purchase-return prompt and shows its dialog
+  /// exactly once. Consuming before showing keeps a second resume silent.
+  void _maybeShowPurchaseReturnPrompt() {
+    final pending = widget.controller.pendingPurchasePrompts;
+    if (pending.isEmpty) return;
+    final prompt = pending.first;
+    widget.controller.consumePurchasePrompt(prompt.conversationId);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _showPurchaseReturnDialog(prompt);
+    });
+  }
+
+  Future<void> _showPurchaseReturnDialog(PurchaseReturnPrompt prompt) async {
+    final controller = widget.controller;
+    final snapshot = controller.conversationOf(prompt.conversationId).snapshot;
+    // Only the provider voice: no prices, codes or personal data in the dialog.
+    final label = switch (prompt.kind) {
+      ExternalPurchaseKind.travel => snapshot?.travelSelection?.option.label,
+      ExternalPurchaseKind.stay => snapshot?.staySelection?.option.label,
+    }
+        ?.split(' · ')
+        .first;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      // The traveler is already back in the app: they must settle the
+      // purchase explicitly. Tapping outside or system Back never leaves a
+      // dangling `purchaseOpened`.
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Sei tornato dal sito di prenotazione.'),
+        content: Text(
+          label == null
+              ? 'Hai completato l’acquisto? Aggiorna il piano o lascia tutto com’è.'
+              : 'Hai completato l’acquisto di “$label”?',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Non ancora'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Sì, aggiorna'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == null || !mounted) return;
+    if (confirmed) {
+      controller.confirmExternalPurchase(
+        conversationId: prompt.conversationId,
+        kind: prompt.kind,
+        optionId: prompt.optionId,
+      );
+    } else {
+      controller.dismissExternalPurchasePrompt(
+        conversationId: prompt.conversationId,
+        kind: prompt.kind,
+        optionId: prompt.optionId,
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: widget.controller,

@@ -6,6 +6,7 @@ import 'chat_first_models.dart';
 import 'place_detail_sheet.dart';
 import 'place_picker_sheet.dart';
 import 'place_reel_screen.dart';
+import 'plan_cost_sheet.dart';
 import 'plan_external_launcher.dart';
 import 'plan_editor.dart';
 import 'plan_patch_sheet.dart';
@@ -249,9 +250,7 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
           bottomNavigationBar: _GlobalPlanActions(
             onAdd: () => _openPlacePicker(snapshot: snapshot, fixture: fixture),
             onAsk: () => Navigator.of(context).maybePop(),
-            onCosts: () => _showPlannedAction(
-              'Riepilogo costi disponibile nel prossimo passaggio.',
-            ),
+            onCosts: _openCostSheet,
           ),
         );
       },
@@ -456,6 +455,15 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
       const SnackBar(
         content: Text('Non riesco ad aprire le indicazioni. Riprova.'),
       ),
+    );
+  }
+
+  Future<void> _openCostSheet() async {
+    await showPlanCostSheet(
+      context: context,
+      controller: _controller,
+      conversationId: _conversationId,
+      externalLauncher: widget.externalLauncher ?? PlanExternalLauncher(),
     );
   }
 

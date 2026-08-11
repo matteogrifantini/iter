@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show ThemeMode;
+import 'package:flutter/material.dart' show AppLifecycleState, ThemeMode;
 
 import '../../models/trip_models.dart' show JourneyRoute;
 import 'chat_first_data.dart';
@@ -9,8 +9,38 @@ import 'chat_first_models.dart';
 import 'data_source.dart';
 import 'mock_data_source.dart';
 import 'plan_editor.dart';
+import 'plan_external_launcher.dart';
 
 enum PlanPersistenceStatus { idle, saving, saved, failed }
+
+/// Which purchase the traveler is settling: the outbound/return journey or the
+/// stay. Mirrors [TripSnapshot.travelSelection] / [TripSnapshot.staySelection].
+enum ExternalPurchaseKind { travel, stay }
+
+/// A return from an external purchase the traveler is asked to settle. It
+/// carries no sensitive data: only the conversation and the purchase identity,
+/// which the shell resolves against the plan snapshot for the dialog copy.
+@immutable
+class PurchaseReturnPrompt {
+  const PurchaseReturnPrompt({
+    required this.conversationId,
+    required this.kind,
+    required this.optionId,
+  });
+
+  final String conversationId;
+  final ExternalPurchaseKind kind;
+  final String optionId;
+}
+
+/// The expected-return intent registered right before an external launch.
+@immutable
+class _PurchaseReturnIntent {
+  const _PurchaseReturnIntent({required this.kind, required this.optionId});
+
+  final ExternalPurchaseKind kind;
+  final String optionId;
+}
 
 @immutable
 class PlanPersistenceState {
@@ -94,6 +124,18 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   final Map<String, int> _latestPlanSaveRevision = <String, int>{};
   final Map<String, PlanPlaceDetails> _placeComposerContexts =
       <String, PlanPlaceDetails>{};
+
+  /// Per-conversation external purchase lifecycle: the expected-return intent
+  /// (registered before the launch), whether the launch succeeded in THIS
+  /// session, whether the resume prompt was already consumed, and whether the
+  /// prompt is still waiting for an app resume. Process death clears all of
+  /// them because they are session state; the persisted `purchaseOpened`
+  /// selection survives instead.
+  final Map<String, _PurchaseReturnIntent> _purchaseReturns =
+      <String, _PurchaseReturnIntent>{};
+  final Map<String, bool> _purchaseLaunchSucceeded = <String, bool>{};
+  final Map<String, bool> _purchasePromptConsumed = <String, bool>{};
+  final Map<String, bool> _purchaseAwaitingResume = <String, bool>{};
 
   String? _activeThreadId;
   int _unread = 0;
@@ -367,6 +409,148 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     return removed;
   }
 
+  /// Opens an external purchase page for the selected [optionId]. The expected
+  /// return is registered BEFORE the launch: a resume in the same session can
+  /// then ask the traveler to settle the purchase. A failed launch clears the
+  /// intent and never marks the selection `purchaseOpened`. Returns whether
+  /// the external page was actually opened.
+  Future<bool> openExternalPurchase({
+    required String conversationId,
+    required ExternalPurchaseKind kind,
+    required String optionId,
+    required Uri uri,
+    required PlanExternalLauncher launcher,
+  }) async {
+    // Refuse to launch when there is no applicable selection to settle: the
+    // post-launch mark would otherwise have nothing to update.
+    if (!_hasSelection(conversationId, kind, optionId)) return false;
+    _purchaseReturns[conversationId] = _PurchaseReturnIntent(
+      kind: kind,
+      optionId: optionId,
+    );
+    _purchasePromptConsumed[conversationId] = false;
+    final opened = await launcher.open(uri);
+    if (!opened) {
+      _purchaseReturns.remove(conversationId);
+      _purchaseLaunchSucceeded.remove(conversationId);
+      _purchasePromptConsumed.remove(conversationId);
+      _purchaseAwaitingResume.remove(conversationId);
+      return false;
+    }
+    _purchaseLaunchSucceeded[conversationId] = true;
+    // The resume gate is armed only once the launch succeeded in this
+    // session: a `resumed` arriving while the launch is still in flight never
+    // leaves the prompt permanently stuck waiting.
+    _purchaseAwaitingResume[conversationId] = true;
+    _markPurchaseOpened(conversationId, kind, optionId);
+    return true;
+  }
+
+  /// The prompts waiting to be shown after an app resume. A prompt is exposed
+  /// only when a launch succeeded in the current session AND the app resumed
+  /// (the shell consumes it once, so a second resume never re-shows it).
+  List<PurchaseReturnPrompt> get pendingPurchasePrompts {
+    final prompts = <PurchaseReturnPrompt>[];
+    for (final entry in _purchaseReturns.entries) {
+      final conversationId = entry.key;
+      if (_purchaseAwaitingResume[conversationId] ?? false) continue;
+      if (!(_purchaseLaunchSucceeded[conversationId] ?? false)) continue;
+      if (_purchasePromptConsumed[conversationId] ?? false) continue;
+      prompts.add(
+        PurchaseReturnPrompt(
+          conversationId: conversationId,
+          kind: entry.value.kind,
+          optionId: entry.value.optionId,
+        ),
+      );
+    }
+    return List<PurchaseReturnPrompt>.unmodifiable(prompts);
+  }
+
+  /// Whether an expected return for [conversationId] is currently registered.
+  /// Testable read of the pre-launch intent; the shell uses the snapshot for
+  /// the dialog copy instead.
+  bool hasExpectedPurchaseReturn(String conversationId) =>
+      _purchaseReturns.containsKey(conversationId);
+
+  /// Marks the resume prompt for [conversationId] as shown. The shell calls
+  /// this once before displaying the dialog, so a second resume stays silent.
+  bool consumePurchasePrompt(String conversationId) {
+    if (!_purchaseReturns.containsKey(conversationId)) return false;
+    _purchasePromptConsumed[conversationId] = true;
+    notifyListeners();
+    return true;
+  }
+
+  /// Translates a lifecycle state into a purchase-return prompt. Only a
+  /// `resumed` state with a successful launch in this session exposes the
+  /// prompt (still not consumed); everything else stays silent.
+  void handleAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    var changed = false;
+    for (final conversationId in _purchaseReturns.keys.toList()) {
+      if (!(_purchaseAwaitingResume[conversationId] ?? false)) continue;
+      if (!(_purchaseLaunchSucceeded[conversationId] ?? false)) continue;
+      if (_purchasePromptConsumed[conversationId] ?? false) continue;
+      _purchaseAwaitingResume[conversationId] = false;
+      changed = true;
+    }
+    if (changed) notifyListeners();
+  }
+
+  /// "Sì, aggiorna": settles the purchase as completed. Only the authorized
+  /// fields of the selection change — provider/option identity, price,
+  /// timestamp and purchase state (plus the plan revision). Every other part
+  /// of the snapshot stays byte-identical.
+  void confirmExternalPurchase({
+    required String conversationId,
+    required ExternalPurchaseKind kind,
+    required String optionId,
+  }) {
+    final next = _selectionWithState(
+      conversationId: conversationId,
+      kind: kind,
+      optionId: optionId,
+      state: PurchaseState.purchased,
+      label: 'Acquisto confermato',
+    );
+    if (next != null) {
+      _commitPlanRevision(
+        conversationId: conversationId,
+        before: _planSnapshot(conversationId),
+        after: next,
+      );
+    }
+    // Whatever the outcome, the settled purchase stops lingering as a prompt.
+    _clearPurchaseReturn(conversationId);
+  }
+
+  /// "Non ancora": restores the previous `selected` state in memory without
+  /// ever marking the purchase as completed. If the selection is gone or was
+  /// never there, the snapshot stays unchanged.
+  void dismissExternalPurchasePrompt({
+    required String conversationId,
+    required ExternalPurchaseKind kind,
+    required String optionId,
+  }) {
+    final next = _selectionWithState(
+      conversationId: conversationId,
+      kind: kind,
+      optionId: optionId,
+      state: PurchaseState.selected,
+      label: 'Acquisto non confermato',
+    );
+    if (next != null) {
+      _commitPlanRevision(
+        conversationId: conversationId,
+        before: _planSnapshot(conversationId),
+        after: next,
+      );
+    }
+    // Same cleanup as the confirm path: no residual intent or consumed flag.
+    _clearPurchaseReturn(conversationId);
+  }
+
   bool selectTravelOption({
     required String conversationId,
     required String optionId,
@@ -515,6 +699,134 @@ class ChatFirstPrototypeController extends ChangeNotifier {
       throw StateError('Conversation $conversationId has no plan snapshot.');
     }
     return snapshot;
+  }
+
+  /// Whether the conversation currently has [optionId] selected for [kind].
+  bool _hasSelection(
+    String conversationId,
+    ExternalPurchaseKind kind,
+    String optionId,
+  ) {
+    final snapshot = conversationOf(conversationId).snapshot;
+    if (snapshot == null) return false;
+    return switch (kind) {
+      ExternalPurchaseKind.travel =>
+        snapshot.travelSelection?.option.id == optionId,
+      ExternalPurchaseKind.stay => snapshot.staySelection?.option.id == optionId,
+    };
+  }
+
+  /// Marks the selection as `purchaseOpened` right after a successful external
+  /// launch. Only the authorized selection fields change; the rest of the
+  /// snapshot stays intact.
+  void _markPurchaseOpened(
+    String conversationId,
+    ExternalPurchaseKind kind,
+    String optionId,
+  ) {
+    final next = _selectionWithState(
+      conversationId: conversationId,
+      kind: kind,
+      optionId: optionId,
+      state: PurchaseState.purchaseOpened,
+      label: 'Acquisto avviato',
+    );
+    if (next == null) return;
+    _commitPlanRevision(
+      conversationId: conversationId,
+      before: _planSnapshot(conversationId),
+      after: next,
+    );
+  }
+
+  /// Builds a revision that changes ONLY the selection's purchase state (and
+  /// the plan revision/timestamp), preserving provider label, option id, price
+  /// and alternatives. Returns null when the conversation has no such
+  /// selection, leaving the snapshot untouched.
+  TripSnapshot? _selectionWithState({
+    required String conversationId,
+    required ExternalPurchaseKind kind,
+    required String optionId,
+    required PurchaseState state,
+    required String label,
+  }) {
+    final current = _planSnapshot(conversationId);
+    final revision = current.revision + 1;
+    return switch (kind) {
+      ExternalPurchaseKind.travel => _travelSelectionWithState(
+        current: current,
+        conversationId: conversationId,
+        optionId: optionId,
+        state: state,
+        revision: revision,
+        label: label,
+      ),
+      ExternalPurchaseKind.stay => _staySelectionWithState(
+        current: current,
+        conversationId: conversationId,
+        optionId: optionId,
+        state: state,
+        revision: revision,
+        label: label,
+      ),
+    };
+  }
+
+  TripSnapshot? _travelSelectionWithState({
+    required TripSnapshot current,
+    required String conversationId,
+    required String optionId,
+    required PurchaseState state,
+    required int revision,
+    required String label,
+  }) {
+    final selection = current.travelSelection;
+    if (selection == null || selection.option.id != optionId) return null;
+    return current.copyWith(
+      travelSelection: TravelPlanSelection(
+        option: TravelOption(
+          id: selection.option.id,
+          label: selection.option.label,
+          priceCents: selection.option.priceCents,
+          purchaseState: state,
+        ),
+        alternatives: selection.alternatives,
+      ),
+      revision: revision,
+      revisionMetadata: _selectionMetadata(conversationId, revision, label),
+    );
+  }
+
+  TripSnapshot? _staySelectionWithState({
+    required TripSnapshot current,
+    required String conversationId,
+    required String optionId,
+    required PurchaseState state,
+    required int revision,
+    required String label,
+  }) {
+    final selection = current.staySelection;
+    if (selection == null || selection.option.id != optionId) return null;
+    return current.copyWith(
+      staySelection: StayPlanSelection(
+        option: StayOption(
+          id: selection.option.id,
+          label: selection.option.label,
+          priceCents: selection.option.priceCents,
+          purchaseState: state,
+        ),
+        alternatives: selection.alternatives,
+      ),
+      revision: revision,
+      revisionMetadata: _selectionMetadata(conversationId, revision, label),
+    );
+  }
+
+  void _clearPurchaseReturn(String conversationId) {
+    _purchaseReturns.remove(conversationId);
+    _purchaseLaunchSucceeded.remove(conversationId);
+    _purchasePromptConsumed.remove(conversationId);
+    _purchaseAwaitingResume.remove(conversationId);
   }
 
   PlanPatchPreview _rememberPlanPreview(PlanPatchPreview preview) {

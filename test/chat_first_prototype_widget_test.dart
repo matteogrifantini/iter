@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:iter/app/iter_theme.dart';
 import 'package:iter/data/mock_data.dart';
 import 'package:iter/features/chat_first_prototype/adaptive_home_model.dart';
+import 'package:iter/features/chat_first_prototype/chat_first_app.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_controller.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_data.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_home_screen.dart';
@@ -12,6 +13,7 @@ import 'package:iter/features/chat_first_prototype/chat_first_models.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_profile_screen.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_shell.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_thread_screen.dart';
+import 'package:iter/features/chat_first_prototype/plan_external_launcher.dart';
 import 'package:iter/features/chat_first_prototype/rotta_viva_mark.dart';
 import 'package:iter/features/chat_first_prototype/trip_snapshot_screen.dart';
 import 'package:iter/models/trip_models.dart' show JourneyRoute;
@@ -1290,5 +1292,183 @@ void main() {
     await tester.pump();
 
     expect(find.byIcon(Icons.share_outlined), findsNothing);
+  });
+
+  group('Acquisti esterni e lifecycle UI', () {
+    final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+    final flight = fixture.flights[0];
+    final launcher = PlanExternalLauncher(
+      launchExternal: (_) async => true,
+      launchBrowser: (_) async => false,
+    );
+
+    String planningPortoId(ChatFirstPrototypeController controller) => controller
+        .threads
+        .firstWhere(
+          (thread) => thread.summary.snapshot?.statusLabel == 'In pianificazione',
+        )
+        .summary
+        .id;
+
+    Future<void> openPortoPurchase(
+      ChatFirstPrototypeController controller,
+    ) async {
+      final id = planningPortoId(controller);
+      controller.selectTravelOption(
+        conversationId: id,
+        optionId: flight.id,
+      );
+      expect(
+        await controller.openExternalPurchase(
+          conversationId: id,
+          kind: ExternalPurchaseKind.travel,
+          optionId: flight.id,
+          uri: flight.providerUrl,
+          launcher: launcher,
+        ),
+        isTrue,
+      );
+    }
+
+    testWidgets(
+      'app osserva WidgetsBinding e il resume apre il dialog una volta sola',
+      (tester) async {
+        final controller = ChatFirstPrototypeController();
+        addTearDown(controller.dispose);
+        await openPortoPurchase(controller);
+
+        await tester.pumpWidget(ChatFirstPrototypeApp(controller: controller));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Sei tornato dal sito di prenotazione.'), findsNothing);
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text('Sei tornato dal sito di prenotazione.'),
+          findsOneWidget,
+        );
+        expect(find.text('Sì, aggiorna'), findsOneWidget);
+        expect(find.text('Non ancora'), findsOneWidget);
+
+        // The prompt is consumed: a second resume stays silent.
+        await tester.tap(find.text('Non ancora'));
+        await tester.pumpAndSettle();
+        expect(find.text('Sei tornato dal sito di prenotazione.'), findsNothing);
+        final id = planningPortoId(controller);
+        expect(
+          controller.conversationOf(id).snapshot!.travelSelection!.option
+              .purchaseState,
+          PurchaseState.selected,
+        );
+        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await tester.pumpAndSettle();
+        expect(find.text('Sei tornato dal sito di prenotazione.'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'resume senza ritorno atteso o senza launch riuscito non mostra dialog',
+      (tester) async {
+        final controller = ChatFirstPrototypeController();
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: IterTheme.light(),
+            home: ChatFirstShell(
+              controller: controller,
+              themeMode: ThemeMode.light,
+              onThemeChanged: (_) {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        controller.handleAppLifecycleState(AppLifecycleState.resumed);
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'dialog Sì aggiorna porta solo i campi autorizzati a acquistato',
+      (tester) async {
+        final controller = ChatFirstPrototypeController();
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: IterTheme.light(),
+            home: ChatFirstShell(
+              controller: controller,
+              themeMode: ThemeMode.light,
+              onThemeChanged: (_) {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await openPortoPurchase(controller);
+        final id = planningPortoId(controller);
+        final opened = controller.conversationOf(id).snapshot!;
+        final openedOption = opened.travelSelection!.option;
+        final openedAlternatives = opened.travelSelection!.alternatives;
+
+        controller.handleAppLifecycleState(AppLifecycleState.resumed);
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Sei tornato dal sito di prenotazione.'),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.text('Sì, aggiorna'));
+        await tester.pumpAndSettle();
+        final confirmed = controller.conversationOf(id).snapshot!;
+        final option = confirmed.travelSelection!.option;
+        expect(option.purchaseState, PurchaseState.purchased);
+        expect(option.id, openedOption.id);
+        expect(option.label, openedOption.label);
+        expect(option.priceCents, openedOption.priceCents);
+        expect(
+          confirmed.travelSelection!.alternatives.map((item) => item.id),
+          openedAlternatives.map((item) => item.id),
+        );
+        expect(
+          confirmed.days.map((day) => day.toJson()).toList(),
+          opened.days.map((day) => day.toJson()).toList(),
+        );
+        expect(find.byType(AlertDialog), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'dialog in italiano e senza dati sensibili annuncia solo la voce',
+      (tester) async {
+        final controller = ChatFirstPrototypeController();
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: IterTheme.light(),
+            home: ChatFirstShell(
+              controller: controller,
+              themeMode: ThemeMode.light,
+              onThemeChanged: (_) {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await openPortoPurchase(controller);
+
+        controller.handleAppLifecycleState(AppLifecycleState.resumed);
+        await tester.pumpAndSettle();
+        final dialog = tester.widget<AlertDialog>(find.byType(AlertDialog));
+        final title = (dialog.title! as Text).data!;
+        final content = (dialog.content! as Text).data!;
+        expect(title, contains('sito di prenotazione'));
+        expect(content, contains(flight.provider));
+        expect(content, isNot(contains('FCO')));
+        expect(content, isNot(contains('€')));
+        await tester.tap(find.text('Non ancora'));
+        await tester.pumpAndSettle();
+      },
+    );
   });
 }
