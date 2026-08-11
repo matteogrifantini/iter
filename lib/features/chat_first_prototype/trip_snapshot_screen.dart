@@ -14,6 +14,10 @@ import 'plan_timeline.dart';
 typedef LegacyTripSnapshotControllerFactory =
     ChatFirstPrototypeController Function(TripSnapshot snapshot);
 
+const double _globalPlanActionsHeight = 64;
+const double _globalPlanActionsBottomSpacing = 8;
+const double _planContentBottomSpacing = 16;
+
 class TripSnapshotScreen extends StatefulWidget {
   factory TripSnapshotScreen({
     Key? key,
@@ -59,6 +63,7 @@ class TripSnapshotScreen extends StatefulWidget {
 
 class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
   var _selectedDay = 0;
+  String? _draggedItemId;
   late ChatFirstPrototypeController _controller;
   late String _conversationId;
   var _ownsController = false;
@@ -125,6 +130,12 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
           snapshot,
         );
         final media = snapshot.destinationMedia ?? fixture?.media;
+        final globalActionsScrollReserve =
+            _globalPlanActionsHeight +
+            _globalPlanActionsBottomSpacing +
+            MediaQuery.paddingOf(context).bottom +
+            _planContentBottomSpacing +
+            (kMinInteractiveDimension / 2);
         return Scaffold(
           appBar: AppBar(
             title: Semantics(
@@ -137,73 +148,103 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
               ),
             ),
           ),
-          body: ListView(
-            key: const Key('plan-scroll'),
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+          body: Stack(
             children: <Widget>[
-              _DestinationHero(snapshot: snapshot, media: media),
-              const SizedBox(height: 24),
-              _PlanFacts(snapshot: snapshot),
-              if (snapshot.days.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 24),
-                _DayChips(
-                  days: snapshot.days,
-                  selectedIndex: _selectedDay,
-                  onSelected: (index) => setState(() => _selectedDay = index),
-                ),
-                const SizedBox(height: 22),
-                PlanTimeline(
-                  day: snapshot.days[_selectedDay],
-                  mediaForItem: (item) =>
-                      _cataloguePlaceFor(fixture, item)?.media,
-                  canOpenPlace: (item) =>
-                      _cataloguePlaceFor(fixture, item) != null ||
-                      item.place != null,
-                  onOpenPlace: (item, index) => _openPlace(
+              ListView(
+                key: const Key('plan-scroll'),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                children: <Widget>[
+                  _DestinationHero(snapshot: snapshot, media: media),
+                  const SizedBox(height: 24),
+                  _PlanFacts(snapshot: snapshot),
+                  if (snapshot.days.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 24),
+                    _DayChips(
+                      days: snapshot.days,
+                      selectedIndex: _selectedDay,
+                      onSelected: (index) =>
+                          setState(() => _selectedDay = index),
+                    ),
+                    const SizedBox(height: 22),
+                    PlanTimeline(
+                      day: snapshot.days[_selectedDay],
+                      mediaForItem: (item) =>
+                          _cataloguePlaceFor(fixture, item)?.media,
+                      canOpenPlace: (item) =>
+                          _cataloguePlaceFor(fixture, item) != null ||
+                          item.place != null,
+                      onOpenPlace: (item, index) => _openPlace(
+                        snapshot: snapshot,
+                        fixture: fixture,
+                        day: snapshot.days[_selectedDay],
+                        item: item,
+                        index: index,
+                      ),
+                      onDragStarted: (itemId) =>
+                          setState(() => _draggedItemId = itemId),
+                      onDragEnded: () {
+                        if (mounted) setState(() => _draggedItemId = null);
+                      },
+                      onAction: (item, action) => _handleTimelineAction(
+                        snapshot: snapshot,
+                        item: item,
+                        action: action,
+                      ),
+                    ),
+                  ] else ...<Widget>[
+                    const SizedBox(height: 28),
+                    const _UnplacedSection(items: <TripItemSnapshot>[]),
+                  ],
+                  if (snapshot.unplacedItems.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 28),
+                    PlanUnplacedItems(
+                      items: snapshot.unplacedItems,
+                      onAction: (item, action) => _handleTimelineAction(
+                        snapshot: snapshot,
+                        item: item,
+                        action: action,
+                      ),
+                    ),
+                  ],
+                  if (_ownsController) ...<Widget>[
+                    if (snapshot.placeLabels.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 24),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: <Widget>[
+                          for (final label in snapshot.placeLabels)
+                            Chip(label: Text(label)),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    Text(
+                      'Modifiche solo tramite chat nella precedente anteprima.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                  SizedBox(height: globalActionsScrollReserve),
+                ],
+              ),
+              if (_draggedItemId case final itemId?)
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: 8,
+                  child: PlanDragDestinations(
                     snapshot: snapshot,
-                    fixture: fixture,
-                    day: snapshot.days[_selectedDay],
-                    item: item,
-                    index: index,
-                  ),
-                  onMovePreview: (itemId, targetDayId, targetIndex) =>
+                    itemId: itemId,
+                    onAccept: (target) {
+                      setState(() => _draggedItemId = null);
                       _previewMove(
                         itemId: itemId,
-                        targetDayId: targetDayId,
-                        targetIndex: targetIndex,
-                      ),
-                  onAction: (item, action) => _handleTimelineAction(
-                    snapshot: snapshot,
-                    item: item,
-                    action: action,
+                        targetDayId: target.dayId,
+                        targetIndex: target.targetIndex,
+                      );
+                    },
                   ),
                 ),
-              ] else ...<Widget>[
-                const SizedBox(height: 28),
-                const _UnplacedSection(items: <TripItemSnapshot>[]),
-              ],
-              if (snapshot.unplacedItems.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 28),
-                _UnplacedSection(items: snapshot.unplacedItems),
-              ],
-              if (_ownsController) ...<Widget>[
-                if (snapshot.placeLabels.isNotEmpty) ...<Widget>[
-                  const SizedBox(height: 24),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: <Widget>[
-                      for (final label in snapshot.placeLabels)
-                        Chip(label: Text(label)),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 18),
-                Text(
-                  'Modifiche solo tramite chat nella precedente anteprima.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
             ],
           ),
           bottomNavigationBar: _GlobalPlanActions(
@@ -670,7 +711,12 @@ class _GlobalPlanActions extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return SafeArea(
       top: false,
-      minimum: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      minimum: const EdgeInsets.fromLTRB(
+        12,
+        0,
+        12,
+        _globalPlanActionsBottomSpacing,
+      ),
       child: Material(
         elevation: 3,
         color: colors.surfaceContainer,
@@ -678,7 +724,7 @@ class _GlobalPlanActions extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
           key: const Key('plan-global-actions'),
-          height: 64,
+          height: _globalPlanActionsHeight,
           child: Row(
             children: <Widget>[
               Expanded(

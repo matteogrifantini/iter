@@ -147,6 +147,75 @@ void main() {
     expect(itemIds.toSet(), hasLength(itemIds.length));
   });
 
+  test('legacy day and unplaced items share one deterministic ID registry', () {
+    TripSnapshot build() => TripSnapshot(
+      destinationTitle: 'Roma',
+      country: 'Italia',
+      durationLabel: '1 giorno',
+      statusLabel: 'In viaggio',
+      dates: '11 agosto',
+      transport: '',
+      stay: '',
+      days: <TripDaySnapshot>[
+        TripDaySnapshot(
+          label: 'Oggi',
+          theme: 'Centro',
+          items: const <TripItemSnapshot>[
+            TripItemSnapshot(
+              title: 'Legacy senza ID',
+              category: 'Tappa',
+              locked: false,
+            ),
+          ],
+        ),
+      ],
+      unplacedItems: const <TripItemSnapshot>[
+        TripItemSnapshot(
+          id: 'roma-day-1-item-1',
+          title: 'Canonico in attesa',
+          category: 'Tappa',
+          locked: true,
+        ),
+        TripItemSnapshot(
+          title: 'Legacy in attesa',
+          category: 'Tappa',
+          locked: false,
+        ),
+      ],
+    );
+
+    final first = build();
+    final rebuilt = build();
+    final roundTripped = TripSnapshot.fromJson(first.toJson());
+    final ids = <String>[
+      ...first.days.expand((day) => day.items).map((item) => item.id),
+      ...first.unplacedItems.map((item) => item.id),
+    ];
+
+    expect(ids, everyElement(isNotEmpty));
+    expect(ids.toSet(), hasLength(ids.length));
+    expect(first.unplacedItems.first.id, 'roma-day-1-item-1');
+    expect(first.days.single.items.single.id, 'roma-day-1-item-1-2');
+    expect(<String>[
+      ...rebuilt.days.expand((day) => day.items).map((item) => item.id),
+      ...rebuilt.unplacedItems.map((item) => item.id),
+    ], ids);
+    expect(<String>[
+      ...roundTripped.days.expand((day) => day.items).map((item) => item.id),
+      ...roundTripped.unplacedItems.map((item) => item.id),
+    ], ids);
+    expect(
+      () => first.unplacedItems.add(
+        const TripItemSnapshot(
+          title: 'Mutazione',
+          category: 'Tappa',
+          locked: false,
+        ),
+      ),
+      throwsUnsupportedError,
+    );
+  });
+
   test('complete snapshot round trips canonical plan data', () {
     final snapshot = TripSnapshot(
       destinationTitle: 'Porto',

@@ -174,6 +174,29 @@ class PlanMoveSelection {
   final int targetIndex;
 }
 
+@immutable
+class PlanMoveTarget {
+  const PlanMoveTarget({
+    required this.keyId,
+    required this.dayId,
+    required this.targetIndex,
+    required this.label,
+  });
+
+  final String keyId;
+  final String dayId;
+  final int targetIndex;
+  final String label;
+}
+
+List<PlanMoveTarget> buildPlanMoveTargets({
+  required TripSnapshot snapshot,
+  String? movingItemId,
+}) => <PlanMoveTarget>[
+  for (final day in snapshot.days)
+    ..._targetsForDay(day: day, movingItemId: movingItemId),
+];
+
 Future<PlanMoveSelection?> showPlanMoveSheet({
   required BuildContext context,
   required TripSnapshot snapshot,
@@ -196,10 +219,10 @@ class _PlanMoveSheet extends StatefulWidget {
 }
 
 class _PlanMoveSheetState extends State<_PlanMoveSheet> {
-  late final List<({String dayId, int index, String label})> _options = [
-    for (final day in widget.snapshot.days)
-      ..._optionsForDay(day, widget.itemId),
-  ];
+  late final List<PlanMoveTarget> _options = buildPlanMoveTargets(
+    snapshot: widget.snapshot,
+    movingItemId: widget.itemId,
+  );
   int _selected = 0;
 
   @override
@@ -246,7 +269,7 @@ class _PlanMoveSheetState extends State<_PlanMoveSheet> {
                   Navigator.of(context).pop(
                     PlanMoveSelection(
                       targetDayId: selected.dayId,
-                      targetIndex: selected.index,
+                      targetIndex: selected.targetIndex,
                     ),
                   );
                 },
@@ -260,21 +283,49 @@ class _PlanMoveSheetState extends State<_PlanMoveSheet> {
   }
 }
 
-List<({String dayId, int index, String label})> _optionsForDay(
-  TripDaySnapshot day,
-  String itemId,
-) {
-  final remaining = day.items.where((item) => item.id != itemId).toList();
+List<PlanMoveTarget> _targetsForDay({
+  required TripDaySnapshot day,
+  required String? movingItemId,
+}) {
+  final remaining = day.items
+      .where((item) => item.id != movingItemId)
+      .toList(growable: false);
   if (remaining.isEmpty) {
-    return [(dayId: day.id, index: 0, label: 'In ${day.label}')];
-  }
-  return <({String dayId, int index, String label})>[
-    (dayId: day.id, index: 0, label: 'Prima di ${remaining.first.title}'),
-    for (var index = 0; index < remaining.length; index += 1)
-      (
+    return <PlanMoveTarget>[
+      PlanMoveTarget(
+        keyId: '${day.id}-empty',
         dayId: day.id,
-        index: index + 1,
+        targetIndex: 0,
+        label: '${day.label} · giornata vuota',
+      ),
+    ];
+  }
+  return <PlanMoveTarget>[
+    PlanMoveTarget(
+      keyId: '${day.id}-start',
+      dayId: day.id,
+      targetIndex: 0,
+      label: 'Inizio di ${day.label}',
+    ),
+    for (var index = 0; index < remaining.length; index += 1)
+      PlanMoveTarget(
+        keyId: '${day.id}-before-${remaining[index].id}',
+        dayId: day.id,
+        targetIndex: index,
+        label: 'Prima di ${remaining[index].title}',
+      ),
+    for (var index = 0; index < remaining.length; index += 1)
+      PlanMoveTarget(
+        keyId: '${day.id}-after-${remaining[index].id}',
+        dayId: day.id,
+        targetIndex: index + 1,
         label: 'Dopo ${remaining[index].title}',
       ),
+    PlanMoveTarget(
+      keyId: '${day.id}-end',
+      dayId: day.id,
+      targetIndex: remaining.length,
+      label: 'Fine di ${day.label}',
+    ),
   ];
 }

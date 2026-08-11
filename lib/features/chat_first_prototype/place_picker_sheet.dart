@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'chat_first_data.dart';
 import 'chat_first_models.dart';
+import 'plan_patch_sheet.dart';
 
 @immutable
 class PlacePickerSelection {
@@ -43,7 +44,7 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
   final _searchController = TextEditingController();
   var _step = _PickerStep.search;
   OperationalPlaceFixture? _selectedPlace;
-  String? _targetDayId;
+  var _selectedTarget = 0;
 
   @override
   void dispose() {
@@ -224,9 +225,17 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
         const SizedBox(height: 28),
         FilledButton.icon(
           onPressed: () => setState(() {
-            _targetDayId = widget.snapshot.days.isEmpty
-                ? null
-                : widget.snapshot.days.first.id;
+            final targets = buildPlanMoveTargets(snapshot: widget.snapshot);
+            if (targets.isEmpty) {
+              _selectedTarget = -1;
+              _step = _PickerStep.placement;
+              return;
+            }
+            _selectedTarget = targets.indexWhere(
+              (target) =>
+                  target.keyId == '${widget.snapshot.days.first.id}-end',
+            );
+            if (_selectedTarget < 0) _selectedTarget = 0;
             _step = _PickerStep.placement;
           }),
           icon: const Icon(Icons.add_location_alt_outlined),
@@ -237,6 +246,7 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
   }
 
   Widget _placement(BuildContext context) {
+    final targets = buildPlanMoveTargets(snapshot: widget.snapshot);
     return ListView(
       key: const Key('place-picker-placement-scroll'),
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
@@ -245,21 +255,20 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
           padding: EdgeInsets.fromLTRB(8, 8, 8, 4),
           child: Text('Iter propone il primo spazio disponibile.'),
         ),
-        RadioGroup<String?>(
-          groupValue: _targetDayId,
-          onChanged: (value) => setState(() => _targetDayId = value),
+        RadioGroup<int>(
+          groupValue: _selectedTarget,
+          onChanged: (value) => setState(() => _selectedTarget = value ?? 0),
           child: Column(
             children: <Widget>[
-              for (final day in widget.snapshot.days)
-                RadioListTile<String?>(
-                  key: Key('place-picker-day-${day.id}'),
-                  value: day.id,
-                  title: Text(day.label),
-                  subtitle: const Text('Dopo le tappe già previste'),
+              for (var index = 0; index < targets.length; index += 1)
+                RadioListTile<int>(
+                  key: Key('place-picker-target-${targets[index].keyId}'),
+                  value: index,
+                  title: Text(targets[index].label),
                 ),
-              const RadioListTile<String?>(
+              const RadioListTile<int>(
                 key: Key('place-picker-unplaced'),
-                value: null,
+                value: -1,
                 title: Text('Da sistemare'),
                 subtitle: Text('Senza giorno o orario per ora'),
               ),
@@ -269,17 +278,14 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
         const SizedBox(height: 16),
         FilledButton(
           onPressed: () {
-            final dayId = _targetDayId;
-            final day = dayId == null
+            final target = _selectedTarget < 0
                 ? null
-                : widget.snapshot.days.singleWhere(
-                    (value) => value.id == dayId,
-                  );
+                : targets[_selectedTarget];
             Navigator.of(context).pop(
               PlacePickerSelection(
                 place: _selectedPlace!,
-                targetDayId: dayId,
-                targetIndex: day?.items.length,
+                targetDayId: target?.dayId,
+                targetIndex: target?.targetIndex,
               ),
             );
           },

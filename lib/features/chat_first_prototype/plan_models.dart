@@ -378,7 +378,49 @@ class TripDaySnapshot {
 
 @immutable
 class TripSnapshot {
-  TripSnapshot({
+  factory TripSnapshot({
+    required String destinationTitle,
+    required String country,
+    required String durationLabel,
+    required String statusLabel,
+    required String dates,
+    required String transport,
+    required String stay,
+    List<String> placeLabels = const <String>[],
+    List<TripDaySnapshot> days = const <TripDaySnapshot>[],
+    int revision = 1,
+    PlanRevisionMetadata? revisionMetadata,
+    PlanMedia? destinationMedia,
+    TravelPlanSelection? travelSelection,
+    StayPlanSelection? staySelection,
+    PlanCostSummary costSummary = const PlanCostSummary(),
+    List<TripItemSnapshot> unplacedItems = const <TripItemSnapshot>[],
+  }) {
+    final normalized = _normalizeTripContent(
+      destinationTitle,
+      days,
+      unplacedItems,
+    );
+    return TripSnapshot._(
+      destinationTitle: destinationTitle,
+      country: country,
+      durationLabel: durationLabel,
+      statusLabel: statusLabel,
+      dates: dates,
+      transport: transport,
+      stay: stay,
+      placeLabels: placeLabels,
+      revision: revision,
+      revisionMetadata: revisionMetadata,
+      destinationMedia: destinationMedia,
+      travelSelection: travelSelection,
+      staySelection: staySelection,
+      costSummary: costSummary,
+      normalized: normalized,
+    );
+  }
+
+  TripSnapshot._({
     required this.destinationTitle,
     required this.country,
     required this.durationLabel,
@@ -386,22 +428,17 @@ class TripSnapshot {
     required this.dates,
     required this.transport,
     required this.stay,
-    List<String> placeLabels = const <String>[],
-    List<TripDaySnapshot> days = const <TripDaySnapshot>[],
-    this.revision = 1,
-    this.revisionMetadata,
-    this.destinationMedia,
-    this.travelSelection,
-    this.staySelection,
-    this.costSummary = const PlanCostSummary(),
-    List<TripItemSnapshot> unplacedItems = const <TripItemSnapshot>[],
+    required List<String> placeLabels,
+    required this.revision,
+    required this.revisionMetadata,
+    required this.destinationMedia,
+    required this.travelSelection,
+    required this.staySelection,
+    required this.costSummary,
+    required _NormalizedTripContent normalized,
   }) : _placeLabels = List<String>.unmodifiable(placeLabels),
-       _days = _normalizeDays(destinationTitle, days),
-       _unplacedItems = _normalizeUnplacedItems(
-         destinationTitle,
-         days,
-         unplacedItems,
-       );
+       _days = normalized.days,
+       _unplacedItems = normalized.unplacedItems;
 
   final String destinationTitle;
   final String country;
@@ -517,20 +554,33 @@ class TripSnapshot {
   );
 }
 
-List<TripDaySnapshot> _normalizeDays(
+class _NormalizedTripContent {
+  const _NormalizedTripContent({
+    required this.days,
+    required this.unplacedItems,
+  });
+
+  final List<TripDaySnapshot> days;
+  final List<TripItemSnapshot> unplacedItems;
+}
+
+_NormalizedTripContent _normalizeTripContent(
   String destinationTitle,
   List<TripDaySnapshot> days,
+  List<TripItemSnapshot> unplacedItems,
 ) {
   final destinationId = _fallbackSlug(destinationTitle);
   final reservedDayIds = days
       .map((day) => day.id.trim())
       .where((id) => id.isNotEmpty)
       .toSet();
-  final reservedItemIds = days
-      .expand((day) => day.items)
-      .map((item) => item.id.trim())
-      .where((id) => id.isNotEmpty)
-      .toSet();
+  final reservedItemIds = <String>{
+    ...days
+        .expand((day) => day.items)
+        .map((item) => item.id.trim())
+        .where((id) => id.isNotEmpty),
+    ...unplacedItems.map((item) => item.id.trim()).where((id) => id.isNotEmpty),
+  };
   final normalizedDays = <TripDaySnapshot>[];
 
   for (var dayIndex = 0; dayIndex < days.length; dayIndex += 1) {
@@ -560,22 +610,6 @@ List<TripDaySnapshot> _normalizeDays(
     );
   }
 
-  return List<TripDaySnapshot>.unmodifiable(normalizedDays);
-}
-
-List<TripItemSnapshot> _normalizeUnplacedItems(
-  String destinationTitle,
-  List<TripDaySnapshot> days,
-  List<TripItemSnapshot> unplacedItems,
-) {
-  final destinationId = _fallbackSlug(destinationTitle);
-  final reservedItemIds = <String>{
-    ...days
-        .expand((day) => day.items)
-        .map((item) => item.id.trim())
-        .where((id) => id.isNotEmpty),
-    ...unplacedItems.map((item) => item.id.trim()).where((id) => id.isNotEmpty),
-  };
   final normalizedItems = <TripItemSnapshot>[];
   for (var itemIndex = 0; itemIndex < unplacedItems.length; itemIndex += 1) {
     final item = unplacedItems[itemIndex];
@@ -587,7 +621,10 @@ List<TripItemSnapshot> _normalizeUnplacedItems(
           );
     normalizedItems.add(_copyItemWithId(item, itemId));
   }
-  return List<TripItemSnapshot>.unmodifiable(normalizedItems);
+  return _NormalizedTripContent(
+    days: List<TripDaySnapshot>.unmodifiable(normalizedDays),
+    unplacedItems: List<TripItemSnapshot>.unmodifiable(normalizedItems),
+  );
 }
 
 TripItemSnapshot _copyItemWithId(TripItemSnapshot item, String id) =>

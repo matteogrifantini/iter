@@ -508,9 +508,12 @@ void main() {
         expect(find.text('Vicoli e tavole per la sera.'), findsOneWidget);
         await tester.tap(find.text('Scegli luogo'));
         await tester.pump();
-        expect(find.text('Giorno 1'), findsWidgets);
+        expect(find.text('Inizio di Giorno 1'), findsOneWidget);
+        expect(find.text('Prima di Foro Romano'), findsOneWidget);
+        expect(find.text('Dopo Foro Romano'), findsOneWidget);
+        expect(find.text('Fine di Giorno 1'), findsOneWidget);
         expect(find.text('Da sistemare'), findsWidgets);
-        await tester.tap(find.text('Giorno 1').last);
+        await tester.tap(find.text('Prima di Foro Romano'));
         await tester.tap(find.text('Rivedi modifica'));
         await tester.pumpAndSettle();
 
@@ -523,6 +526,16 @@ void main() {
           controller.conversationOf(_conversationId).snapshot!.days,
           before.days,
         );
+        expect(
+          controller.pendingPlanPatch(_conversationId)?.intent.targetIndex,
+          0,
+        );
+        expect(
+          find.byKey(const Key('plan-patch-strong-check')),
+          findsOneWidget,
+        );
+        await tester.tap(find.byKey(const Key('plan-patch-strong-check')));
+        await tester.pump();
         await tester.tap(find.byKey(const Key('plan-patch-apply')));
         await tester.pumpAndSettle();
 
@@ -580,6 +593,105 @@ void main() {
         'Trastevere',
       );
     });
+
+    testWidgets(
+      'keeps an applied unplaced place visible, movable and removable',
+      (tester) async {
+        final controller = _controllerFor(
+          ChatFirstDemoData.operationalFixtureFor('roma').snapshot,
+        );
+        addTearDown(controller.dispose);
+        await _pumpPlan(tester, controller: controller);
+
+        await _openTrasteverePicker(tester);
+        await tester.tap(find.text('Da sistemare').last);
+        await tester.tap(find.text('Rivedi modifica'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('plan-patch-apply')));
+        await tester.pumpAndSettle();
+        tester
+            .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+            .removeCurrentSnackBar();
+        await tester.pump();
+
+        final unplaced = find.byKey(
+          const Key('plan-unplaced-roma-trastevere-manual-stop'),
+        );
+        final unplacedMenu = find.byKey(
+          const Key('plan-unplaced-menu-roma-trastevere-manual-stop'),
+        );
+        await tester.scrollUntilVisible(
+          unplacedMenu,
+          220,
+          scrollable: _scrollableInside(const Key('plan-scroll')),
+        );
+        final planScroll = tester.state<ScrollableState>(
+          _scrollableInside(const Key('plan-scroll')),
+        );
+        await planScroll.position.animateTo(
+          planScroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+        await tester.pumpAndSettle();
+        expect(unplaced, findsOneWidget);
+        expect(unplacedMenu.hitTestable(), findsOneWidget);
+        await tester.tap(unplacedMenu);
+        await tester.pumpAndSettle();
+        expect(find.text('Sposta'), findsOneWidget);
+        expect(find.text('Rimuovi'), findsOneWidget);
+        await tester.tap(find.text('Sposta'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Fine di Giorno 2'));
+        await tester.tap(find.text('Rivedi modifica'));
+        await tester.pumpAndSettle();
+        expect(
+          controller.pendingPlanPatch(_conversationId)?.intent.targetDayId,
+          'roma-day-2',
+        );
+        await tester.tap(find.byKey(const Key('plan-patch-apply')));
+        await tester.pumpAndSettle();
+        expect(
+          controller.conversationOf(_conversationId).snapshot!.unplacedItems,
+          isEmpty,
+        );
+        await tester.tap(find.widgetWithText(TextButton, 'Annulla'));
+        await tester.pump();
+        expect(
+          controller
+              .conversationOf(_conversationId)
+              .snapshot!
+              .unplacedItems
+              .single
+              .title,
+          'Trastevere',
+        );
+
+        await tester.scrollUntilVisible(
+          unplacedMenu,
+          220,
+          scrollable: _scrollableInside(const Key('plan-scroll')),
+        );
+        await planScroll.position.animateTo(
+          planScroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(unplacedMenu);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Rimuovi'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('viene rimosso dal piano'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('plan-patch-apply')));
+        await tester.pumpAndSettle();
+        expect(
+          controller.conversationOf(_conversationId).snapshot!.unplacedItems,
+          isEmpty,
+        );
+        expect(unplaced, findsNothing);
+      },
+    );
 
     testWidgets(
       'cancels previews and requires a fresh confirmation after rebase',
@@ -714,17 +826,17 @@ void main() {
       addTearDown(controller.dispose);
       await _pumpPlan(tester, controller: controller);
       final drag = find.byKey(const Key('plan-drag-porto-livraria-lello-stop'));
-      final target = find.byKey(const Key('plan-drop-porto-clerigos-stop'));
-      await tester.ensureVisible(target);
+      await tester.ensureVisible(drag);
       await tester.pump();
       expect(tester.getCenter(drag).dy, inInclusiveRange(0, 844));
-      expect(tester.getCenter(target).dy, inInclusiveRange(0, 844));
       final gesture = await tester.startGesture(tester.getCenter(drag));
       await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
       expect(
         find.byKey(const Key('plan-drag-feedback-porto-livraria-lello-stop')),
         findsOneWidget,
       );
+      final target = find.byKey(const Key('plan-drag-target-porto-day-1-end'));
+      expect(target, findsOneWidget);
       await gesture.moveBy(const Offset(0, 8));
       await tester.pump();
       await gesture.moveTo(tester.getCenter(target));
@@ -742,7 +854,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Sposta'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Dopo Torre dos Clérigos'));
+      await tester.tap(find.text('Fine di Giorno 1'));
       await tester.tap(find.text('Rivedi modifica'));
       await tester.pumpAndSettle();
       final menuPreview = controller.pendingPlanPatch(_conversationId)!;
@@ -750,6 +862,43 @@ void main() {
       expect(menuPreview.effects, dragPreview.effects);
       expect(menuPreview.intent.targetDayId, dragPreview.intent.targetDayId);
       expect(menuPreview.intent.targetIndex, dragPreview.intent.targetIndex);
+    });
+
+    testWidgets('drag and move menu both reach an empty day across days', (
+      tester,
+    ) async {
+      final controller = _controllerFor(_snapshotWithEmptyDay());
+      addTearDown(controller.dispose);
+      await _pumpPlan(tester, controller: controller);
+      final drag = find.byKey(const Key('plan-drag-source-stop'));
+      await tester.ensureVisible(drag);
+      await tester.pump();
+      final gesture = await tester.startGesture(tester.getCenter(drag));
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      final target = find.byKey(const Key('plan-drag-target-empty-day-empty'));
+      expect(target, findsOneWidget);
+      await gesture.moveTo(tester.getCenter(target));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+      final dragPreview = controller.pendingPlanPatch(_conversationId)!;
+      expect(dragPreview.intent.targetDayId, 'empty-day');
+      expect(dragPreview.intent.targetIndex, 0);
+      await tester.tap(find.byKey(const Key('plan-patch-cancel')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('plan-menu-source-stop')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Sposta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Giorno vuoto · giornata vuota'));
+      await tester.tap(find.text('Rivedi modifica'));
+      await tester.pumpAndSettle();
+      final menuPreview = controller.pendingPlanPatch(_conversationId)!;
+
+      expect(menuPreview.intent.targetDayId, dragPreview.intent.targetDayId);
+      expect(menuPreview.intent.targetIndex, dragPreview.intent.targetIndex);
+      expect(menuPreview.effects, dragPreview.effects);
     });
 
     testWidgets('requires strong confirmation for a purchased linked option', (
@@ -1198,6 +1347,38 @@ TripSnapshot _emptySnapshot() => TripSnapshot(
   transport: 'Da scegliere',
   stay: 'Da scegliere',
   destinationMedia: const PlanMedia(),
+);
+
+TripSnapshot _snapshotWithEmptyDay() => TripSnapshot(
+  destinationTitle: 'Roma',
+  country: 'Italia',
+  durationLabel: '2 giorni',
+  statusLabel: 'In viaggio',
+  dates: '14–15 ottobre 2026',
+  transport: 'A piedi',
+  stay: 'Centro',
+  days: <TripDaySnapshot>[
+    TripDaySnapshot(
+      id: 'source-day',
+      label: 'Giorno pieno',
+      theme: 'Centro',
+      items: const <TripItemSnapshot>[
+        TripItemSnapshot(
+          id: 'source-stop',
+          title: 'Foro Romano',
+          category: 'Archeologia',
+          startTime: '10:00',
+          durationMinutes: 60,
+          locked: false,
+        ),
+      ],
+    ),
+    TripDaySnapshot(
+      id: 'empty-day',
+      label: 'Giorno vuoto',
+      theme: 'Da costruire',
+    ),
+  ],
 );
 
 TripSnapshot _purchasedRomaSnapshot() {
