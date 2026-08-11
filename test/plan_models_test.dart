@@ -20,6 +20,133 @@ void main() {
     expect(snapshot.costSummary.projectedTotalCents, 0);
   });
 
+  test('direct legacy snapshots receive stable unique editing IDs', () {
+    TripSnapshot build() => TripSnapshot(
+      destinationTitle: 'Roma',
+      country: 'Italia',
+      durationLabel: '2 giorni',
+      statusLabel: 'In viaggio',
+      dates: '11–12 agosto',
+      transport: 'A piedi',
+      stay: 'Centro',
+      days: <TripDaySnapshot>[
+        TripDaySnapshot(
+          label: 'Oggi',
+          theme: 'Roma antica',
+          items: const <TripItemSnapshot>[
+            TripItemSnapshot(
+              title: 'Foro Romano',
+              category: 'Storia',
+              locked: false,
+            ),
+            TripItemSnapshot(
+              title: 'Passeggiata ai Fori',
+              category: 'Passeggiata',
+              locked: true,
+            ),
+          ],
+        ),
+        TripDaySnapshot(
+          id: 'day-canonical',
+          label: 'Domani',
+          theme: 'Verde',
+          items: const <TripItemSnapshot>[
+            TripItemSnapshot(
+              id: 'item-canonical',
+              title: 'Villa Borghese',
+              category: 'Parco',
+              locked: false,
+            ),
+          ],
+        ),
+      ],
+      unplacedItems: const <TripItemSnapshot>[
+        TripItemSnapshot(
+          title: 'Trastevere',
+          category: 'Quartiere',
+          locked: false,
+        ),
+      ],
+    );
+
+    final first = build();
+    final second = build();
+    final firstDayIds = first.days.map((day) => day.id).toList();
+    final firstItemIds = <String>[
+      ...first.days.expand((day) => day.items).map((item) => item.id),
+      ...first.unplacedItems.map((item) => item.id),
+    ];
+
+    expect(firstDayIds, everyElement(isNotEmpty));
+    expect(firstDayIds.toSet(), hasLength(firstDayIds.length));
+    expect(firstItemIds, everyElement(isNotEmpty));
+    expect(firstItemIds.toSet(), hasLength(firstItemIds.length));
+    expect(second.days.map((day) => day.id), firstDayIds);
+    expect(<String>[
+      ...second.days.expand((day) => day.items).map((item) => item.id),
+      ...second.unplacedItems.map((item) => item.id),
+    ], firstItemIds);
+    expect(first.days.last.id, 'day-canonical');
+    expect(first.days.last.items.single.id, 'item-canonical');
+  });
+
+  test('legacy JSON editing IDs survive deterministic round trips', () {
+    const legacy = <String, dynamic>{
+      'destinationTitle': 'Roma',
+      'days': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'label': 'Oggi',
+          'items': <Map<String, dynamic>>[
+            <String, dynamic>{'title': 'Foro Romano'},
+            <String, dynamic>{'title': 'Passeggiata ai Fori'},
+          ],
+        },
+      ],
+      'unplacedItems': <Map<String, dynamic>>[
+        <String, dynamic>{'title': 'Trastevere'},
+      ],
+    };
+
+    final first = TripSnapshot.fromJson(legacy);
+    final rebuilt = TripSnapshot.fromJson(legacy);
+    final roundTripped = TripSnapshot.fromJson(first.toJson());
+    final firstIds = <String>[
+      first.days.single.id,
+      ...first.days.single.items.map((item) => item.id),
+      first.unplacedItems.single.id,
+    ];
+
+    expect(firstIds, everyElement(isNotEmpty));
+    expect(firstIds.toSet(), hasLength(firstIds.length));
+    expect(<String>[
+      rebuilt.days.single.id,
+      ...rebuilt.days.single.items.map((item) => item.id),
+      rebuilt.unplacedItems.single.id,
+    ], firstIds);
+    expect(<String>[
+      roundTripped.days.single.id,
+      ...roundTripped.days.single.items.map((item) => item.id),
+      roundTripped.unplacedItems.single.id,
+    ], firstIds);
+  });
+
+  test('Roma active route exposes distinct non-empty editing IDs', () {
+    final snapshot = ChatFirstDemoData.seedThreads()
+        .singleWhere((thread) => thread.summary.id == 'c-roma-active')
+        .summary
+        .snapshot!;
+    final dayIds = snapshot.days.map((day) => day.id).toList();
+    final itemIds = <String>[
+      ...snapshot.days.expand((day) => day.items).map((item) => item.id),
+      ...snapshot.unplacedItems.map((item) => item.id),
+    ];
+
+    expect(dayIds, everyElement(isNotEmpty));
+    expect(dayIds.toSet(), hasLength(dayIds.length));
+    expect(itemIds, everyElement(isNotEmpty));
+    expect(itemIds.toSet(), hasLength(itemIds.length));
+  });
+
   test('complete snapshot round trips canonical plan data', () {
     final snapshot = TripSnapshot(
       destinationTitle: 'Porto',

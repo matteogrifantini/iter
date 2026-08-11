@@ -396,8 +396,12 @@ class TripSnapshot {
     this.costSummary = const PlanCostSummary(),
     List<TripItemSnapshot> unplacedItems = const <TripItemSnapshot>[],
   }) : _placeLabels = List<String>.unmodifiable(placeLabels),
-       _days = List<TripDaySnapshot>.unmodifiable(days),
-       _unplacedItems = List<TripItemSnapshot>.unmodifiable(unplacedItems);
+       _days = _normalizeDays(destinationTitle, days),
+       _unplacedItems = _normalizeUnplacedItems(
+         destinationTitle,
+         days,
+         unplacedItems,
+       );
 
   final String destinationTitle;
   final String country;
@@ -511,6 +515,112 @@ class TripSnapshot {
         const PlanCostSummary(),
     unplacedItems: _list(json['unplacedItems'], TripItemSnapshot.fromJson),
   );
+}
+
+List<TripDaySnapshot> _normalizeDays(
+  String destinationTitle,
+  List<TripDaySnapshot> days,
+) {
+  final destinationId = _fallbackSlug(destinationTitle);
+  final reservedDayIds = days
+      .map((day) => day.id.trim())
+      .where((id) => id.isNotEmpty)
+      .toSet();
+  final reservedItemIds = days
+      .expand((day) => day.items)
+      .map((item) => item.id.trim())
+      .where((id) => id.isNotEmpty)
+      .toSet();
+  final normalizedDays = <TripDaySnapshot>[];
+
+  for (var dayIndex = 0; dayIndex < days.length; dayIndex += 1) {
+    final day = days[dayIndex];
+    final dayId = day.id.trim().isNotEmpty
+        ? day.id
+        : _uniqueFallback('$destinationId-day-${dayIndex + 1}', reservedDayIds);
+    final normalizedItems = <TripItemSnapshot>[];
+    for (var itemIndex = 0; itemIndex < day.items.length; itemIndex += 1) {
+      final item = day.items[itemIndex];
+      final itemId = item.id.trim().isNotEmpty
+          ? item.id
+          : _uniqueFallback(
+              '$destinationId-day-${dayIndex + 1}-item-${itemIndex + 1}',
+              reservedItemIds,
+            );
+      normalizedItems.add(_copyItemWithId(item, itemId));
+    }
+    normalizedDays.add(
+      TripDaySnapshot(
+        id: dayId,
+        date: day._date,
+        label: day.label,
+        theme: day.theme,
+        items: normalizedItems,
+      ),
+    );
+  }
+
+  return List<TripDaySnapshot>.unmodifiable(normalizedDays);
+}
+
+List<TripItemSnapshot> _normalizeUnplacedItems(
+  String destinationTitle,
+  List<TripDaySnapshot> days,
+  List<TripItemSnapshot> unplacedItems,
+) {
+  final destinationId = _fallbackSlug(destinationTitle);
+  final reservedItemIds = <String>{
+    ...days
+        .expand((day) => day.items)
+        .map((item) => item.id.trim())
+        .where((id) => id.isNotEmpty),
+    ...unplacedItems.map((item) => item.id.trim()).where((id) => id.isNotEmpty),
+  };
+  final normalizedItems = <TripItemSnapshot>[];
+  for (var itemIndex = 0; itemIndex < unplacedItems.length; itemIndex += 1) {
+    final item = unplacedItems[itemIndex];
+    final itemId = item.id.trim().isNotEmpty
+        ? item.id
+        : _uniqueFallback(
+            '$destinationId-unplaced-item-${itemIndex + 1}',
+            reservedItemIds,
+          );
+    normalizedItems.add(_copyItemWithId(item, itemId));
+  }
+  return List<TripItemSnapshot>.unmodifiable(normalizedItems);
+}
+
+TripItemSnapshot _copyItemWithId(TripItemSnapshot item, String id) =>
+    TripItemSnapshot.withPurchaseLinks(
+      id: id,
+      title: item.title,
+      category: item.category,
+      startTime: item.startTime,
+      durationMinutes: item.durationMinutes,
+      source: item.source,
+      place: item.place,
+      locked: item.locked,
+      linkedPurchaseOptionIds: item.linkedPurchaseOptionIds,
+    );
+
+String _uniqueFallback(String base, Set<String> reservedIds) {
+  var candidate = base;
+  var suffix = 2;
+  while (reservedIds.contains(candidate)) {
+    candidate = '$base-$suffix';
+    suffix += 1;
+  }
+  reservedIds.add(candidate);
+  return candidate;
+}
+
+String _fallbackSlug(String value) {
+  final slug = value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp('[^a-z0-9]+'), '-')
+      .replaceAll(RegExp('^-+|-+\$'), '');
+  return slug.isEmpty ? 'trip' : slug;
 }
 
 T? _map<T>(dynamic value, T Function(Map<String, dynamic>) parse) {

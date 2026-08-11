@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:iter/features/chat_first_prototype/chat_first_controller.dart';
@@ -6,6 +7,7 @@ import 'package:iter/features/chat_first_prototype/chat_first_data.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_models.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_thread_screen.dart';
 import 'package:iter/features/chat_first_prototype/place_reel_screen.dart';
+import 'package:iter/features/chat_first_prototype/plan_editor.dart';
 import 'package:iter/features/chat_first_prototype/plan_external_launcher.dart';
 import 'package:iter/features/chat_first_prototype/trip_snapshot_screen.dart';
 
@@ -67,7 +69,7 @@ void main() {
           ),
         ),
       );
-      final firstStop = find.byKey(const Key('plan-item-0'));
+      final firstStop = find.byKey(const Key('plan-item-roma-day-1-item-1'));
       await tester.ensureVisible(firstStop);
       await tester.tap(firstStop);
       await tester.pumpAndSettle();
@@ -238,6 +240,11 @@ void main() {
         );
         expect(find.text('Vedi reel'), findsOneWidget);
         expect(find.text('Foto: JaimeMSilva'), findsOneWidget);
+        await tester.scrollUntilVisible(
+          find.text('Perché Iter te la consiglia'),
+          180,
+          scrollable: _scrollableInside(const Key('place-sheet-scroll')),
+        );
         expect(find.text('Perché Iter te la consiglia'), findsOneWidget);
         await tester.scrollUntilVisible(
           find.text('Scalone in legno e scaffali Liberty nel centro di Porto.'),
@@ -412,7 +419,7 @@ void main() {
           ),
         ),
       );
-      final foro = find.byKey(const Key('plan-item-0'));
+      final foro = find.byKey(const Key('plan-item-roma-day-1-item-1'));
       await tester.ensureVisible(foro);
       await tester.tap(foro);
       await tester.pumpAndSettle();
@@ -466,6 +473,438 @@ void main() {
 
         await tester.pumpWidget(const SizedBox.shrink());
         expect(created.last.disposeCalls, 1);
+      },
+    );
+
+    testWidgets(
+      'searches by category, previews without mutation, applies and undoes an added place',
+      (tester) async {
+        final controller = _controllerFor(
+          ChatFirstDemoData.operationalFixtureFor('roma').snapshot,
+        );
+        addTearDown(controller.dispose);
+        await _pumpPlan(tester, controller: controller);
+        final before = controller.conversationOf(_conversationId).snapshot!;
+
+        await tester.tap(find.text('Aggiungi luogo'));
+        await tester.pumpAndSettle();
+        expect(
+          FocusManager.instance.primaryFocus?.context?.widget.key,
+          const Key('place-picker-search'),
+        );
+        await tester.enterText(
+          find.byKey(const Key('place-picker-search-field')),
+          'Quartiere',
+        );
+        await tester.pump();
+        expect(
+          find.byKey(const Key('place-picker-result-roma-trastevere')),
+          findsOneWidget,
+        );
+        await tester.tap(
+          find.byKey(const Key('place-picker-result-roma-trastevere')),
+        );
+        await tester.pump();
+        expect(find.text('Vicoli e tavole per la sera.'), findsOneWidget);
+        await tester.tap(find.text('Scegli luogo'));
+        await tester.pump();
+        expect(find.text('Giorno 1'), findsWidgets);
+        expect(find.text('Da sistemare'), findsWidgets);
+        await tester.tap(find.text('Giorno 1').last);
+        await tester.tap(find.text('Rivedi modifica'));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('plan-patch-sheet')), findsOneWidget);
+        expect(
+          find.textContaining('Trastevere entra in Giorno 1'),
+          findsOneWidget,
+        );
+        expect(
+          controller.conversationOf(_conversationId).snapshot!.days,
+          before.days,
+        );
+        await tester.tap(find.byKey(const Key('plan-patch-apply')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Modifica applicata'), findsOneWidget);
+        expect(
+          controller
+              .conversationOf(_conversationId)
+              .snapshot!
+              .days
+              .first
+              .items
+              .map((item) => item.title),
+          contains('Trastevere'),
+        );
+        await tester.tap(find.widgetWithText(TextButton, 'Annulla'));
+        await tester.pump();
+        expect(
+          controller
+              .conversationOf(_conversationId)
+              .snapshot!
+              .days
+              .expand((day) => day.items)
+              .map((item) => item.title),
+          isNot(contains('Trastevere')),
+        );
+      },
+    );
+
+    testWidgets('adds a selected place to Da sistemare only after apply', (
+      tester,
+    ) async {
+      final controller = _controllerFor(
+        ChatFirstDemoData.operationalFixtureFor('roma').snapshot,
+      );
+      addTearDown(controller.dispose);
+      await _pumpPlan(tester, controller: controller);
+
+      await _openTrasteverePicker(tester);
+      await tester.tap(find.text('Da sistemare').last);
+      await tester.tap(find.text('Rivedi modifica'));
+      await tester.pumpAndSettle();
+      expect(
+        controller.conversationOf(_conversationId).snapshot!.unplacedItems,
+        isEmpty,
+      );
+      await tester.tap(find.byKey(const Key('plan-patch-apply')));
+      await tester.pumpAndSettle();
+      expect(
+        controller
+            .conversationOf(_conversationId)
+            .snapshot!
+            .unplacedItems
+            .single
+            .title,
+        'Trastevere',
+      );
+    });
+
+    testWidgets(
+      'cancels previews and requires a fresh confirmation after rebase',
+      (tester) async {
+        final controller = _controllerFor(
+          ChatFirstDemoData.operationalFixtureFor('roma').snapshot,
+        );
+        addTearDown(controller.dispose);
+        await _pumpPlan(tester, controller: controller);
+
+        await _openTrasteverePicker(tester);
+        await tester.tap(find.text('Da sistemare').last);
+        await tester.tap(find.text('Rivedi modifica'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('plan-patch-cancel')));
+        await tester.pumpAndSettle();
+        expect(controller.pendingPlanPatch(_conversationId), isNull);
+        expect(
+          controller.conversationOf(_conversationId).snapshot!.unplacedItems,
+          isEmpty,
+        );
+
+        await _openTrasteverePicker(tester);
+        await tester.tap(find.text('Da sistemare').last);
+        await tester.tap(find.text('Rivedi modifica'));
+        await tester.pumpAndSettle();
+        final current = controller.conversationOf(_conversationId).snapshot!;
+        controller.threadOf(_conversationId).summary = controller
+            .conversationOf(_conversationId)
+            .copyWith(
+              snapshot: current.copyWith(revision: current.revision + 1),
+            );
+        controller.notifyListeners();
+        await tester.tap(find.byKey(const Key('plan-patch-apply')));
+        await tester.pump();
+        expect(
+          find.text('Piano aggiornato: ricontrolla la modifica.'),
+          findsOneWidget,
+        );
+        expect(
+          controller.conversationOf(_conversationId).snapshot!.unplacedItems,
+          isEmpty,
+        );
+        await tester.tap(find.byKey(const Key('plan-patch-apply')));
+        await tester.pumpAndSettle();
+        expect(
+          controller.conversationOf(_conversationId).snapshot!.unplacedItems,
+          hasLength(1),
+        );
+      },
+    );
+
+    testWidgets(
+      'context menu previews time, lock and confirmed removal with strong protection',
+      (tester) async {
+        final controller = _controllerFor(
+          ChatFirstDemoData.operationalFixtureFor('roma').snapshot,
+        );
+        addTearDown(controller.dispose);
+        await _pumpPlan(tester, controller: controller);
+        await tester.tap(find.text('Giorno 2'));
+        await tester.pump();
+
+        await tester.tap(find.byKey(const Key('plan-menu-roma-borghese-stop')));
+        await tester.pumpAndSettle();
+        expect(find.text('Sposta'), findsOneWidget);
+        expect(find.text('Cambia orario'), findsOneWidget);
+        expect(find.text('Blocca'), findsOneWidget);
+        expect(find.text('Rimuovi'), findsOneWidget);
+        await tester.tap(find.text('Cambia orario'));
+        await tester.pumpAndSettle();
+        expect(find.byType(TimePickerDialog), findsOneWidget);
+        await tester.tap(find.text('OK'));
+        await tester.pumpAndSettle();
+        expect(
+          controller.pendingPlanPatch(_conversationId)?.kind,
+          PlanPatchKind.changeTime,
+        );
+        await tester.tap(find.byKey(const Key('plan-patch-cancel')));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('plan-menu-roma-borghese-stop')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Blocca'));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('plan-patch-strong-check')),
+          findsOneWidget,
+        );
+        expect(
+          tester
+              .widget<FilledButton>(find.byKey(const Key('plan-patch-apply')))
+              .onPressed,
+          isNull,
+        );
+        await tester.tap(find.byKey(const Key('plan-patch-strong-check')));
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('plan-patch-apply')));
+        await tester.pumpAndSettle();
+        expect(
+          controller
+              .conversationOf(_conversationId)
+              .snapshot!
+              .days
+              .last
+              .items
+              .single
+              .locked,
+          isTrue,
+        );
+
+        await tester.tap(find.byKey(const Key('plan-menu-roma-borghese-stop')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Rimuovi'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('viene rimosso dal piano'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('plan-patch-cancel')));
+        await tester.pumpAndSettle();
+        expect(
+          controller.conversationOf(_conversationId).snapshot!.days.last.items,
+          hasLength(1),
+        );
+      },
+    );
+
+    testWidgets('drag and accessible move menu produce equivalent previews', (
+      tester,
+    ) async {
+      final controller = _controllerFor(
+        ChatFirstDemoData.operationalFixtureFor('porto').snapshot,
+      );
+      addTearDown(controller.dispose);
+      await _pumpPlan(tester, controller: controller);
+      final drag = find.byKey(const Key('plan-drag-porto-livraria-lello-stop'));
+      final target = find.byKey(const Key('plan-drop-porto-clerigos-stop'));
+      await tester.ensureVisible(target);
+      await tester.pump();
+      expect(tester.getCenter(drag).dy, inInclusiveRange(0, 844));
+      expect(tester.getCenter(target).dy, inInclusiveRange(0, 844));
+      final gesture = await tester.startGesture(tester.getCenter(drag));
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      expect(
+        find.byKey(const Key('plan-drag-feedback-porto-livraria-lello-stop')),
+        findsOneWidget,
+      );
+      await gesture.moveBy(const Offset(0, 8));
+      await tester.pump();
+      await gesture.moveTo(tester.getCenter(target));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+      final dragPreview = controller.pendingPlanPatch(_conversationId)!;
+      expect(dragPreview.kind, PlanPatchKind.moveStop);
+      await tester.tap(find.byKey(const Key('plan-patch-cancel')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const Key('plan-menu-porto-livraria-lello-stop')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Sposta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dopo Torre dos Clérigos'));
+      await tester.tap(find.text('Rivedi modifica'));
+      await tester.pumpAndSettle();
+      final menuPreview = controller.pendingPlanPatch(_conversationId)!;
+
+      expect(menuPreview.effects, dragPreview.effects);
+      expect(menuPreview.intent.targetDayId, dragPreview.intent.targetDayId);
+      expect(menuPreview.intent.targetIndex, dragPreview.intent.targetIndex);
+    });
+
+    testWidgets('requires strong confirmation for a purchased linked option', (
+      tester,
+    ) async {
+      final controller = _controllerFor(_purchasedRomaSnapshot());
+      addTearDown(controller.dispose);
+      await _pumpPlan(tester, controller: controller);
+      await tester.tap(find.text('Giorno 2'));
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('plan-menu-roma-borghese-stop')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Rimuovi'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Il piano include una scelta acquistata'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('plan-patch-strong-check')), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('plan-patch-apply')))
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.byKey(const Key('plan-patch-cancel')));
+      await tester.pumpAndSettle();
+      expect(
+        controller.conversationOf(_conversationId).snapshot!.days.last.items,
+        hasLength(1),
+      );
+    });
+
+    testWidgets(
+      'keeps manual editing scrollable and semantic at 320, 360 and 390 with large text',
+      (tester) async {
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        for (final width in <double>[320, 360, 390]) {
+          for (final brightness in <Brightness>[
+            Brightness.light,
+            Brightness.dark,
+          ]) {
+            final controller = _controllerFor(
+              ChatFirstDemoData.operationalFixtureFor('roma').snapshot,
+            );
+            final size = Size(width, 760);
+            await tester.binding.setSurfaceSize(size);
+            await tester.pumpWidget(
+              MaterialApp(
+                key: ValueKey<String>('edit-$width-$brightness'),
+                theme: ThemeData(brightness: brightness, useMaterial3: true),
+                builder: (context, child) => MediaQuery(
+                  data: MediaQueryData(
+                    size: size,
+                    textScaler: const TextScaler.linear(1.5),
+                    disableAnimations: true,
+                  ),
+                  child: child!,
+                ),
+                home: TripSnapshotScreen(
+                  controller: controller,
+                  conversationId: _conversationId,
+                ),
+              ),
+            );
+            await tester.pump();
+            expect(tester.takeException(), isNull);
+
+            await tester.tap(find.text('Aggiungi luogo'));
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull);
+            expect(
+              FocusManager.instance.primaryFocus?.context,
+              same(
+                find.byKey(const Key('place-picker-search')).evaluate().single,
+              ),
+            );
+            await tester.enterText(
+              find.byKey(const Key('place-picker-search-field')),
+              'Quartiere',
+            );
+            await tester.pump();
+            await tester.scrollUntilVisible(
+              find.byKey(const Key('place-picker-result-roma-trastevere')),
+              180,
+              scrollable: _scrollableInside(const Key('place-picker-scroll')),
+            );
+            expect(tester.takeException(), isNull);
+            await tester.tap(
+              find.byKey(const Key('place-picker-result-roma-trastevere')),
+            );
+            await tester.pump();
+            await tester.scrollUntilVisible(
+              find.text('Scegli luogo'),
+              180,
+              scrollable: _scrollableInside(
+                const Key('place-picker-detail-scroll'),
+              ),
+            );
+            expect(tester.takeException(), isNull);
+            await tester.tap(find.text('Scegli luogo'));
+            await tester.pump();
+            final reviewChange = find.text('Rivedi modifica');
+            final placementScroll = _scrollableInside(
+              const Key('place-picker-placement-scroll'),
+            );
+            await tester.scrollUntilVisible(
+              reviewChange,
+              180,
+              scrollable: placementScroll,
+            );
+            await tester.drag(placementScroll, const Offset(0, -80));
+            await tester.pump();
+            expect(tester.takeException(), isNull);
+            expect(tester.getCenter(reviewChange).dy, lessThan(size.height));
+            expect(reviewChange.hitTestable(), findsOneWidget);
+            await tester.tap(find.text('Da sistemare').last);
+            await tester.pump();
+            await tester.tap(reviewChange);
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull);
+            expect(
+              FocusManager.instance.primaryFocus?.context,
+              same(
+                find
+                    .byKey(const Key('plan-patch-title-focus'))
+                    .evaluate()
+                    .single,
+              ),
+            );
+            final semantics = tester.ensureSemantics();
+            expect(
+              tester.semantics.simulatedAccessibilityTraversal(),
+              containsAllInOrder(<Matcher>[
+                isSemantics(label: 'Rivedi modifica'),
+                isSemantics(label: 'Trastevere va in Da sistemare'),
+                isSemantics(label: 'Annulla'),
+                isSemantics(label: 'Applica'),
+              ]),
+            );
+            await tester.drag(
+              _scrollableInside(const Key('plan-patch-scroll')),
+              const Offset(0, -80),
+            );
+            await tester.pump();
+            expect(tester.takeException(), isNull);
+            semantics.dispose();
+            await tester.tap(find.byKey(const Key('plan-patch-cancel')));
+            await tester.pumpAndSettle();
+            expect(controller.pendingPlanPatch(_conversationId), isNull);
+            controller.dispose();
+          }
+        }
       },
     );
   });
@@ -699,18 +1138,35 @@ Future<void> _pumpPlan(
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     MaterialApp(
-      home: MediaQuery(
+      builder: (context, child) => MediaQuery(
         data: MediaQueryData(
           size: const Size(390, 844),
           textScaler: textScaler,
         ),
-        child: TripSnapshotScreen(
-          controller: controller,
-          conversationId: _conversationId,
-        ),
+        child: child!,
+      ),
+      home: TripSnapshotScreen(
+        controller: controller,
+        conversationId: _conversationId,
       ),
     ),
   );
+  await tester.pump();
+}
+
+Future<void> _openTrasteverePicker(WidgetTester tester) async {
+  await tester.tap(find.text('Aggiungi luogo'));
+  await tester.pumpAndSettle();
+  await tester.enterText(
+    find.byKey(const Key('place-picker-search-field')),
+    'Trastevere',
+  );
+  await tester.pump();
+  await tester.tap(
+    find.byKey(const Key('place-picker-result-roma-trastevere')),
+  );
+  await tester.pump();
+  await tester.tap(find.text('Scegli luogo'));
   await tester.pump();
 }
 
@@ -743,6 +1199,43 @@ TripSnapshot _emptySnapshot() => TripSnapshot(
   stay: 'Da scegliere',
   destinationMedia: const PlanMedia(),
 );
+
+TripSnapshot _purchasedRomaSnapshot() {
+  final snapshot = ChatFirstDemoData.operationalFixtureFor('roma').snapshot;
+  final day = snapshot.days.last;
+  final item = day.items.single;
+  return snapshot.copyWith(
+    days: <TripDaySnapshot>[
+      snapshot.days.first,
+      TripDaySnapshot(
+        id: day.id,
+        date: day.date,
+        label: day.label,
+        theme: day.theme,
+        items: <TripItemSnapshot>[
+          TripItemSnapshot.withPurchaseLinks(
+            id: item.id,
+            title: item.title,
+            category: item.category,
+            startTime: item.startTime,
+            durationMinutes: item.durationMinutes,
+            source: item.source,
+            place: item.place,
+            locked: item.locked,
+            linkedPurchaseOptionIds: const <String>['roma-flight-purchased'],
+          ),
+        ],
+      ),
+    ],
+    travelSelection: TravelPlanSelection(
+      option: const TravelOption(
+        id: 'roma-flight-purchased',
+        label: 'Volo acquistato',
+        purchaseState: PurchaseState.purchased,
+      ),
+    ),
+  );
+}
 
 PlanMedia _portoMedia() =>
     ChatFirstDemoData.operationalFixtureFor('porto').media;

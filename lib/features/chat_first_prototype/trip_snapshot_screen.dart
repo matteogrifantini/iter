@@ -4,8 +4,11 @@ import 'chat_first_controller.dart';
 import 'chat_first_data.dart';
 import 'chat_first_models.dart';
 import 'place_detail_sheet.dart';
+import 'place_picker_sheet.dart';
 import 'place_reel_screen.dart';
 import 'plan_external_launcher.dart';
+import 'plan_editor.dart';
+import 'plan_patch_sheet.dart';
 import 'plan_timeline.dart';
 
 typedef LegacyTripSnapshotControllerFactory =
@@ -163,6 +166,17 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
                     item: item,
                     index: index,
                   ),
+                  onMovePreview: (itemId, targetDayId, targetIndex) =>
+                      _previewMove(
+                        itemId: itemId,
+                        targetDayId: targetDayId,
+                        targetIndex: targetIndex,
+                      ),
+                  onAction: (item, action) => _handleTimelineAction(
+                    snapshot: snapshot,
+                    item: item,
+                    action: action,
+                  ),
                 ),
               ] else ...<Widget>[
                 const SizedBox(height: 28),
@@ -193,9 +207,7 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
             ],
           ),
           bottomNavigationBar: _GlobalPlanActions(
-            onAdd: () => _showPlannedAction(
-              'Aggiunta luoghi disponibile nel prossimo passaggio.',
-            ),
+            onAdd: () => _openPlacePicker(snapshot: snapshot, fixture: fixture),
             onAsk: () => Navigator.of(context).maybePop(),
             onCosts: () => _showPlannedAction(
               'Riepilogo costi disponibile nel prossimo passaggio.',
@@ -268,6 +280,132 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
     if (!mounted || action != PlaceDetailAction.askIter) return;
     _controller.setPlaceComposerContext(_conversationId, place);
     Navigator.of(context).pop();
+  }
+
+  Future<void> _openPlacePicker({
+    required TripSnapshot snapshot,
+    required OperationalTripFixture? fixture,
+  }) async {
+    if (fixture == null) {
+      _showPlannedAction('Catalogo luoghi non disponibile per questo piano.');
+      return;
+    }
+    final selection = await showPlacePickerSheet(
+      context: context,
+      fixture: fixture,
+      snapshot: snapshot,
+    );
+    if (!mounted || selection == null) return;
+    final place = selection.place;
+    final preview = _controller.previewAddPlace(
+      conversationId: _conversationId,
+      item: TripItemSnapshot(
+        id: '${place.id}-manual-stop',
+        title: place.name,
+        category: place.category,
+        durationMinutes: 60,
+        source: PlanItemSource.manual,
+        place: PlanPlaceDetails(
+          id: place.id,
+          title: place.name,
+          description: place.description,
+        ),
+        locked: false,
+      ),
+      targetDayId: selection.targetDayId,
+      targetIndex: selection.targetIndex,
+    );
+    await _showPatch(preview);
+  }
+
+  Future<void> _previewMove({
+    required String itemId,
+    required String targetDayId,
+    required int targetIndex,
+  }) async {
+    final preview = _controller.previewMoveStop(
+      conversationId: _conversationId,
+      itemId: itemId,
+      targetDayId: targetDayId,
+      targetIndex: targetIndex,
+    );
+    await _showPatch(preview);
+  }
+
+  Future<void> _handleTimelineAction({
+    required TripSnapshot snapshot,
+    required TripItemSnapshot item,
+    required PlanTimelineAction action,
+  }) async {
+    switch (action) {
+      case PlanTimelineAction.move:
+        final selection = await showPlanMoveSheet(
+          context: context,
+          snapshot: snapshot,
+          itemId: item.id,
+        );
+        if (!mounted || selection == null) return;
+        await _previewMove(
+          itemId: item.id,
+          targetDayId: selection.targetDayId,
+          targetIndex: selection.targetIndex,
+        );
+        return;
+      case PlanTimelineAction.changeTime:
+        final initial =
+            _parseTime(item.startTime) ?? const TimeOfDay(hour: 9, minute: 0);
+        final selected = await showTimePicker(
+          context: context,
+          initialTime: initial,
+          helpText: 'Cambia orario',
+          cancelText: 'Annulla',
+          confirmText: 'OK',
+        );
+        if (!mounted || selected == null) return;
+        final preview = _controller.previewChangeTime(
+          conversationId: _conversationId,
+          itemId: item.id,
+          startTime:
+              '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}',
+        );
+        await _showPatch(preview);
+        return;
+      case PlanTimelineAction.toggleLock:
+        final preview = _controller.previewToggleLock(
+          conversationId: _conversationId,
+          itemId: item.id,
+        );
+        await _showPatch(preview);
+        return;
+      case PlanTimelineAction.remove:
+        final preview = _controller.previewRemoveStop(
+          conversationId: _conversationId,
+          itemId: item.id,
+        );
+        await _showPatch(preview);
+        return;
+    }
+  }
+
+  Future<void> _showPatch(PlanPatchPreview preview) async {
+    final applied = await showPlanPatchSheet(
+      context: context,
+      preview: preview,
+      onApply: () => _controller.confirmPlanPatch(_conversationId),
+      onCancel: () => _controller.cancelPlanPatch(_conversationId),
+    );
+    if (!mounted || !applied) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('Modifica applicata'),
+          action: SnackBarAction(
+            label: 'Annulla',
+            onPressed: () => _controller.undoLastPlanRevision(_conversationId),
+          ),
+        ),
+      );
   }
 
   Future<void> _openDirections(Uri? uri) async {
@@ -637,6 +775,15 @@ OperationalPlaceFixture? _cataloguePlaceFor(
     }
   }
   return null;
+}
+
+TimeOfDay? _parseTime(String value) {
+  final match = RegExp(r'^(\d{2}):(\d{2})$').firstMatch(value);
+  if (match == null) return null;
+  final hour = int.tryParse(match.group(1)!);
+  final minute = int.tryParse(match.group(2)!);
+  if (hour == null || minute == null || hour > 23 || minute > 59) return null;
+  return TimeOfDay(hour: hour, minute: minute);
 }
 
 const _legacyConversationId = 'legacy-plan-preview';
