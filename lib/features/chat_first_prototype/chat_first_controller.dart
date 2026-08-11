@@ -8,6 +8,48 @@ import 'chat_first_data.dart';
 import 'chat_first_models.dart';
 import 'data_source.dart';
 import 'mock_data_source.dart';
+import 'plan_editor.dart';
+
+enum PlanPersistenceStatus { idle, saving, saved, failed }
+
+@immutable
+class PlanPersistenceState {
+  const PlanPersistenceState({
+    required this.status,
+    this.revision,
+    this.errorCode,
+  });
+
+  const PlanPersistenceState.idle()
+    : status = PlanPersistenceStatus.idle,
+      revision = null,
+      errorCode = null;
+
+  final PlanPersistenceStatus status;
+  final int? revision;
+  final String? errorCode;
+}
+
+@immutable
+class PlanRevisionRecord {
+  const PlanRevisionRecord({required this.before, required this.after});
+
+  final TripSnapshot before;
+  final TripSnapshot after;
+}
+
+@immutable
+class _PlanSaveAttempt {
+  const _PlanSaveAttempt({
+    required this.conversationId,
+    required this.conversation,
+    required this.snapshot,
+  });
+
+  final String conversationId;
+  final Conversation conversation;
+  final TripSnapshot snapshot;
+}
 
 /// Isolated demo store for the chat-first prototype. It never touches the
 /// legacy [IterStore]; data is deterministic and lives only for the session.
@@ -15,8 +57,10 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   ChatFirstPrototypeController({
     List<ChatThread>? seed,
     IterDataSource? dataSource,
+    DateTime Function()? now,
   }) : _threads = seed ?? ChatFirstDemoData.seedThreads(),
-       dataSource = dataSource ?? MockDataSource() {
+       dataSource = dataSource ?? MockDataSource(),
+       _now = now ?? DateTime.now {
     _unread = _sumUnread();
   }
 
@@ -24,6 +68,8 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   /// Supabase. [trendJourneys] falls back to the deterministic demo content
   /// until [loadTrendJourneys] replaces it.
   final IterDataSource dataSource;
+  final PlanEditor _planEditor = const PlanEditor();
+  final DateTime Function() _now;
 
   final List<ChatThread> _threads;
 
@@ -35,6 +81,18 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   /// writers never double-create the row for the same thread.
   final Map<String, Future<String?>> _pendingConversation =
       <String, Future<String?>>{};
+
+  final Map<String, PlanPatchPreview> _pendingPlanPatches =
+      <String, PlanPatchPreview>{};
+  final Map<String, List<PlanRevisionRecord>> _planRevisionHistory =
+      <String, List<PlanRevisionRecord>>{};
+  final Map<String, PlanPersistenceState> _planPersistence =
+      <String, PlanPersistenceState>{};
+  final Map<String, _PlanSaveAttempt> _failedPlanSaves =
+      <String, _PlanSaveAttempt>{};
+  final Map<String, Future<void>> _planSaveQueues = <String, Future<void>>{};
+  final Map<String, PlanPlaceDetails> _placeComposerContexts =
+      <String, PlanPlaceDetails>{};
 
   String? _activeThreadId;
   int _unread = 0;
@@ -144,6 +202,334 @@ class ChatFirstPrototypeController extends ChangeNotifier {
 
   Conversation conversationOf(String id) => threadOf(id).summary;
 
+  PlanPatchPreview? pendingPlanPatch(String conversationId) =>
+      _pendingPlanPatches[conversationId];
+
+  List<PlanRevisionRecord> planRevisionHistory(String conversationId) =>
+      List<PlanRevisionRecord>.unmodifiable(
+        _planRevisionHistory[conversationId] ?? const <PlanRevisionRecord>[],
+      );
+
+  PlanPersistenceState planPersistenceState(String conversationId) =>
+      _planPersistence[conversationId] ?? const PlanPersistenceState.idle();
+
+  PlanPlaceDetails? placeComposerContext(String conversationId) =>
+      _placeComposerContexts[conversationId];
+
+  PlanPatchPreview previewAddPlace({
+    required String conversationId,
+    required TripItemSnapshot item,
+    String? targetDayId,
+    int? targetIndex,
+  }) => _rememberPlanPreview(
+    _planEditor.previewAddPlace(
+      conversationId: conversationId,
+      snapshot: _planSnapshot(conversationId),
+      item: item,
+      targetDayId: targetDayId,
+      targetIndex: targetIndex,
+    ),
+  );
+
+  PlanPatchPreview previewMoveStop({
+    required String conversationId,
+    required String itemId,
+    required String targetDayId,
+    required int targetIndex,
+  }) => _rememberPlanPreview(
+    _planEditor.previewMoveStop(
+      conversationId: conversationId,
+      snapshot: _planSnapshot(conversationId),
+      itemId: itemId,
+      targetDayId: targetDayId,
+      targetIndex: targetIndex,
+    ),
+  );
+
+  PlanPatchPreview previewRemoveStop({
+    required String conversationId,
+    required String itemId,
+  }) => _rememberPlanPreview(
+    _planEditor.previewRemoveStop(
+      conversationId: conversationId,
+      snapshot: _planSnapshot(conversationId),
+      itemId: itemId,
+    ),
+  );
+
+  PlanPatchPreview previewChangeTime({
+    required String conversationId,
+    required String itemId,
+    required String startTime,
+  }) => _rememberPlanPreview(
+    _planEditor.previewChangeTime(
+      conversationId: conversationId,
+      snapshot: _planSnapshot(conversationId),
+      itemId: itemId,
+      startTime: startTime,
+    ),
+  );
+
+  PlanPatchPreview previewToggleLock({
+    required String conversationId,
+    required String itemId,
+  }) => _rememberPlanPreview(
+    _planEditor.previewToggleLock(
+      conversationId: conversationId,
+      snapshot: _planSnapshot(conversationId),
+      itemId: itemId,
+    ),
+  );
+
+  /// Applies the current preview once. A stale preview is recalculated against
+  /// the current snapshot and remains pending for a fresh explicit confirm.
+  PlanPatchPreview? confirmPlanPatch(String conversationId) {
+    final pending = _pendingPlanPatches[conversationId];
+    if (pending == null) return null;
+    final current = _planSnapshot(conversationId);
+    if (pending.baseRevision != current.revision) {
+      final rebased = _planEditor.rebase(preview: pending, current: current);
+      _pendingPlanPatches[conversationId] = rebased;
+      notifyListeners();
+      return rebased;
+    }
+    final applied = _planEditor.apply(
+      preview: pending,
+      current: current,
+      currentConversationId: conversationId,
+      timestamp: _now().toUtc(),
+    );
+    if (applied.status != PlanPatchStatus.applied) return applied;
+    _pendingPlanPatches.remove(conversationId);
+    _commitPlanRevision(
+      conversationId: conversationId,
+      before: current,
+      after: applied.after,
+    );
+    return applied;
+  }
+
+  bool cancelPlanPatch(String conversationId) {
+    final removed = _pendingPlanPatches.remove(conversationId) != null;
+    if (removed) notifyListeners();
+    return removed;
+  }
+
+  /// Restores the previous snapshot content as a new, observable revision.
+  bool undoLastPlanRevision(String conversationId) {
+    final history = _planRevisionHistory[conversationId];
+    if (history == null || history.isEmpty) return false;
+    final current = _planSnapshot(conversationId);
+    final previous = history.last.before;
+    final revision = current.revision + 1;
+    final json = Map<String, dynamic>.of(previous.toJson())
+      ..['revision'] = revision
+      ..['revisionMetadata'] = PlanRevisionMetadata(
+        id: '$conversationId-r$revision',
+        number: revision,
+        timestamp: _now().toUtc(),
+        origin: PlanChangeOrigin.manual,
+        label: 'Annulla ultima modifica',
+      ).toJson();
+    final restored = TripSnapshot.fromJson(json);
+    _commitPlanRevision(
+      conversationId: conversationId,
+      before: current,
+      after: restored,
+    );
+    return true;
+  }
+
+  Future<bool> retryPlanPersistence(String conversationId) async {
+    final failed = _failedPlanSaves[conversationId];
+    if (failed == null) return false;
+    await _enqueuePlanSave(failed);
+    return true;
+  }
+
+  void setPlaceComposerContext(String conversationId, PlanPlaceDetails place) {
+    threadOf(conversationId);
+    _placeComposerContexts[conversationId] = place;
+    notifyListeners();
+  }
+
+  bool clearPlaceComposerContext(String conversationId) {
+    final removed = _placeComposerContexts.remove(conversationId) != null;
+    if (removed) notifyListeners();
+    return removed;
+  }
+
+  bool selectTravelOption({
+    required String conversationId,
+    required String optionId,
+  }) {
+    final current = _planSnapshot(conversationId);
+    final option = ChatFirstDemoData.travelOptionFor(
+      snapshot: current,
+      optionId: optionId,
+    );
+    if (option == null) return false;
+    final next = current.copyWith(
+      transport: option.label,
+      travelSelection: TravelPlanSelection(option: option),
+      revision: current.revision + 1,
+      revisionMetadata: _selectionMetadata(
+        conversationId,
+        current.revision + 1,
+        'Volo selezionato',
+      ),
+    );
+    _commitPlanRevision(
+      conversationId: conversationId,
+      before: current,
+      after: next,
+    );
+    return true;
+  }
+
+  bool selectStayOption({
+    required String conversationId,
+    required String optionId,
+  }) {
+    final current = _planSnapshot(conversationId);
+    final option = ChatFirstDemoData.stayOptionFor(
+      snapshot: current,
+      optionId: optionId,
+    );
+    if (option == null) return false;
+    final next = current.copyWith(
+      stay: option.label,
+      staySelection: StayPlanSelection(option: option),
+      revision: current.revision + 1,
+      revisionMetadata: _selectionMetadata(
+        conversationId,
+        current.revision + 1,
+        'Hotel selezionato',
+      ),
+    );
+    _commitPlanRevision(
+      conversationId: conversationId,
+      before: current,
+      after: next,
+    );
+    return true;
+  }
+
+  TripSnapshot _planSnapshot(String conversationId) {
+    final snapshot = conversationOf(conversationId).snapshot;
+    if (snapshot == null) {
+      throw StateError('Conversation $conversationId has no plan snapshot.');
+    }
+    return snapshot;
+  }
+
+  PlanPatchPreview _rememberPlanPreview(PlanPatchPreview preview) {
+    _pendingPlanPatches[preview.conversationId] = preview;
+    notifyListeners();
+    return preview;
+  }
+
+  PlanRevisionMetadata _selectionMetadata(
+    String conversationId,
+    int revision,
+    String label,
+  ) => PlanRevisionMetadata(
+    id: '$conversationId-r$revision',
+    number: revision,
+    timestamp: _now().toUtc(),
+    origin: PlanChangeOrigin.manual,
+    label: label,
+  );
+
+  void _commitPlanRevision({
+    required String conversationId,
+    required TripSnapshot before,
+    required TripSnapshot after,
+  }) {
+    final thread = threadOf(conversationId);
+    thread.summary = thread.summary.copyWith(snapshot: after);
+    final history = _planRevisionHistory.putIfAbsent(
+      conversationId,
+      () => <PlanRevisionRecord>[],
+    );
+    history.add(PlanRevisionRecord(before: before, after: after));
+    if (history.length > 10) history.removeRange(0, history.length - 10);
+    notifyListeners();
+    unawaited(
+      _enqueuePlanSave(
+        _PlanSaveAttempt(
+          conversationId: conversationId,
+          conversation: thread.summary,
+          snapshot: after,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _enqueuePlanSave(_PlanSaveAttempt attempt) {
+    final conversationId = attempt.conversationId;
+    _planPersistence[conversationId] = PlanPersistenceState(
+      status: PlanPersistenceStatus.saving,
+      revision: attempt.snapshot.revision,
+    );
+    notifyListeners();
+    final previous = _planSaveQueues[conversationId] ?? Future<void>.value();
+    final next = previous
+        .catchError((Object _) {})
+        .then((_) => _performPlanSave(attempt));
+    _planSaveQueues[conversationId] = next;
+    unawaited(
+      next.whenComplete(() {
+        if (identical(_planSaveQueues[conversationId], next)) {
+          _planSaveQueues.remove(conversationId);
+        }
+      }),
+    );
+    return next;
+  }
+
+  Future<void> _performPlanSave(_PlanSaveAttempt attempt) async {
+    PlanSaveResult result;
+    try {
+      final dbId = await _ensureConversation(threadOf(attempt.conversationId));
+      result = await dataSource.saveTripVersion(
+        conversationId: dbId ?? attempt.conversationId,
+        conversation: attempt.conversation,
+        snapshot: attempt.snapshot,
+      );
+    } catch (_) {
+      result = const PlanSaveResult.failure('unexpected');
+    }
+
+    final conversationId = attempt.conversationId;
+    final visible = _planPersistence[conversationId];
+    if (result.succeeded) {
+      final failed = _failedPlanSaves[conversationId];
+      if (failed != null &&
+          failed.snapshot.revision <= attempt.snapshot.revision) {
+        _failedPlanSaves.remove(conversationId);
+      }
+      if (visible?.revision == attempt.snapshot.revision) {
+        _planPersistence[conversationId] = PlanPersistenceState(
+          status: PlanPersistenceStatus.saved,
+          revision: attempt.snapshot.revision,
+        );
+        notifyListeners();
+      }
+      return;
+    }
+
+    _failedPlanSaves[conversationId] = attempt;
+    if (visible?.revision == attempt.snapshot.revision) {
+      _planPersistence[conversationId] = PlanPersistenceState(
+        status: PlanPersistenceStatus.failed,
+        revision: attempt.snapshot.revision,
+        errorCode: result.errorCode ?? 'unexpected',
+      );
+      notifyListeners();
+    }
+  }
+
   ChatThread? threadForJourney(String journeyId) {
     for (final thread in _threads) {
       if (thread.summary.id == 'c-$journeyId') return thread;
@@ -208,6 +594,7 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     final thread = activeThread;
     if (thread == null || text.trim().isEmpty) return;
     _advance(thread, text.trim());
+    _consumePlaceComposerContext(thread.summary.id);
   }
 
   /// Sends a mock voice note from the traveler.
@@ -217,6 +604,7 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     _activeThreadId = thread.summary.id;
     thread.travelerAudioMessage();
     _reply(thread);
+    _consumePlaceComposerContext(thread.summary.id);
   }
 
   /// Sends a traveler attachment (a demo image or video) and advances.
@@ -226,6 +614,13 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     _activeThreadId = thread.summary.id;
     thread.travelerMediaMessage(asset, isVideo: isVideo);
     _reply(thread);
+    _consumePlaceComposerContext(thread.summary.id);
+  }
+
+  void _consumePlaceComposerContext(String conversationId) {
+    if (_placeComposerContexts.remove(conversationId) != null) {
+      notifyListeners();
+    }
   }
 
   void _reply(ChatThread thread) {
@@ -392,24 +787,19 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     }
   }
 
-  /// Persists the accepted plan of [thread] as a new trip version (upserting
-  /// the linked `trips` row). Best effort, exactly once, only when the plan has
-  /// changed; rejecting a proposal never touches the trips.
-  Future<void> _persistAcceptedPlan(ChatThread thread) async {
-    try {
-      final dbId = await _ensureConversation(thread);
-      if (dbId == null) return;
-      final snapshot = thread.summary.snapshot;
-      if (snapshot == null) return;
-      final result = await dataSource.saveTripVersion(
-        conversationId: dbId,
-        conversation: thread.summary,
-        snapshot: snapshot,
-      );
-      if (!result.succeeded) return;
-    } catch (_) {
-      // Accepting a visible proposal stays authoritative in memory even when
-      // the optional persistence boundary is temporarily unavailable.
-    }
+  /// Persists accepted proposals through the same per-conversation queue used
+  /// by direct plan commands, so their writes cannot overtake each other.
+  void _persistAcceptedPlan(ChatThread thread) {
+    final snapshot = thread.summary.snapshot;
+    if (snapshot == null) return;
+    unawaited(
+      _enqueuePlanSave(
+        _PlanSaveAttempt(
+          conversationId: thread.summary.id,
+          conversation: thread.summary,
+          snapshot: snapshot,
+        ),
+      ),
+    );
   }
 }

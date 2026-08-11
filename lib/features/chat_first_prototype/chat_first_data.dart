@@ -771,6 +771,57 @@ abstract final class ChatFirstDemoData {
         operationalFixtureFor(destinationId).placeCatalog,
       );
 
+  /// Resolves the deterministic operational inventory owned by [snapshot].
+  /// Unknown destinations intentionally return null instead of inventing
+  /// provider data.
+  static OperationalTripFixture? operationalFixtureForSnapshot(
+    TripSnapshot snapshot,
+  ) {
+    final destination = snapshot.destinationTitle.toLowerCase();
+    if (destination.contains('porto')) return operationalFixtureFor('porto');
+    if (destination.contains('roma')) return operationalFixtureFor('roma');
+    return null;
+  }
+
+  /// Maps one flight fixture into the canonical selected-option shape.
+  static TravelOption? travelOptionFor({
+    required TripSnapshot snapshot,
+    required String optionId,
+  }) {
+    final fixture = operationalFixtureForSnapshot(snapshot);
+    if (fixture == null) return null;
+    for (final flight in fixture.flights) {
+      if (flight.id != optionId) continue;
+      return TravelOption(
+        id: flight.id,
+        label:
+            '${flight.provider} · ${flight.departureAirport}–${flight.arrivalAirport}',
+        priceCents: flight.priceCents,
+        purchaseState: PurchaseState.selected,
+      );
+    }
+    return null;
+  }
+
+  /// Maps one hotel fixture into the canonical selected-option shape.
+  static StayOption? stayOptionFor({
+    required TripSnapshot snapshot,
+    required String optionId,
+  }) {
+    final fixture = operationalFixtureForSnapshot(snapshot);
+    if (fixture == null) return null;
+    for (final hotel in fixture.hotels) {
+      if (hotel.id != optionId) continue;
+      return StayOption(
+        id: hotel.id,
+        label: hotel.name,
+        priceCents: hotel.priceCents,
+        purchaseState: PurchaseState.selected,
+      );
+    }
+    return null;
+  }
+
   static OperationalTripFixture _portoOperationalFixture() {
     final media = PlanMedia(
       imageUrl: 'assets/images/travel/porto_livraria_lello.jpg',

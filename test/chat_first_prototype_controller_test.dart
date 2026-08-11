@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,6 +12,7 @@ import 'package:iter/features/chat_first_prototype/chat_first_data.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_models.dart';
 import 'package:iter/features/chat_first_prototype/data_source.dart';
 import 'package:iter/features/chat_first_prototype/mock_data_source.dart';
+import 'package:iter/features/chat_first_prototype/plan_editor.dart';
 import 'package:iter/features/chat_first_prototype/supabase_data_source.dart';
 import 'package:iter/models/trip_models.dart' show JourneyRoute;
 
@@ -1157,6 +1159,322 @@ void main() {
     });
   });
 
+  group('Controller Piano operativo', () {
+    test('tutti i comandi producono anteprime senza mutare il piano', () {
+      final controller = _planController();
+      const conversationId = 'c-plan-porto';
+      final before = controller.conversationOf(conversationId).snapshot!;
+
+      final add = controller.previewAddPlace(
+        conversationId: conversationId,
+        item: const TripItemSnapshot(
+          id: 'porto-new-stop',
+          title: 'Casa da Musica',
+          category: 'Musica',
+          startTime: '11:00',
+          durationMinutes: 60,
+          locked: false,
+        ),
+        targetDayId: 'porto-day-1',
+        targetIndex: 1,
+      );
+      final move = controller.previewMoveStop(
+        conversationId: conversationId,
+        itemId: 'porto-livraria-lello-stop',
+        targetDayId: 'porto-day-2',
+        targetIndex: 1,
+      );
+      final remove = controller.previewRemoveStop(
+        conversationId: conversationId,
+        itemId: 'porto-livraria-lello-stop',
+      );
+      final time = controller.previewChangeTime(
+        conversationId: conversationId,
+        itemId: 'porto-livraria-lello-stop',
+        startTime: '08:30',
+      );
+      final lock = controller.previewToggleLock(
+        conversationId: conversationId,
+        itemId: 'porto-livraria-lello-stop',
+      );
+
+      expect(<PlanPatchKind>[
+        add.kind,
+        move.kind,
+        remove.kind,
+        time.kind,
+        lock.kind,
+      ], PlanPatchKind.values);
+      expect(controller.conversationOf(conversationId).snapshot, same(before));
+      expect(controller.pendingPlanPatch(conversationId), same(lock));
+      expect(controller.pendingPlanPatch('c-plan-roma'), isNull);
+    });
+
+    test('conferma applica e persiste una sola volta', () async {
+      final source = _PlanRecordingDataSource();
+      final controller = _planController(dataSource: source);
+      const conversationId = 'c-plan-porto';
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+
+      controller.previewChangeTime(
+        conversationId: conversationId,
+        itemId: 'porto-livraria-lello-stop',
+        startTime: '08:30',
+      );
+      final applied = controller.confirmPlanPatch(conversationId);
+      final duplicate = controller.confirmPlanPatch(conversationId);
+      await source.savedCount(1);
+
+      expect(applied?.status, PlanPatchStatus.applied);
+      expect(duplicate, isNull);
+      expect(controller.conversationOf(conversationId).snapshot?.revision, 2);
+      expect(source.savedVersions, hasLength(1));
+      expect(source.savedVersions.single.snapshot.revision, 2);
+      expect(notifications, greaterThanOrEqualTo(2));
+    });
+
+    test('conferma stale ricalcola e richiede una nuova conferma', () {
+      final controller = _planController();
+      const conversationId = 'c-plan-porto';
+      final thread = controller.threadOf(conversationId);
+      final current = thread.summary.snapshot!;
+      controller.previewChangeTime(
+        conversationId: conversationId,
+        itemId: 'porto-livraria-lello-stop',
+        startTime: '08:30',
+      );
+      thread.summary = thread.summary.copyWith(
+        snapshot: current.copyWith(revision: current.revision + 1),
+      );
+
+      final rebased = controller.confirmPlanPatch(conversationId);
+      expect(rebased?.baseRevision, 2);
+      expect(rebased?.requiresConfirmation, isTrue);
+      expect(controller.conversationOf(conversationId).snapshot?.revision, 2);
+
+      final applied = controller.confirmPlanPatch(conversationId);
+      expect(applied?.status, PlanPatchStatus.applied);
+      expect(controller.conversationOf(conversationId).snapshot?.revision, 3);
+    });
+
+    test('annulla elimina solo la patch della conversazione richiesta', () {
+      final controller = _planController();
+      controller.previewToggleLock(
+        conversationId: 'c-plan-porto',
+        itemId: 'porto-livraria-lello-stop',
+      );
+      controller.previewToggleLock(
+        conversationId: 'c-plan-roma',
+        itemId: 'roma-foro-stop',
+      );
+
+      expect(controller.cancelPlanPatch('c-plan-porto'), isTrue);
+      expect(controller.pendingPlanPatch('c-plan-porto'), isNull);
+      expect(controller.pendingPlanPatch('c-plan-roma'), isNotNull);
+      expect(controller.cancelPlanPatch('c-plan-porto'), isFalse);
+    });
+
+    test(
+      'cronologia mantiene dieci before/after e undo crea una revisione',
+      () {
+        final controller = _planController();
+        const conversationId = 'c-plan-porto';
+        for (var index = 0; index < 11; index++) {
+          controller.previewToggleLock(
+            conversationId: conversationId,
+            itemId: 'porto-livraria-lello-stop',
+          );
+          expect(controller.confirmPlanPatch(conversationId), isNotNull);
+        }
+        final beforeUndo = controller.conversationOf(conversationId).snapshot!;
+        final history = controller.planRevisionHistory(conversationId);
+        expect(history, hasLength(10));
+        expect(history.last.before.revision, 11);
+        expect(history.last.after.revision, 12);
+
+        expect(controller.undoLastPlanRevision(conversationId), isTrue);
+        final undone = controller.conversationOf(conversationId).snapshot!;
+        expect(undone.revision, beforeUndo.revision + 1);
+        expect(undone.days.first.items.first.locked, isFalse);
+        expect(undone.revisionMetadata?.label, 'Annulla ultima modifica');
+        expect(controller.planRevisionHistory(conversationId), hasLength(10));
+      },
+    );
+
+    test(
+      'fallimento espone errorCode e retry salva la revisione esatta',
+      () async {
+        final source = _RetryingPlanDataSource();
+        final controller = _planController(dataSource: source);
+        const conversationId = 'c-plan-porto';
+        controller.previewToggleLock(
+          conversationId: conversationId,
+          itemId: 'porto-livraria-lello-stop',
+        );
+        controller.confirmPlanPatch(conversationId);
+        await source.savedCount(1);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(
+          controller.planPersistenceState(conversationId).status,
+          PlanPersistenceStatus.failed,
+        );
+        expect(
+          controller.planPersistenceState(conversationId).errorCode,
+          'plan_write_failed',
+        );
+        expect(controller.conversationOf(conversationId).snapshot?.revision, 2);
+
+        expect(await controller.retryPlanPersistence(conversationId), isTrue);
+        expect(
+          source.savedVersions.map((call) => call.snapshot.revision),
+          <int>[2, 2],
+        );
+        expect(
+          controller.planPersistenceState(conversationId).status,
+          PlanPersistenceStatus.saved,
+        );
+        expect(
+          controller.planPersistenceState(conversationId).errorCode,
+          isNull,
+        );
+      },
+    );
+
+    test('scritture della stessa conversazione restano serializzate', () async {
+      final source = _ControlledPlanDataSource();
+      final controller = _planController(dataSource: source);
+      const conversationId = 'c-plan-porto';
+
+      controller.previewToggleLock(
+        conversationId: conversationId,
+        itemId: 'porto-livraria-lello-stop',
+      );
+      controller.confirmPlanPatch(conversationId);
+      controller.previewToggleLock(
+        conversationId: conversationId,
+        itemId: 'porto-livraria-lello-stop',
+      );
+      controller.confirmPlanPatch(conversationId);
+      await source.startedCount(1);
+      expect(source.startedRevisions, <int>[2]);
+
+      source.completeNext();
+      await source.startedCount(2);
+      expect(source.startedRevisions, <int>[2, 3]);
+      source.completeNext();
+      await source.completedCount(2);
+      expect(controller.planPersistenceState(conversationId).revision, 3);
+    });
+
+    test('conversazioni diverse persistono senza bloccarsi fra loro', () async {
+      final source = _ControlledPlanDataSource();
+      final controller = _planController(dataSource: source);
+      controller.previewToggleLock(
+        conversationId: 'c-plan-porto',
+        itemId: 'porto-livraria-lello-stop',
+      );
+      controller.confirmPlanPatch('c-plan-porto');
+      controller.previewToggleLock(
+        conversationId: 'c-plan-roma',
+        itemId: 'roma-foro-stop',
+      );
+      controller.confirmPlanPatch('c-plan-roma');
+
+      await source.startedCount(2);
+      expect(source.startedConversationIds.toSet(), <String>{
+        'db-c-plan-porto',
+        'db-c-plan-roma',
+      });
+      source.completeAll();
+      await source.completedCount(2);
+    });
+
+    test('contesto luogo e removibile e si consuma solo al send valido', () {
+      final controller = _planController();
+      const conversationId = 'c-plan-porto';
+      final beforePlan = controller.conversationOf(conversationId).snapshot!;
+      final beforeMessages = controller
+          .threadOf(conversationId)
+          .messages
+          .length;
+      const place = PlanPlaceDetails(
+        id: 'porto-livraria-lello',
+        title: 'Livraria Lello',
+        description: 'Libreria storica',
+      );
+
+      controller.setPlaceComposerContext(conversationId, place);
+      expect(controller.placeComposerContext(conversationId), same(place));
+      expect(
+        controller.threadOf(conversationId).messages,
+        hasLength(beforeMessages),
+      );
+      expect(
+        controller.conversationOf(conversationId).snapshot,
+        same(beforePlan),
+      );
+      controller.openConversation(conversationId);
+      controller.sendText('   ');
+      expect(controller.placeComposerContext(conversationId), same(place));
+      controller.openConversation('c-plan-roma');
+      controller.sendText('Raccontami questo posto');
+      expect(controller.placeComposerContext(conversationId), same(place));
+      controller.openConversation(conversationId);
+      controller.sendText('Perche vale la pena?');
+      expect(controller.placeComposerContext(conversationId), isNull);
+
+      controller.setPlaceComposerContext(conversationId, place);
+      expect(controller.clearPlaceComposerContext(conversationId), isTrue);
+      expect(controller.clearPlaceComposerContext(conversationId), isFalse);
+    });
+
+    test('selezioni volo e hotel usano fixture e creano revisioni', () {
+      final controller = _planController();
+      const conversationId = 'c-plan-porto';
+      final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+
+      expect(
+        controller.selectTravelOption(
+          conversationId: conversationId,
+          optionId: fixture.flights[2].id,
+        ),
+        isTrue,
+      );
+      final flightSnapshot = controller
+          .conversationOf(conversationId)
+          .snapshot!;
+      expect(flightSnapshot.revision, 2);
+      expect(flightSnapshot.travelSelection?.option.id, fixture.flights[2].id);
+      expect(
+        flightSnapshot.travelSelection?.option.purchaseState,
+        PurchaseState.selected,
+      );
+      expect(flightSnapshot.transport, contains(fixture.flights[2].provider));
+
+      expect(
+        controller.selectStayOption(
+          conversationId: conversationId,
+          optionId: fixture.hotels[1].id,
+        ),
+        isTrue,
+      );
+      final staySnapshot = controller.conversationOf(conversationId).snapshot!;
+      expect(staySnapshot.revision, 3);
+      expect(staySnapshot.staySelection?.option.id, fixture.hotels[1].id);
+      expect(staySnapshot.stay, fixture.hotels[1].name);
+      expect(
+        controller.selectTravelOption(
+          conversationId: conversationId,
+          optionId: 'missing',
+        ),
+        isFalse,
+      );
+      expect(controller.conversationOf(conversationId).snapshot?.revision, 3);
+    });
+  });
+
   group('Free talk (nuovo viaggio parlando)', () {
     test('startFreeTalk crea il thread libero e riusa quello esistente', () {
       final controller = ChatFirstPrototypeController();
@@ -1408,6 +1726,31 @@ void main() {
   });
 }
 
+ChatFirstPrototypeController _planController({IterDataSource? dataSource}) {
+  final porto = ChatFirstDemoData.operationalFixtureFor('porto');
+  final roma = ChatFirstDemoData.operationalFixtureFor('roma');
+  return ChatFirstPrototypeController(
+    dataSource: dataSource,
+    seed: <ChatThread>[
+      _planThread('c-plan-porto', porto.snapshot),
+      _planThread('c-plan-roma', roma.snapshot),
+    ],
+  );
+}
+
+ChatThread _planThread(String id, TripSnapshot snapshot) => ChatThread(
+  summary: Conversation(
+    id: id,
+    title: snapshot.destinationTitle,
+    subtitle: 'Piano operativo',
+    avatar: ChatAvatar('fixture.jpg', label: snapshot.destinationTitle),
+    timestamp: DateTime(2026, 8, 11, 12),
+    lastPreview: 'Piano pronto',
+    snapshot: snapshot,
+  ),
+  script: <ScriptedBeat>[],
+);
+
 Iterable<String> _assistantTexts(ChatThread thread) => thread.messages
     .where((message) => message.role == ChatRole.assistant)
     .expand(
@@ -1452,6 +1795,132 @@ class _TripSpyDataSource extends MockDataSource {
       snapshot: snapshot,
     ));
     return const PlanSaveResult.success();
+  }
+}
+
+class _PlanRecordingDataSource extends MockDataSource {
+  final List<
+    ({String conversationId, Conversation conversation, TripSnapshot snapshot})
+  >
+  savedVersions =
+      <
+        ({
+          String conversationId,
+          Conversation conversation,
+          TripSnapshot snapshot,
+        })
+      >[];
+
+  final StreamController<int> _saveCounts = StreamController<int>.broadcast();
+
+  @override
+  Future<ConversationRow?> createConversation(Conversation summary) async =>
+      ConversationRow(
+        id: 'db-${summary.id}',
+        conversation: summary,
+        updatedAt: DateTime(2026, 8, 11, 12),
+      );
+
+  @override
+  Future<PlanSaveResult> saveTripVersion({
+    required String conversationId,
+    required Conversation conversation,
+    required TripSnapshot snapshot,
+  }) async {
+    savedVersions.add((
+      conversationId: conversationId,
+      conversation: conversation,
+      snapshot: snapshot,
+    ));
+    _saveCounts.add(savedVersions.length);
+    return const PlanSaveResult.success();
+  }
+
+  Future<void> savedCount(int count) async {
+    if (savedVersions.length >= count) return;
+    await _saveCounts.stream.firstWhere((current) => current >= count);
+  }
+}
+
+class _RetryingPlanDataSource extends _PlanRecordingDataSource {
+  final List<int> _attempt = <int>[0];
+
+  @override
+  Future<PlanSaveResult> saveTripVersion({
+    required String conversationId,
+    required Conversation conversation,
+    required TripSnapshot snapshot,
+  }) async {
+    savedVersions.add((
+      conversationId: conversationId,
+      conversation: conversation,
+      snapshot: snapshot,
+    ));
+    _saveCounts.add(savedVersions.length);
+    _attempt[0]++;
+    return _attempt.single == 1
+        ? const PlanSaveResult.failure('plan_write_failed')
+        : const PlanSaveResult.success();
+  }
+}
+
+class _ControlledPlanDataSource extends MockDataSource {
+  final List<int> startedRevisions = <int>[];
+  final List<String> startedConversationIds = <String>[];
+  final List<Completer<PlanSaveResult>> _pending =
+      <Completer<PlanSaveResult>>[];
+  final StreamController<int> _started = StreamController<int>.broadcast();
+  final StreamController<int> _completed = StreamController<int>.broadcast();
+  final List<int> _completedCount = <int>[0];
+
+  @override
+  Future<ConversationRow?> createConversation(Conversation summary) async =>
+      ConversationRow(
+        id: 'db-${summary.id}',
+        conversation: summary,
+        updatedAt: DateTime(2026, 8, 11, 12),
+      );
+
+  @override
+  Future<PlanSaveResult> saveTripVersion({
+    required String conversationId,
+    required Conversation conversation,
+    required TripSnapshot snapshot,
+  }) {
+    startedRevisions.add(snapshot.revision);
+    startedConversationIds.add(conversationId);
+    final completer = Completer<PlanSaveResult>();
+    _pending.add(completer);
+    _started.add(startedRevisions.length);
+    return completer.future.whenComplete(() {
+      _completedCount[0]++;
+      _completed.add(_completedCount.single);
+    });
+  }
+
+  Future<void> startedCount(int count) async {
+    if (startedRevisions.length >= count) return;
+    await _started.stream.firstWhere((current) => current >= count);
+  }
+
+  Future<void> completedCount(int count) async {
+    if (_completedCount.single >= count) return;
+    await _completed.stream.firstWhere((current) => current >= count);
+  }
+
+  void completeNext() {
+    final completer = _pending.firstWhere(
+      (candidate) => !candidate.isCompleted,
+    );
+    completer.complete(const PlanSaveResult.success());
+  }
+
+  void completeAll() {
+    for (final completer in _pending.where(
+      (candidate) => !candidate.isCompleted,
+    )) {
+      completer.complete(const PlanSaveResult.success());
+    }
   }
 }
 
