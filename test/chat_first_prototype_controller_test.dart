@@ -864,6 +864,43 @@ void main() {
       expect(normalized.indexOf(rlsDdl), lessThan(normalized.indexOf(grant)));
     });
 
+    test('fresh SQL limita trip_versions agli utenti permanenti', () async {
+      final schema = await File('supabase/schema.sql').readAsString();
+      final migration = await File(
+        'supabase/migrations/'
+        '20260810235146_add_trip_version_owner_policies.sql',
+      ).readAsString();
+
+      _expectTripVersionLeastPrivilege('schema.sql', schema);
+      _expectTripVersionLeastPrivilege('migration originale', migration);
+    });
+
+    test('follow-up migration restringe privilegi e policy live', () async {
+      final migrations = Directory('supabase/migrations')
+          .listSync()
+          .whereType<File>()
+          .where(
+            (file) =>
+                file.path.endsWith('_tighten_trip_version_privileges.sql'),
+          )
+          .toList(growable: false);
+
+      expect(migrations, hasLength(1));
+      final sql = await migrations.single.readAsString();
+      _expectTripVersionLeastPrivilege('migration follow-up', sql);
+      final normalized = sql.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+      expect(
+        normalized,
+        contains('revoke execute on function public.save_trip_revision'),
+      );
+      expect(normalized, contains('from public, anon'));
+      expect(
+        normalized,
+        contains('grant execute on function public.save_trip_revision'),
+      );
+      expect(normalized, contains('to authenticated'));
+    });
+
     test('migration rende RPC atomica, monotona e policy ripetibili', () async {
       final sql = await File(
         'supabase/migrations/'
@@ -1501,6 +1538,53 @@ String _saveTripRevisionContract(String normalizedSql) {
   final start = normalizedSql.indexOf(startMarker);
   final end = normalizedSql.indexOf(endMarker, start);
   return normalizedSql.substring(start, end + endMarker.length);
+}
+
+void _expectTripVersionLeastPrivilege(String source, String sql) {
+  final normalized = sql.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  const revoke =
+      'revoke all privileges on table public.trip_versions '
+      'from anon, authenticated;';
+  const grant =
+      'grant select, insert on table public.trip_versions to authenticated;';
+  const permanentUser =
+      "(select (auth.jwt()->>'is_anonymous')::boolean) is false";
+
+  expect(
+    normalized,
+    contains(revoke),
+    reason: '$source revoca i default grant',
+  );
+  expect(
+    normalized,
+    contains(grant),
+    reason: '$source ripristina SELECT/INSERT',
+  );
+  expect(
+    normalized.indexOf(revoke),
+    lessThan(normalized.indexOf(grant)),
+    reason: '$source revoca prima del grant minimo',
+  );
+  expect(
+    RegExp(RegExp.escape(permanentUser)).allMatches(normalized),
+    hasLength(2),
+    reason: '$source protegge entrambe le policy dagli utenti anonimi',
+  );
+  expect(
+    RegExp(r'grant [^;]* on table public\.trip_versions [^;]*;')
+        .allMatches(normalized)
+        .map((match) => match.group(0))
+        .toList(growable: false),
+    <String?>[grant],
+    reason: '$source mantiene un solo grant minimo',
+  );
+  expect(
+    RegExp(
+      r'revoke [^;]* on table public\.trip_versions [^;]*service_role',
+    ).hasMatch(normalized),
+    isFalse,
+    reason: '$source non revoca service_role',
+  );
 }
 
 class _TripVersionPostgrestServer {

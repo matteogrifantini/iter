@@ -137,25 +137,32 @@ create policy "trips owner all"
   on public.trips for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Trip versions: append-only, via il trip del proprietario
+revoke all privileges on table public.trip_versions from anon, authenticated;
 grant select, insert on table public.trip_versions to authenticated;
 
 drop policy if exists "trip versions owner select" on public.trip_versions;
 create policy "trip versions owner select"
   on public.trip_versions for select to authenticated
-  using (exists (
-    select 1 from public.trips t
-    where t.id = trip_versions.trip_id
-      and t.user_id = (select auth.uid())
-  ));
+  using (
+    (select (auth.jwt()->>'is_anonymous')::boolean) is false
+    and exists (
+      select 1 from public.trips t
+      where t.id = trip_versions.trip_id
+        and t.user_id = (select auth.uid())
+    )
+  );
 
 drop policy if exists "trip versions owner insert" on public.trip_versions;
 create policy "trip versions owner insert"
   on public.trip_versions for insert to authenticated
-  with check (exists (
-    select 1 from public.trips t
-    where t.id = trip_versions.trip_id
-      and t.user_id = (select auth.uid())
-  ));
+  with check (
+    (select (auth.jwt()->>'is_anonymous')::boolean) is false
+    and exists (
+      select 1 from public.trips t
+      where t.id = trip_versions.trip_id
+        and t.user_id = (select auth.uid())
+    )
+  );
 
 create or replace function public.save_trip_revision(
   p_conversation_id uuid,
