@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:iter/app/iter_theme.dart';
+import 'package:iter/data/mock_data.dart';
 import 'package:iter/features/chat_first_prototype/adaptive_home_model.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_controller.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_data.dart';
@@ -13,6 +14,7 @@ import 'package:iter/features/chat_first_prototype/chat_first_shell.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_thread_screen.dart';
 import 'package:iter/features/chat_first_prototype/rotta_viva_mark.dart';
 import 'package:iter/features/chat_first_prototype/trip_snapshot_screen.dart';
+import 'package:iter/models/trip_models.dart' show JourneyRoute;
 
 void main() {
   Widget wrap(Widget child) {
@@ -433,6 +435,367 @@ void main() {
     expect(snapshot.stay, zoneName);
     expect(snapshot.days.last.items.last.title, 'Passeggiata finale');
     expect(find.text('Modifica applicata'), findsWidgets);
+  });
+
+  testWidgets('moduli rich volo e hotel compaiono in una meta operativa', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 9000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final controller = ChatFirstPrototypeController();
+    // porto-slow gia esiste come thread di pianificazione seed: costruiamo un
+    // journey guidato con id diverso per attraversare il flusso intake/F5.
+    final seeded = MockData.journeyById('porto-slow');
+    final journey = JourneyRoute(
+      id: 'porto-guided',
+      title: seeded.title,
+      summary: seeded.summary,
+      durationLabel: seeded.durationLabel,
+      stops: const <String>['Porto'],
+      destinationIds: const <String>['porto'],
+      whyItFits: seeded.whyItFits,
+      season: seeded.season,
+      travelMode: seeded.travelMode,
+      videoAssets: seeded.videoAssets,
+      matchScore: seeded.matchScore,
+    );
+    final thread = controller.startFromJourney(journey);
+    final id = thread.summary.id;
+    await tester.pumpWidget(
+      wrap(
+        ChatFirstThreadScreen(
+          controller: controller,
+          conversationId: id,
+          onOpenSnapshot: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    const intakeLabels = <String>[
+      '4–5 giorni, senza fretta',
+      'Bilanciato: cultura e pause',
+      'Centro, per spostarmi a piedi',
+      'Treno o metro + passi',
+      'Moderato: qualche tavola bella',
+    ];
+    for (final label in intakeLabels) {
+      await tapLast(tester, label);
+    }
+    await tapLast(tester, 'Accetta');
+
+    await tapLast(tester, 'Salva');
+    await tapLast(tester, 'Salva');
+    await tapLast(tester, 'Irrinunciabile');
+    await tapLast(tester, 'Passa');
+    await tapLast(tester, 'Passa');
+    await tapLast(tester, 'Passa');
+
+    final transport = controller
+        .threadOf(id)
+        .messages
+        .lastWhere((message) => message.kind == ChatMessageKind.transport);
+    expect(transport.flightCompare, isNotNull);
+    expect(transport.flightCompare!.options, hasLength(4));
+    expect(find.text('Consigliato'), findsOneWidget);
+    expect(find.text('TAP Air Portugal'), findsOneWidget);
+    expect(find.text('189 €'), findsOneWidget);
+    expect(find.textContaining('FCO→OPO'), findsNWidgets(4));
+    expect(find.textContaining('07:15'), findsOneWidget);
+    expect(find.textContaining('3h 05m'), findsNWidgets(2));
+    expect(find.textContaining('Diretto'), findsNWidgets(3));
+    expect(find.text('Bagaglio a mano 10 kg'), findsNWidgets(3));
+    expect(
+      find.text('Diretto e comodo, ma non il più economico.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('scalo'), findsNWidgets(3));
+    expect(find.textContaining('quotazione 11/08/2026'), findsWidgets);
+
+    await tester.tap(find.text('Scegli').first);
+    await tester.pumpAndSettle();
+    var snapshot = controller.threadOf(id).summary.snapshot!;
+    expect(snapshot.travelSelection?.option.id, 'porto-flight-tap-direct');
+    expect(snapshot.revision, 3);
+
+    await tapLast(tester, 'Aereo diretto');
+
+    final stay = controller
+        .threadOf(id)
+        .messages
+        .lastWhere((message) => message.kind == ChatMessageKind.stayZone);
+    expect(stay.stayCompare, isNotNull);
+    expect(stay.stayCompare!.options, hasLength(4));
+    expect(find.text('Torel Avantgarde'), findsOneWidget);
+    expect(find.text('Cedofeita · 1 notte'), findsOneWidget);
+
+    final proposalsBefore = controller
+        .threadOf(id)
+        .messages
+        .where((message) => message.kind == ChatMessageKind.planProposal)
+        .length;
+    await tester.tap(find.byTooltip('Aggiungi notti'));
+    await tester.pumpAndSettle();
+    final proposals = controller
+        .threadOf(id)
+        .messages
+        .where((message) => message.kind == ChatMessageKind.planProposal)
+        .toList(growable: false);
+    expect(proposals.length, proposalsBefore + 1);
+    expect(proposals.last.proposal?.changeLabel, contains('2 notti'));
+    expect(
+      proposals.last.proposal?.snapshot.staySelection?.option.priceCents,
+      96400,
+    );
+  });
+
+  testWidgets(
+    'moduli rich: totale stepper e proposta allineati sull hotel selezionato',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 11000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final controller = ChatFirstPrototypeController();
+      final seeded = MockData.journeyById('porto-slow');
+      final journey = JourneyRoute(
+        id: 'porto-guided-2',
+        title: seeded.title,
+        summary: seeded.summary,
+        durationLabel: seeded.durationLabel,
+        stops: const <String>['Porto'],
+        destinationIds: const <String>['porto'],
+        whyItFits: seeded.whyItFits,
+        season: seeded.season,
+        travelMode: seeded.travelMode,
+        videoAssets: seeded.videoAssets,
+        matchScore: seeded.matchScore,
+      );
+      final thread = controller.startFromJourney(journey);
+      final id = thread.summary.id;
+      await tester.pumpWidget(
+        wrap(
+          ChatFirstThreadScreen(
+            controller: controller,
+            conversationId: id,
+            onOpenSnapshot: (_) {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      const intakeLabels = <String>[
+        '4–5 giorni, senza fretta',
+        'Bilanciato: cultura e pause',
+        'Centro, per spostarmi a piedi',
+        'Treno o metro + passi',
+        'Moderato: qualche tavola bella',
+      ];
+      for (final label in intakeLabels) {
+        await tapLast(tester, label);
+      }
+      await tapLast(tester, 'Accetta');
+      await tapLast(tester, 'Salva');
+      await tapLast(tester, 'Salva');
+      await tapLast(tester, 'Irrinunciabile');
+      await tapLast(tester, 'Passa');
+      await tapLast(tester, 'Passa');
+      await tapLast(tester, 'Passa');
+      await tapLast(tester, 'Aereo diretto');
+
+      expect(find.text('1 notte · 482 €'), findsOneWidget);
+
+      final moovButton = find.descendant(
+        of: find
+            .ancestor(
+              of: find.text('Moov Hotel Porto Centro'),
+              matching: find.byWidgetPredicate(
+                (widget) =>
+                    widget is Container && widget.decoration is BoxDecoration,
+              ),
+            )
+            .first,
+        matching: find.bySubtype<FilledButton>(),
+      );
+      expect(moovButton, findsOneWidget);
+      await tester.tap(moovButton);
+      await tester.pumpAndSettle();
+
+      final snapshot = controller.threadOf(id).summary.snapshot!;
+      expect(snapshot.staySelection?.option.id, 'porto-hotel-moov-centro');
+      // L'header passa alla tariffa dell'hotel selezionato (236 €/notte).
+      expect(find.text('1 notte · 236 €'), findsOneWidget);
+      // Il bottone Scegli dell'opzione scelta si disabilita.
+      expect(tester.widget<FilledButton>(moovButton).onPressed, isNull);
+
+      await tester.tap(find.byTooltip('Aggiungi notti'));
+      await tester.pumpAndSettle();
+      expect(find.text('2 notti · 472 €'), findsOneWidget);
+      final proposals = controller
+          .threadOf(id)
+          .messages
+          .where((message) => message.kind == ChatMessageKind.planProposal)
+          .toList(growable: false);
+      final proposal = proposals.last.proposal!;
+      expect(proposal.changeLabel, contains('2 notti · 472 €'));
+      expect(
+        proposal.snapshot.staySelection?.option.id,
+        'porto-hotel-moov-centro',
+      );
+      expect(proposal.snapshot.staySelection?.option.priceCents, 47200);
+      expect(proposal.snapshot.stay, contains('2 notti · 472 €'));
+    },
+  );
+
+  testWidgets('moduli rich a 320 px con testo 1.5 non traboccano', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 30000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final controller = ChatFirstPrototypeController();
+    final seeded = MockData.journeyById('porto-slow');
+    final journey = JourneyRoute(
+      id: 'porto-guided-3',
+      title: seeded.title,
+      summary: seeded.summary,
+      durationLabel: seeded.durationLabel,
+      stops: const <String>['Porto'],
+      destinationIds: const <String>['porto'],
+      whyItFits: seeded.whyItFits,
+      season: seeded.season,
+      travelMode: seeded.travelMode,
+      videoAssets: seeded.videoAssets,
+      matchScore: seeded.matchScore,
+    );
+    final thread = controller.startFromJourney(journey);
+    final id = thread.summary.id;
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.5)),
+        child: wrap(
+          ChatFirstThreadScreen(
+            controller: controller,
+            conversationId: id,
+            onOpenSnapshot: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    const intakeLabels = <String>[
+      '4–5 giorni, senza fretta',
+      'Bilanciato: cultura e pause',
+      'Centro, per spostarmi a piedi',
+      'Treno o metro + passi',
+      'Moderato: qualche tavola bella',
+    ];
+    // Fino alla remata operativa il flusso è guidato dal controller: a 320 px
+    // con testo 1.5 il centro dei chip può cadere fuori dal target hit-test,
+    // ma la verifica è sull'overflow e sui moduli rich, non sul tap preciso.
+    Future<void> choose(String label) async {
+      final message = controller
+          .threadOf(id)
+          .messages
+          .lastWhere((m) => m.choices.any((c) => c.label == label));
+      controller.choose(
+        message.choices.firstWhere((c) => c.label == label),
+        conversationId: id,
+        messageId: message.id,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    for (final label in intakeLabels) {
+      await choose(label);
+    }
+    controller.acceptProposal(id, 'intake-proposal');
+    await tester.pumpAndSettle();
+    await choose('Salva');
+    await choose('Salva');
+    await choose('Irrinunciabile');
+    await choose('Passa');
+    await choose('Passa');
+    await choose('Passa');
+    await choose('Aereo diretto');
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Consigliato'), findsWidgets);
+    final addNights = find.byTooltip('Aggiungi notti');
+    await tester.ensureVisible(addNights);
+    await tester.pumpAndSettle();
+    await tester.tap(addNights, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(
+      controller
+          .threadOf(id)
+          .messages
+          .where((message) => message.kind == ChatMessageKind.planProposal),
+      isNotEmpty,
+    );
+  });
+
+  testWidgets('flusso non operativo (Lisbona) non mostra i moduli rich', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final controller = ChatFirstPrototypeController();
+    final journey = controller.trendJourneys.first;
+    expect(journeyCity(journey), 'Lisbona');
+    final thread = controller.startFromJourney(journey);
+    final id = thread.summary.id;
+    await tester.pumpWidget(
+      wrap(
+        ChatFirstThreadScreen(
+          controller: controller,
+          conversationId: id,
+          onOpenSnapshot: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    const intakeLabels = <String>[
+      '4–5 giorni, senza fretta',
+      'Bilanciato: cultura e pause',
+      'Centro, per spostarmi a piedi',
+      'Treno o metro + passi',
+      'Moderato: qualche tavola bella',
+    ];
+    for (final label in intakeLabels) {
+      await tapLast(tester, label);
+    }
+    await tapLast(tester, 'Accetta');
+
+    await tapLast(tester, 'Salva');
+    await tapLast(tester, 'Salva');
+    await tapLast(tester, 'Irrinunciabile');
+    await tapLast(tester, 'Passa');
+    await tapLast(tester, 'Passa');
+    await tapLast(tester, 'Passa');
+    await tapLast(tester, 'Aereo diretto');
+
+    final transport = controller
+        .threadOf(id)
+        .messages
+        .lastWhere((message) => message.kind == ChatMessageKind.transport);
+    expect(transport.flightCompare, isNull);
+    final stay = controller
+        .threadOf(id)
+        .messages
+        .lastWhere((message) => message.kind == ChatMessageKind.stayZone);
+    expect(stay.stayCompare, isNull);
+    expect(find.text('Scegli'), findsNothing);
+    expect(find.text('TAP Air Portugal'), findsNothing);
+    expect(find.textContaining('FCO→OPO'), findsNothing);
   });
 
   testWidgets('profilo mostra memoria appresa e privacy', (tester) async {

@@ -1630,6 +1630,211 @@ void main() {
       );
       expect(controller.conversationOf(conversationId).snapshot?.revision, 3);
     });
+
+    test(
+      'inventario chat conserva dettagli e tutte le alternative operative',
+      () {
+        final snapshot = ChatFirstDemoData.operationalFixtureFor(
+          'porto',
+        ).snapshot;
+        final flights = ChatFirstDemoData.flightCompareFor(snapshot);
+        final stays = ChatFirstDemoData.stayCompareFor(snapshot);
+
+        expect(flights.options, hasLength(4));
+        expect(flights.recommended.id, 'porto-flight-tap-direct');
+        expect(flights.options[2].departureAirport, 'FCO');
+        expect(flights.options[2].stops, 1);
+        expect(flights.options[2].baggage, isNotEmpty);
+        expect(flights.quotedAt, DateTime.utc(2026, 8, 11, 9));
+        expect(stays.options, hasLength(4));
+        expect(stays.recommended.zone, 'Cedofeita');
+        expect(stays.options[1].conditions, isNotEmpty);
+        expect(stays.options[1].averageWalkMinutes, 13);
+      },
+    );
+
+    test(
+      'proposeStayNightsChange propone notti senza applicare, accept le incorpora',
+      () {
+        final controller = _planController();
+        const conversationId = 'c-plan-porto';
+        final before = controller.conversationOf(conversationId).snapshot!;
+
+        expect(
+          controller.proposeStayNightsChange(
+            conversationId: conversationId,
+            nights: 2,
+          ),
+          isTrue,
+        );
+        final thread = controller.threadOf(conversationId);
+        final proposalMessage = thread.messages.lastWhere(
+          (message) => message.kind == ChatMessageKind.planProposal,
+        );
+        final proposal = proposalMessage.proposal!;
+        expect(proposal.changeLabel, isNotEmpty);
+        expect(proposal.changeLabel, contains('2 notti'));
+        expect(proposal.snapshot.staySelection?.option.priceCents, 96400);
+        expect(
+          proposal.snapshot.staySelection?.option.purchaseState,
+          PurchaseState.selected,
+        );
+        expect(proposal.snapshot.stay, contains('2 notti'));
+        expect(proposal.snapshot.stay, contains('964 €'));
+        expect(
+          proposal.snapshot.revisionMetadata?.label,
+          contains('Date ricalcolate'),
+        );
+        expect(
+          controller.conversationOf(conversationId).snapshot,
+          same(before),
+        );
+
+        controller.acceptProposal(conversationId, proposalMessage.id);
+        final accepted = controller.conversationOf(conversationId).snapshot!;
+        expect(accepted.revision, before.revision + 1);
+        expect(accepted.staySelection?.option.priceCents, 96400);
+        expect(
+          accepted.staySelection?.option.id,
+          'porto-hotel-torel-avantgarde',
+        );
+        expect(accepted.stay, contains('2 notti'));
+        expect(accepted.revisionMetadata?.label, proposal.changeLabel);
+      },
+    );
+
+    test('reject di una proposta notti lascia il piano invariato', () {
+      final controller = _planController();
+      const conversationId = 'c-plan-porto';
+      final before = controller.conversationOf(conversationId).snapshot!;
+
+      expect(
+        controller.proposeStayNightsChange(
+          conversationId: conversationId,
+          nights: 3,
+        ),
+        isTrue,
+      );
+      final thread = controller.threadOf(conversationId);
+      final proposalMessage = thread.messages.lastWhere(
+        (message) => message.kind == ChatMessageKind.planProposal,
+      );
+      expect(controller.conversationOf(conversationId).snapshot, same(before));
+
+      controller.rejectProposal(conversationId, proposalMessage.id);
+      expect(controller.conversationOf(conversationId).snapshot, same(before));
+      expect(controller.conversationOf(conversationId).snapshot?.revision, 1);
+      expect(proposalMessage.proposal?.outcome, PlanProposalOutcome.rejected);
+    });
+
+    test(
+      'proposeStayNightsChange rifiuta notti invalide o destinazioni non operative',
+      () {
+        final controller = _planController();
+        const conversationId = 'c-plan-porto';
+        expect(
+          controller.proposeStayNightsChange(
+            conversationId: conversationId,
+            nights: 0,
+          ),
+          isFalse,
+        );
+        expect(
+          controller.proposeStayNightsChange(
+            conversationId: conversationId,
+            nights: -2,
+          ),
+          isFalse,
+        );
+
+        final notOperational = ChatFirstPrototypeController(
+          seed: <ChatThread>[
+            _planThread(
+              'c-plan-unknown',
+              ChatFirstDemoData.operationalFixtureFor(
+                'porto',
+              ).snapshot.copyWith(destinationTitle: 'Lisbona'),
+            ),
+          ],
+        );
+        expect(
+          notOperational.proposeStayNightsChange(
+            conversationId: 'c-plan-unknown',
+            nights: 2,
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test('proposte notti consecutive senza accept generano id univoci', () {
+      final controller = _planController();
+      const conversationId = 'c-plan-porto';
+
+      expect(
+        controller.proposeStayNightsChange(
+          conversationId: conversationId,
+          nights: 2,
+        ),
+        isTrue,
+      );
+      expect(
+        controller.proposeStayNightsChange(
+          conversationId: conversationId,
+          nights: 3,
+        ),
+        isTrue,
+      );
+
+      final proposals = controller
+          .threadOf(conversationId)
+          .messages
+          .where((message) => message.kind == ChatMessageKind.planProposal)
+          .toList(growable: false);
+      expect(proposals, hasLength(2));
+      expect(proposals.first.id, isNot(proposals.last.id));
+      // entrambe restano pendenti: la conferma raggiunge la proposta giusta.
+      expect(proposals.first.proposal?.outcome, isNull);
+      expect(proposals.last.proposal?.outcome, isNull);
+      expect(controller.conversationOf(conversationId).snapshot?.revision, 1);
+    });
+
+    test('FlightCompare e StayCompare fanno round-trip JSON completo', () {
+      final snapshot = ChatFirstDemoData.operationalFixtureFor(
+        'porto',
+      ).snapshot;
+      final flights = ChatFirstDemoData.flightCompareFor(snapshot);
+      final stays = ChatFirstDemoData.stayCompareFor(snapshot);
+
+      final flightsBack = FlightCompare.fromJson(flights.toJson());
+      expect(flightsBack.options, hasLength(flights.options.length));
+      expect(flightsBack.recommendedId, flights.recommendedId);
+      expect(flightsBack.quotedAt, flights.quotedAt);
+      expect(flightsBack.recommended.id, flights.recommended.id);
+      final flight = flightsBack.options[2];
+      expect(flight.departureAirport, 'FCO');
+      expect(flight.arrivalAirport, 'OPO');
+      expect(flight.departureAt, flights.options[2].departureAt);
+      expect(flight.durationMinutes, 275);
+      expect(flight.stops, 1);
+      expect(flight.baggage, isNotEmpty);
+      expect(flight.priceCents, 15600);
+      expect(flight.tradeoff, isNotEmpty);
+
+      final staysBack = StayCompare.fromJson(stays.toJson());
+      expect(staysBack.options, hasLength(stays.options.length));
+      expect(staysBack.recommendedId, stays.recommendedId);
+      expect(staysBack.recommended.name, 'Torel Avantgarde');
+      final hotel = staysBack.options[1];
+      expect(hotel.zone, 'Sé');
+      expect(hotel.nights, 1);
+      expect(hotel.priceCents, 23600);
+      expect(hotel.averageWalkMinutes, 13);
+      expect(hotel.conditions, isNotEmpty);
+      expect(hotel.atmosphere, isNotEmpty);
+      expect(hotel.tradeoff, isNotEmpty);
+      expect(hotel.provider, isNotEmpty);
+    });
   });
 
   group('Free talk (nuovo viaggio parlando)', () {

@@ -435,6 +435,80 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     return true;
   }
 
+  /// Proposes a concrete stay change (number of nights) without applying it:
+  /// the traveler confirms or rejects through the standard proposal flow. The
+  /// candidate mirrors the flight/hotel selections: proportional price from the
+  /// fixture's nightly rate and a fresh manual revision. Returns false when the
+  /// conversation has no operational hotel inventory or [nights] is invalid.
+  bool proposeStayNightsChange({
+    required String conversationId,
+    required int nights,
+  }) {
+    if (nights < 1) return false;
+    final current = _planSnapshot(conversationId);
+    final fixture = ChatFirstDemoData.operationalFixtureForSnapshot(current);
+    if (fixture == null || fixture.hotels.isEmpty) return false;
+    var hotel = fixture.hotels.first;
+    final selected = current.staySelection?.option;
+    if (selected != null) {
+      for (final candidate in fixture.hotels) {
+        if (candidate.id == selected.id) {
+          hotel = candidate;
+          break;
+        }
+      }
+    }
+    final nightly = stayNightlyPriceCents(
+      priceCents: hotel.priceCents,
+      nights: hotel.nights,
+      nightlyPriceCents: hotel.nightlyPriceCents,
+    );
+    final totalCents = nightly * nights;
+    final nightsLabel = nights == 1 ? '1 notte' : '$nights notti';
+    final revision = current.revision + 1;
+    final candidate = current.copyWith(
+      stay: '${hotel.name}, $nightsLabel · ${formatEuroCents(totalCents)}',
+      staySelection: StayPlanSelection(
+        option: StayOption(
+          id: hotel.id,
+          label: hotel.name,
+          priceCents: totalCents,
+          purchaseState: PurchaseState.selected,
+        ),
+        alternatives:
+            current.staySelection?.alternatives ??
+            ChatFirstDemoData.stayOptionsFor(current),
+      ),
+      revision: revision,
+      revisionMetadata: _selectionMetadata(
+        conversationId,
+        revision,
+        'Date ricalcolate',
+      ),
+    );
+    final thread = threadOf(conversationId);
+    thread.messages.add(
+      ChatMessage(
+        id: 'm-$conversationId-nights-$nights-r$revision-t${thread.messages.length}',
+        role: ChatRole.assistant,
+        kind: ChatMessageKind.planProposal,
+        text:
+            'Come cambierebbe il soggiorno: $nightsLabel a ${hotel.name}, '
+            '${formatEuroCents(totalCents)} in totale.',
+        sentAt: _now().toUtc(),
+        proposal: PlanProposal(
+          changeLabel:
+              'Soggiorno ricalcolato: $nightsLabel · '
+              '${formatEuroCents(totalCents)}',
+          snapshot: candidate,
+        ),
+      ),
+    );
+    _persistNewMessages(thread);
+    notifyListeners();
+    return true;
+  }
+
   TripSnapshot _planSnapshot(String conversationId) {
     final snapshot = conversationOf(conversationId).snapshot;
     if (snapshot == null) {

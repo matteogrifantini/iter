@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/journey_media.dart';
 import 'chat_first_controller.dart';
+import 'chat_first_data.dart';
 import 'chat_first_models.dart';
 
 class ChatFirstThreadScreen extends StatefulWidget {
@@ -80,6 +81,8 @@ class _ChatFirstThreadScreenState extends State<ChatFirstThreadScreen> {
         final thread = widget.controller.threadOf(widget.conversationId);
         final summary = thread.summary;
         final messages = thread.messages;
+        final selectedFlightId = summary.snapshot?.travelSelection?.option.id;
+        final selectedStayId = summary.snapshot?.staySelection?.option.id;
         if (messages.length != _lastMessageCount) {
           _lastMessageCount = messages.length;
           _jumpToBottom();
@@ -139,6 +142,29 @@ class _ChatFirstThreadScreenState extends State<ChatFirstThreadScreen> {
                         );
                         _jumpToBottom();
                       },
+                      onSelectFlight: (optionId) {
+                        widget.controller.selectTravelOption(
+                          conversationId: widget.conversationId,
+                          optionId: optionId,
+                        );
+                        _jumpToBottom();
+                      },
+                      onSelectStay: (optionId) {
+                        widget.controller.selectStayOption(
+                          conversationId: widget.conversationId,
+                          optionId: optionId,
+                        );
+                        _jumpToBottom();
+                      },
+                      onProposeNightsChange: (nights) {
+                        widget.controller.proposeStayNightsChange(
+                          conversationId: widget.conversationId,
+                          nights: nights,
+                        );
+                        _jumpToBottom();
+                      },
+                      selectedFlightId: selectedFlightId,
+                      selectedStayId: selectedStayId,
                       reducedMotion: reducedMotion,
                     );
                   },
@@ -221,6 +247,11 @@ class _MessageRow extends StatelessWidget {
     this.enabled = true,
     this.onAcceptProposal,
     this.onRejectProposal,
+    this.onSelectFlight,
+    this.onSelectStay,
+    this.onProposeNightsChange,
+    this.selectedFlightId,
+    this.selectedStayId,
   });
 
   final ChatMessage message;
@@ -229,6 +260,11 @@ class _MessageRow extends StatelessWidget {
   final ValueChanged<ChatChoice> onChoice;
   final VoidCallback? onAcceptProposal;
   final VoidCallback? onRejectProposal;
+  final ValueChanged<String>? onSelectFlight;
+  final ValueChanged<String>? onSelectStay;
+  final ValueChanged<int>? onProposeNightsChange;
+  final String? selectedFlightId;
+  final String? selectedStayId;
   final bool reducedMotion;
 
   /// Whether the chips below this message are still actionable. Only the
@@ -273,6 +309,11 @@ class _MessageRow extends StatelessWidget {
                         message: message,
                         onAcceptProposal: onAcceptProposal,
                         onRejectProposal: onRejectProposal,
+                        onSelectFlight: onSelectFlight,
+                        onSelectStay: onSelectStay,
+                        onProposeNightsChange: onProposeNightsChange,
+                        selectedFlightId: selectedFlightId,
+                        selectedStayId: selectedStayId,
                       ),
                       if (message.choices.isNotEmpty)
                         Padding(
@@ -342,11 +383,21 @@ class _Bubble extends StatelessWidget {
     required this.message,
     this.onAcceptProposal,
     this.onRejectProposal,
+    this.onSelectFlight,
+    this.onSelectStay,
+    this.onProposeNightsChange,
+    this.selectedFlightId,
+    this.selectedStayId,
   });
 
   final ChatMessage message;
   final VoidCallback? onAcceptProposal;
   final VoidCallback? onRejectProposal;
+  final ValueChanged<String>? onSelectFlight;
+  final ValueChanged<String>? onSelectStay;
+  final ValueChanged<int>? onProposeNightsChange;
+  final String? selectedFlightId;
+  final String? selectedStayId;
 
   @override
   Widget build(BuildContext context) {
@@ -366,6 +417,11 @@ class _Bubble extends StatelessWidget {
       isIncoming: isIncoming,
       onAcceptProposal: onAcceptProposal,
       onRejectProposal: onRejectProposal,
+      onSelectFlight: onSelectFlight,
+      onSelectStay: onSelectStay,
+      onProposeNightsChange: onProposeNightsChange,
+      selectedFlightId: selectedFlightId,
+      selectedStayId: selectedStayId,
     );
     return Container(
       constraints: BoxConstraints(
@@ -405,12 +461,22 @@ class _MessageContent extends StatelessWidget {
     required this.isIncoming,
     this.onAcceptProposal,
     this.onRejectProposal,
+    this.onSelectFlight,
+    this.onSelectStay,
+    this.onProposeNightsChange,
+    this.selectedFlightId,
+    this.selectedStayId,
   });
 
   final ChatMessage message;
   final bool isIncoming;
   final VoidCallback? onAcceptProposal;
   final VoidCallback? onRejectProposal;
+  final ValueChanged<String>? onSelectFlight;
+  final ValueChanged<String>? onSelectStay;
+  final ValueChanged<int>? onProposeNightsChange;
+  final String? selectedFlightId;
+  final String? selectedStayId;
 
   @override
   Widget build(BuildContext context) {
@@ -445,8 +511,25 @@ class _MessageContent extends StatelessWidget {
       case ChatMessageKind.placeCard:
         return _PlaceCardContent(message: message);
       case ChatMessageKind.transport:
+        final flightCompare = message.flightCompare;
+        if (flightCompare != null && flightCompare.options.isNotEmpty) {
+          return _FlightCompareContent(
+            message: message,
+            selectedOptionId: selectedFlightId,
+            onSelectFlight: onSelectFlight,
+          );
+        }
         return _TransportContent(message: message);
       case ChatMessageKind.stayZone:
+        final stayCompare = message.stayCompare;
+        if (stayCompare != null && stayCompare.options.isNotEmpty) {
+          return _StayCompareContent(
+            message: message,
+            selectedOptionId: selectedStayId,
+            onSelectStay: onSelectStay,
+            onProposeNightsChange: onProposeNightsChange,
+          );
+        }
         return _StayZoneContent(message: message);
       case ChatMessageKind.system:
         return const SizedBox.shrink();
@@ -965,6 +1048,472 @@ class _StayZoneContent extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The operational flight inventory inside the chat: the recommended option
+/// first, then every fixture alternative in a readable panel with an explicit
+/// Scegli action. Rendered only when the message carries a non-empty
+/// [FlightCompare]; otherwise the classic [TransportCompare] table is used.
+class _FlightCompareContent extends StatelessWidget {
+  const _FlightCompareContent({
+    required this.message,
+    this.selectedOptionId,
+    this.onSelectFlight,
+  });
+
+  final ChatMessage message;
+  final String? selectedOptionId;
+  final ValueChanged<String>? onSelectFlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final compare = message.flightCompare;
+    if (compare == null || compare.options.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (message.text.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              message.text,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: colors.onSurface),
+            ),
+          ),
+        for (final option in compare.options)
+          _FlightOptionPanel(
+            option: option,
+            quotedAt: compare.quotedAt,
+            isRecommended: option.id == compare.recommendedId,
+            isSelected: option.id == selectedOptionId,
+            onSelect: onSelectFlight == null
+                ? null
+                : () => onSelectFlight!(option.id),
+          ),
+      ],
+    );
+  }
+}
+
+class _FlightOptionPanel extends StatelessWidget {
+  const _FlightOptionPanel({
+    required this.option,
+    required this.quotedAt,
+    required this.isRecommended,
+    this.isSelected = false,
+    this.onSelect,
+  });
+
+  final FlightOptionInfo option;
+  final DateTime quotedAt;
+  final bool isRecommended;
+  final bool isSelected;
+  final VoidCallback? onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final stops = option.stops == 0
+        ? 'Diretto'
+        : '${option.stops} ${option.stops == 1 ? 'scalo' : 'scali'}';
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isRecommended ? colors.primary : colors.outlineVariant,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (isRecommended) ...<Widget>[
+            _RecommendedChip(),
+            const SizedBox(height: 8),
+          ],
+          Row(
+            children: <Widget>[
+              Icon(Icons.flight_takeoff, size: 17, color: colors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  option.provider,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                formatEuroCents(option.priceCents),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colors.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _DetailRow(
+            icon: Icons.schedule,
+            label:
+                '${_timeLabel(option.departureAt)}–${_timeLabel(option.arrivalAt)} '
+                '· ${option.departureAirport}→${option.arrivalAirport}',
+          ),
+          _DetailRow(
+            icon: Icons.hourglass_bottom,
+            label: 'Durata ${_durationLabel(option.durationMinutes)} · $stops',
+          ),
+          _DetailRow(icon: Icons.luggage_outlined, label: option.baggage),
+          _DetailRow(
+            icon: Icons.compare_arrows_outlined,
+            label: option.tradeoff,
+          ),
+          _DetailRow(
+            icon: Icons.schedule_send_outlined,
+            label:
+                'Dati demo · quotazione ${_dateLabel(quotedAt)} · prezzi e '
+                'disponibilità non in tempo reale',
+          ),
+          if (onSelect != null) ...<Widget>[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.tonal(
+                style: FilledButton.styleFrom(minimumSize: const Size(96, 48)),
+                onPressed: isSelected ? null : onSelect,
+                child: const Text('Scegli'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The recommended hotel inventory inside the chat, with a minimal nights
+/// stepper whose changes surface as a confirmable [PlanProposal]. Rendered only
+/// when the message carries a non-empty [StayCompare].
+class _StayCompareContent extends StatefulWidget {
+  const _StayCompareContent({
+    required this.message,
+    this.selectedOptionId,
+    this.onSelectStay,
+    this.onProposeNightsChange,
+  });
+
+  final ChatMessage message;
+  final String? selectedOptionId;
+  final ValueChanged<String>? onSelectStay;
+  final ValueChanged<int>? onProposeNightsChange;
+
+  @override
+  State<_StayCompareContent> createState() => _StayCompareContentState();
+}
+
+class _StayCompareContentState extends State<_StayCompareContent> {
+  late int _nights;
+
+  @override
+  void initState() {
+    super.initState();
+    final compare = widget.message.stayCompare;
+    final source = _nightlySource(compare);
+    _nights = source?.nights ?? 2;
+  }
+
+  /// The single hotel the stepper's preview is priced from: the current
+  /// selection when present, otherwise the recommended one. Mirrors the
+  /// controller so the preview and the proposal always agree.
+  StayOptionInfo? _nightlySource(StayCompare? compare) {
+    if (compare == null || compare.options.isEmpty) return null;
+    if (widget.selectedOptionId != null) {
+      return compare.options.firstWhere(
+        (option) => option.id == widget.selectedOptionId,
+        orElse: () => compare.recommended,
+      );
+    }
+    return compare.recommended;
+  }
+
+  void _changeNights(int delta) {
+    final next = _nights + delta;
+    if (next < 1) return;
+    setState(() => _nights = next);
+    widget.onProposeNightsChange?.call(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final compare = widget.message.stayCompare;
+    if (compare == null || compare.options.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final source = _nightlySource(compare)!;
+    final nightlyCents = stayNightlyPriceCents(
+      priceCents: source.priceCents,
+      nights: source.nights,
+    );
+    final nightsLabel = _nights == 1 ? '1 notte' : '$_nights notti';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (widget.message.text.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              widget.message.text,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: colors.onSurface),
+            ),
+          ),
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: colors.outlineVariant),
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(Icons.bed_outlined, size: 17, color: colors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      '$nightsLabel · ${formatEuroCents(nightlyCents * _nights)}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                    Text(
+                      'Ogni modifica diventa una proposta da confermare.',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                    Text(
+                      'Dati demo · prezzi e disponibilità non in tempo reale',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Riduci notti',
+                onPressed: _nights > 1 ? () => _changeNights(-1) : null,
+                icon: const Icon(Icons.remove),
+              ),
+              Text(
+                '$_nights',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              IconButton(
+                tooltip: 'Aggiungi notti',
+                onPressed: () => _changeNights(1),
+                icon: const Icon(Icons.add),
+              ),
+            ],
+          ),
+        ),
+        for (final option in compare.options)
+          _StayOptionPanel(
+            option: option,
+            isRecommended: option.id == compare.recommendedId,
+            isSelected: option.id == widget.selectedOptionId,
+            onSelect: widget.onSelectStay == null
+                ? null
+                : () => widget.onSelectStay!(option.id),
+          ),
+      ],
+    );
+  }
+}
+
+class _StayOptionPanel extends StatelessWidget {
+  const _StayOptionPanel({
+    required this.option,
+    required this.isRecommended,
+    this.isSelected = false,
+    this.onSelect,
+  });
+
+  final StayOptionInfo option;
+  final bool isRecommended;
+  final bool isSelected;
+  final VoidCallback? onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isRecommended ? colors.primary : colors.outlineVariant,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (isRecommended) ...<Widget>[
+            _RecommendedChip(),
+            const SizedBox(height: 8),
+          ],
+          Row(
+            children: <Widget>[
+              Icon(Icons.hotel_outlined, size: 17, color: colors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  option.name,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                formatEuroCents(option.priceCents),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colors.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _DetailRow(
+            icon: Icons.place_outlined,
+            label:
+                '${option.zone} · ${option.nights == 1 ? '1 notte' : '${option.nights} notti'}',
+          ),
+          _DetailRow(
+            icon: Icons.directions_walk,
+            label: '${option.averageWalkMinutes} min a piedi dalle tappe',
+          ),
+          _DetailRow(
+            icon: Icons.local_fire_department_outlined,
+            label: option.atmosphere,
+          ),
+          _DetailRow(icon: Icons.verified_outlined, label: option.conditions),
+          _DetailRow(
+            icon: Icons.compare_arrows_outlined,
+            label: option.tradeoff,
+          ),
+          if (onSelect != null) ...<Widget>[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.tonal(
+                style: FilledButton.styleFrom(minimumSize: const Size(96, 48)),
+                onPressed: isSelected ? null : onSelect,
+                child: const Text('Scegli'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The reusable in-chat "Consigliato" chip used by the rich modules.
+class _RecommendedChip extends StatelessWidget {
+  const _RecommendedChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: colors.primaryContainer,
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(Icons.recommend, size: 13, color: colors.primary),
+          const SizedBox(width: 4),
+          Text(
+            'Consigliato',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: colors.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One compact icon+label line inside a rich module panel.
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(icon, size: 15, color: colors.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _durationLabel(int minutes) {
+  final hours = minutes ~/ 60;
+  final rest = minutes % 60;
+  if (hours == 0) return '${rest}m';
+  return '${hours}h ${rest.toString().padLeft(2, '0')}m';
+}
+
+String _dateLabel(DateTime time) {
+  final day = time.day.toString().padLeft(2, '0');
+  final month = time.month.toString().padLeft(2, '0');
+  return '$day/$month/${time.year}';
 }
 
 /// An in-chat plan proposal: what changes, a preview of the resulting plan and

@@ -416,6 +416,8 @@ class IntakeThread extends ChatThread {
         placeCard: beat.assistant.placeCard,
         transport: beat.assistant.transport,
         stayZone: beat.assistant.stayZone,
+        flightCompare: beat.assistant.flightCompare,
+        stayCompare: beat.assistant.stayCompare,
       ),
     );
     scriptIndex++;
@@ -615,6 +617,23 @@ class IntakeThread extends ChatThread {
 /// chat-first surfaces show one clean city name, never a slogan.
 String journeyCity(JourneyRoute journey) =>
     journey.stops.isNotEmpty ? journey.stops.first : journey.title;
+
+/// Formats EUR cents as a compact, deterministic demo price, e.g. `189 €`.
+String formatEuroCents(int cents) => '${(cents / 100).toStringAsFixed(0)} €';
+
+/// Shared nightly-rate formula used by the in-chat stay stepper and by the
+/// controller proposal, so the preview and the confirmed proposal always
+/// agree for the same option. Prefers the fixture nightly rate; falls back to
+/// the rounded per-night share without ever dividing by zero.
+int stayNightlyPriceCents({
+  required int priceCents,
+  required int nights,
+  int nightlyPriceCents = 0,
+}) {
+  if (nightlyPriceCents > 0) return nightlyPriceCents;
+  if (nights <= 0) return priceCents;
+  return (priceCents / nights).round();
+}
 
 /// A conversation started from the traveler's own words before a destination is
 /// named. It first reflects the clues, asks for one missing constraint, then
@@ -853,6 +872,64 @@ abstract final class ChatFirstDemoData {
       );
     }
     return null;
+  }
+
+  /// Rich, immutable chat view of every local flight fixture.
+  static FlightCompare flightCompareFor(TripSnapshot snapshot) {
+    final fixture = operationalFixtureForSnapshot(snapshot);
+    final options =
+        fixture?.flights
+            .map(
+              (flight) => FlightOptionInfo(
+                id: flight.id,
+                provider: flight.provider,
+                departureAirport: flight.departureAirport,
+                arrivalAirport: flight.arrivalAirport,
+                departureAt: flight.departureAt,
+                arrivalAt: flight.arrivalAt,
+                durationMinutes: flight.durationMinutes,
+                stops: flight.stops,
+                baggage: flight.baggage,
+                priceCents: flight.priceCents,
+                tradeoff: flight.tradeoff,
+              ),
+            )
+            .toList(growable: false) ??
+        const <FlightOptionInfo>[];
+    return FlightCompare(
+      options: options,
+      recommendedId: options.isEmpty ? '' : options.first.id,
+      quotedAt:
+          fixture?.quotedAt ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    );
+  }
+
+  /// Rich, immutable chat view of every local hotel fixture.
+  static StayCompare stayCompareFor(TripSnapshot snapshot) {
+    final fixture = operationalFixtureForSnapshot(snapshot);
+    final options =
+        fixture?.hotels
+            .map(
+              (hotel) => StayOptionInfo(
+                id: hotel.id,
+                name: hotel.name,
+                zone: hotel.zone,
+                nights: hotel.nights,
+                priceCents: hotel.priceCents,
+                conditions: hotel.conditions,
+                averageWalkMinutes: hotel.averageWalkMinutes,
+                atmosphere: hotel.atmosphere,
+                tradeoff: hotel.tradeoff,
+                provider: hotel.provider,
+              ),
+            )
+            .toList(growable: false) ??
+        const <StayOptionInfo>[];
+    return StayCompare(
+      options: options,
+      recommendedId: options.isEmpty ? '' : options.first.id,
+    );
   }
 
   static OperationalTripFixture _portoOperationalFixture() {
@@ -1530,6 +1607,17 @@ abstract final class ChatFirstDemoData {
     final alternative = zones.length > 1 ? zones[1] : null;
     final options = transportOptions();
     final posters = DemoMedia.postersForDestination(destinationId);
+    final operationalSnapshot = TripSnapshot(
+      destinationTitle: city,
+      country: '',
+      durationLabel: '',
+      statusLabel: '',
+      dates: '',
+      transport: '',
+      stay: '',
+    );
+    final flightCompare = flightCompareFor(operationalSnapshot);
+    final stayCompare = stayCompareFor(operationalSnapshot);
     return <ScriptedBeat>[
       ScriptedBeat(
         ChatMessage(
@@ -1567,10 +1655,13 @@ abstract final class ChatFirstDemoData {
           role: ChatRole.assistant,
           kind: ChatMessageKind.transport,
           text:
-              'Come arrivi a $city? Ecco tre opzioni demo, con prezzi e '
+              'Come arrivi a $city? Ecco le opzioni demo con prezzi e '
               'durata indicativi.',
           sentAt: DateTime(2026, 10, 16, 10, 15),
           transport: TransportCompare(options: options),
+          flightCompare: flightCompare.options.isNotEmpty
+              ? flightCompare
+              : null,
           choices: <ChatChoice>[
             for (final option in options) ChatChoice(label: option.label),
           ],
@@ -1588,6 +1679,7 @@ abstract final class ChatFirstDemoData {
               'prenotiamo niente.',
           sentAt: DateTime(2026, 10, 16, 10, 16),
           stayZone: recommended != null ? stayZoneInfoFor(recommended) : null,
+          stayCompare: stayCompare.options.isNotEmpty ? stayCompare : null,
           choices: <ChatChoice>[
             if (recommended != null) ChatChoice(label: recommended.name),
             if (alternative != null) ChatChoice(label: alternative.name),

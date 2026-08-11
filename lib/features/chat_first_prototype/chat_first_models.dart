@@ -308,6 +308,108 @@ class TransportCompare {
       );
 }
 
+/// Complete, deterministic flight inventory rendered inside the chat. It keeps
+/// the practical information next to the explicit planning choice.
+@immutable
+class FlightCompare {
+  const FlightCompare({
+    required this.options,
+    required this.recommendedId,
+    required this.quotedAt,
+  });
+
+  final List<FlightOptionInfo> options;
+  final String recommendedId;
+  final DateTime quotedAt;
+
+  FlightOptionInfo get recommended =>
+      options.firstWhere((option) => option.id == recommendedId);
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'options': options.map((option) => option.toJson()).toList(growable: false),
+    'recommendedId': recommendedId,
+    'quotedAt': quotedAt.toIso8601String(),
+  };
+
+  factory FlightCompare.fromJson(Map<String, dynamic> json) => FlightCompare(
+    options: (json['options'] as List<dynamic>?)
+            ?.map((item) => FlightOptionInfo.fromJson(item as Map<String, dynamic>))
+            .toList(growable: false) ??
+        const <FlightOptionInfo>[],
+    recommendedId: (json['recommendedId'] as String?) ?? '',
+    quotedAt: DateTime.tryParse((json['quotedAt'] as String?) ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+  );
+}
+
+@immutable
+class FlightOptionInfo {
+  const FlightOptionInfo({
+    required this.id,
+    required this.provider,
+    required this.departureAirport,
+    required this.arrivalAirport,
+    required this.departureAt,
+    required this.arrivalAt,
+    required this.durationMinutes,
+    required this.stops,
+    required this.baggage,
+    required this.priceCents,
+    required this.tradeoff,
+  });
+
+  final String id;
+  final String provider;
+  final String departureAirport;
+  final String arrivalAirport;
+  final DateTime departureAt;
+  final DateTime arrivalAt;
+  final int durationMinutes;
+  final int stops;
+  final String baggage;
+  final int priceCents;
+  final String tradeoff;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'id': id, 'provider': provider, 'departureAirport': departureAirport,
+    'arrivalAirport': arrivalAirport, 'departureAt': departureAt.toIso8601String(),
+    'arrivalAt': arrivalAt.toIso8601String(), 'durationMinutes': durationMinutes,
+    'stops': stops, 'baggage': baggage, 'priceCents': priceCents, 'tradeoff': tradeoff,
+  };
+
+  factory FlightOptionInfo.fromJson(Map<String, dynamic> json) => FlightOptionInfo(
+    id: (json['id'] as String?) ?? '', provider: (json['provider'] as String?) ?? '',
+    departureAirport: (json['departureAirport'] as String?) ?? '',
+    arrivalAirport: (json['arrivalAirport'] as String?) ?? '',
+    departureAt: DateTime.tryParse((json['departureAt'] as String?) ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    arrivalAt: DateTime.tryParse((json['arrivalAt'] as String?) ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
+    stops: (json['stops'] as num?)?.toInt() ?? 0, baggage: (json['baggage'] as String?) ?? '',
+    priceCents: (json['priceCents'] as num?)?.toInt() ?? 0, tradeoff: (json['tradeoff'] as String?) ?? '',
+  );
+}
+
+@immutable
+class StayCompare {
+  const StayCompare({required this.options, required this.recommendedId});
+  final List<StayOptionInfo> options;
+  final String recommendedId;
+  StayOptionInfo get recommended => options.firstWhere((option) => option.id == recommendedId);
+  Map<String, dynamic> toJson() => <String, dynamic>{'options': options.map((option) => option.toJson()).toList(growable: false), 'recommendedId': recommendedId};
+  factory StayCompare.fromJson(Map<String, dynamic> json) => StayCompare(
+    options: (json['options'] as List<dynamic>?)?.map((item) => StayOptionInfo.fromJson(item as Map<String, dynamic>)).toList(growable: false) ?? const <StayOptionInfo>[],
+    recommendedId: (json['recommendedId'] as String?) ?? '',
+  );
+}
+
+@immutable
+class StayOptionInfo {
+  const StayOptionInfo({required this.id, required this.name, required this.zone, required this.nights, required this.priceCents, required this.conditions, required this.averageWalkMinutes, required this.atmosphere, required this.tradeoff, required this.provider});
+  final String id; final String name; final String zone; final int nights; final int priceCents; final String conditions; final int averageWalkMinutes; final String atmosphere; final String tradeoff; final String provider;
+  Map<String, dynamic> toJson() => <String, dynamic>{'id': id, 'name': name, 'zone': zone, 'nights': nights, 'priceCents': priceCents, 'conditions': conditions, 'averageWalkMinutes': averageWalkMinutes, 'atmosphere': atmosphere, 'tradeoff': tradeoff, 'provider': provider};
+  factory StayOptionInfo.fromJson(Map<String, dynamic> json) => StayOptionInfo(id: (json['id'] as String?) ?? '', name: (json['name'] as String?) ?? '', zone: (json['zone'] as String?) ?? '', nights: (json['nights'] as num?)?.toInt() ?? 0, priceCents: (json['priceCents'] as num?)?.toInt() ?? 0, conditions: (json['conditions'] as String?) ?? '', averageWalkMinutes: (json['averageWalkMinutes'] as num?)?.toInt() ?? 0, atmosphere: (json['atmosphere'] as String?) ?? '', tradeoff: (json['tradeoff'] as String?) ?? '', provider: (json['provider'] as String?) ?? '');
+}
+
 /// The recommended stay zone for a destination, rendered with atmosphere and
 /// walk times and a decorative demo "map" (no real map dependency).
 @immutable
@@ -376,6 +478,8 @@ class ChatMessage {
     this.placeCard,
     this.transport,
     this.stayZone,
+    this.flightCompare,
+    this.stayCompare,
   });
 
   final String id;
@@ -404,6 +508,10 @@ class ChatMessage {
   /// Present only on [ChatMessageKind.stayZone].
   final StayZoneInfo? stayZone;
 
+  /// Complete operational alternatives, available only on the F5 chat beats.
+  final FlightCompare? flightCompare;
+  final StayCompare? stayCompare;
+
   bool get isIncoming => role != ChatRole.traveler;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -420,6 +528,8 @@ class ChatMessage {
     if (placeCard != null) 'placeCard': placeCard!.toJson(),
     if (transport != null) 'transport': transport!.toJson(),
     if (stayZone != null) 'stayZone': stayZone!.toJson(),
+    if (flightCompare != null) 'flightCompare': flightCompare!.toJson(),
+    if (stayCompare != null) 'stayCompare': stayCompare!.toJson(),
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -455,6 +565,12 @@ class ChatMessage {
         : null,
     stayZone: json['stayZone'] is Map<String, dynamic>
         ? StayZoneInfo.fromJson(json['stayZone'] as Map<String, dynamic>)
+        : null,
+    flightCompare: json['flightCompare'] is Map<String, dynamic>
+        ? FlightCompare.fromJson(json['flightCompare'] as Map<String, dynamic>)
+        : null,
+    stayCompare: json['stayCompare'] is Map<String, dynamic>
+        ? StayCompare.fromJson(json['stayCompare'] as Map<String, dynamic>)
         : null,
   );
 }
