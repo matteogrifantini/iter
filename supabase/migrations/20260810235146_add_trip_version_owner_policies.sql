@@ -1,3 +1,17 @@
+create table if not exists public.trip_versions (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid not null references public.trips (id) on delete cascade,
+  version_number integer not null check (version_number > 0),
+  draft jsonb not null,
+  created_at timestamptz not null default now(),
+  unique (trip_id, version_number)
+);
+
+create index if not exists idx_trip_versions_trip
+on public.trip_versions (trip_id, created_at desc);
+
+alter table public.trip_versions enable row level security;
+
 grant select, insert on table public.trip_versions to authenticated;
 
 drop policy if exists "trip versions owner select" on public.trip_versions;

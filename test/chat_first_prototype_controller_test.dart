@@ -832,6 +832,38 @@ void main() {
       },
     );
 
+    test('migration crea trip_versions canonica prima dei grant', () async {
+      final sql = await File(
+        'supabase/migrations/'
+        '20260810235146_add_trip_version_owner_policies.sql',
+      ).readAsString();
+      final normalized = sql.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+      const tableDdl =
+          'create table if not exists public.trip_versions ( '
+          'id uuid primary key default gen_random_uuid(), '
+          'trip_id uuid not null references public.trips (id) on delete cascade, '
+          'version_number integer not null check (version_number > 0), '
+          'draft jsonb not null, '
+          'created_at timestamptz not null default now(), '
+          'unique (trip_id, version_number) '
+          ');';
+      const indexDdl =
+          'create index if not exists idx_trip_versions_trip '
+          'on public.trip_versions (trip_id, created_at desc);';
+      const rlsDdl =
+          'alter table public.trip_versions enable row level security;';
+      const grant =
+          'grant select, insert on table public.trip_versions '
+          'to authenticated;';
+
+      expect(normalized, contains(tableDdl));
+      expect(normalized, contains(indexDdl));
+      expect(normalized, contains(rlsDdl));
+      expect(normalized.indexOf(tableDdl), lessThan(normalized.indexOf(grant)));
+      expect(normalized.indexOf(indexDdl), lessThan(normalized.indexOf(grant)));
+      expect(normalized.indexOf(rlsDdl), lessThan(normalized.indexOf(grant)));
+    });
+
     test('migration rende RPC atomica, monotona e policy ripetibili', () async {
       final sql = await File(
         'supabase/migrations/'
