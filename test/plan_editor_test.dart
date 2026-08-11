@@ -122,9 +122,38 @@ void main() {
     });
 
     test(
-      'requires strong confirmation when the trip has a purchased choice',
+      'requires strong confirmation when a downstream locked stop shifts',
       () {
-        final snapshot = _snapshot(hasPurchasedSelection: true);
+        final snapshot = _snapshot(lockedItemId: 'clerigos');
+        const jardim = TripItemSnapshot(
+          id: 'jardim',
+          title: 'Jardim do Morro',
+          category: 'Panorama',
+          durationMinutes: 30,
+          locked: false,
+        );
+
+        final preview = editor.previewAddPlace(
+          conversationId: 'c-porto',
+          snapshot: snapshot,
+          item: jardim,
+          targetDayId: 'day-1',
+          targetIndex: 1,
+        );
+
+        expect(preview.after.days.first.items.last.startTime, '10:15');
+        expect(preview.status, PlanPatchStatus.requiresStrongConfirmation);
+        expect(preview.effects, contains('Clérigos è bloccato'));
+      },
+    );
+
+    test(
+      'requires strong confirmation when a changed stop links a purchase',
+      () {
+        final snapshot = _snapshot(
+          hasPurchasedSelection: true,
+          linkedPurchaseItemId: 'clerigos',
+        );
 
         final preview = editor.previewChangeTime(
           conversationId: 'c-porto',
@@ -140,6 +169,23 @@ void main() {
         );
       },
     );
+
+    test('keeps normal confirmation for an unrelated purchased choice', () {
+      final snapshot = _snapshot(hasPurchasedSelection: true);
+
+      final preview = editor.previewChangeTime(
+        conversationId: 'c-porto',
+        snapshot: snapshot,
+        itemId: 'clerigos',
+        startTime: '12:00',
+      );
+
+      expect(preview.status, PlanPatchStatus.requiresConfirmation);
+      expect(
+        preview.effects,
+        isNot(contains('Il piano include una scelta acquistata')),
+      );
+    });
 
     test('always requires confirmation before removing an unlocked stop', () {
       final snapshot = _snapshot();
@@ -192,10 +238,34 @@ void main() {
       );
 
       expect(locked.after.days.first.items.first.locked, isTrue);
-      expect(locked.status, PlanPatchStatus.requiresConfirmation);
+      expect(locked.status, PlanPatchStatus.requiresStrongConfirmation);
       expect(unlocked.after.days.first.items.first.locked, isFalse);
       expect(unlocked.status, PlanPatchStatus.requiresStrongConfirmation);
       expect(snapshot.days.first.items.first.locked, isFalse);
+    });
+
+    test('rejects schedule recalculation beyond the end of the day', () {
+      final snapshot = _snapshotWithLateSchedule();
+      const lateStop = TripItemSnapshot(
+        id: 'late-stop',
+        title: 'Passeggiata notturna',
+        category: 'Passeggiata',
+        durationMinutes: 90,
+        locked: false,
+      );
+
+      final preview = editor.previewAddPlace(
+        conversationId: 'c-porto',
+        snapshot: snapshot,
+        item: lateStop,
+        targetDayId: 'day-1',
+        targetIndex: 1,
+      );
+
+      expect(preview.status, PlanPatchStatus.conflicted);
+      expect(preview.canApply, isFalse);
+      expect(preview.conflicts, isNotEmpty);
+      expect(preview.after, same(snapshot));
     });
   });
 
@@ -216,6 +286,7 @@ void main() {
       final stale = editor.apply(
         preview: preview,
         current: current,
+        currentConversationId: 'c-porto',
         timestamp: DateTime.utc(2026, 8, 11, 10),
       );
       final rebased = editor.rebase(preview: preview, current: current);
@@ -242,6 +313,7 @@ void main() {
       final applied = editor.apply(
         preview: preview,
         current: snapshot,
+        currentConversationId: 'c-porto',
         timestamp: DateTime.utc(2026, 8, 11, 10),
         origin: PlanChangeOrigin.chat,
       );
@@ -259,76 +331,148 @@ void main() {
       expect(snapshot.revision, 3);
       expect(snapshot.days.first.items.length, 2);
     });
+
+    test(
+      'rejects a preview from another conversation at the same revision',
+      () {
+        final snapshot = _snapshot();
+        final preview = editor.previewRemoveStop(
+          conversationId: 'c-porto',
+          snapshot: snapshot,
+          itemId: 'clerigos',
+        );
+
+        final rejected = editor.apply(
+          preview: preview,
+          current: snapshot,
+          currentConversationId: 'c-roma',
+          timestamp: DateTime.utc(2026, 8, 11, 10),
+        );
+
+        expect(rejected.status, PlanPatchStatus.stale);
+        expect(rejected.after, same(snapshot));
+        expect(rejected.conflicts, isNotEmpty);
+        expect(snapshot.days.first.items.length, 2);
+      },
+    );
   });
 }
 
 TripSnapshot _snapshot({
   String? lockedItemId,
   bool hasPurchasedSelection = false,
-}) => TripSnapshot(
-  destinationTitle: 'Porto',
-  country: 'Portogallo',
-  durationLabel: '2 giorni',
-  statusLabel: 'In pianificazione',
-  dates: '14–15 ottobre',
-  transport: 'Treno',
-  stay: 'Ribeira',
-  revision: 3,
-  travelSelection: TravelPlanSelection(
-    option: TravelOption(
-      id: 'train',
-      label: 'Treno',
-      purchaseState: hasPurchasedSelection
-          ? PurchaseState.purchased
-          : PurchaseState.estimate,
+  String? linkedPurchaseItemId,
+}) {
+  final snapshot = TripSnapshot(
+    destinationTitle: 'Porto',
+    country: 'Portogallo',
+    durationLabel: '2 giorni',
+    statusLabel: 'In pianificazione',
+    dates: '14–15 ottobre',
+    transport: 'Treno',
+    stay: 'Ribeira',
+    revision: 3,
+    travelSelection: TravelPlanSelection(
+      option: TravelOption(
+        id: 'train',
+        label: 'Treno',
+        purchaseState: hasPurchasedSelection
+            ? PurchaseState.purchased
+            : PurchaseState.estimate,
+      ),
     ),
-  ),
-  days: <TripDaySnapshot>[
-    TripDaySnapshot(
-      id: 'day-1',
-      label: 'Giorno 1',
-      theme: 'Centro',
-      items: <TripItemSnapshot>[
-        TripItemSnapshot(
-          id: 'lello',
-          title: 'Lello',
-          category: 'Libreria',
-          startTime: '09:00',
-          durationMinutes: 45,
-          locked: lockedItemId == 'lello',
-        ),
-        TripItemSnapshot(
-          id: 'clerigos',
-          title: 'Clérigos',
-          category: 'Monumento',
-          startTime: '09:45',
-          durationMinutes: 60,
-          locked: lockedItemId == 'clerigos',
-        ),
-      ],
-    ),
-    TripDaySnapshot(
-      id: 'day-2',
-      label: 'Giorno 2',
-      theme: 'Atlantico',
-      items: <TripItemSnapshot>[
-        const TripItemSnapshot(
-          id: 'foz',
-          title: 'Foz',
-          category: 'Quartiere',
-          startTime: '09:00',
-          durationMinutes: 90,
-          locked: false,
-        ),
-        const TripItemSnapshot(
-          id: 'ribeira',
-          title: 'Ribeira',
-          category: 'Quartiere',
-          startTime: '10:30',
-          durationMinutes: 60,
-          locked: false,
-        ),
-      ],
-    ),
-  ],
-);
+    days: <TripDaySnapshot>[
+      TripDaySnapshot(
+        id: 'day-1',
+        label: 'Giorno 1',
+        theme: 'Centro',
+        items: <TripItemSnapshot>[
+          TripItemSnapshot(
+            id: 'lello',
+            title: 'Lello',
+            category: 'Libreria',
+            startTime: '09:00',
+            durationMinutes: 45,
+            locked: lockedItemId == 'lello',
+          ),
+          TripItemSnapshot(
+            id: 'clerigos',
+            title: 'Clérigos',
+            category: 'Monumento',
+            startTime: '09:45',
+            durationMinutes: 60,
+            locked: lockedItemId == 'clerigos',
+          ),
+        ],
+      ),
+      TripDaySnapshot(
+        id: 'day-2',
+        label: 'Giorno 2',
+        theme: 'Atlantico',
+        items: <TripItemSnapshot>[
+          const TripItemSnapshot(
+            id: 'foz',
+            title: 'Foz',
+            category: 'Quartiere',
+            startTime: '09:00',
+            durationMinutes: 90,
+            locked: false,
+          ),
+          const TripItemSnapshot(
+            id: 'ribeira',
+            title: 'Ribeira',
+            category: 'Quartiere',
+            startTime: '10:30',
+            durationMinutes: 60,
+            locked: false,
+          ),
+        ],
+      ),
+    ],
+  );
+  if (linkedPurchaseItemId == null) return snapshot;
+
+  final json = snapshot.toJson();
+  final days = json['days']! as List<dynamic>;
+  for (final day in days.cast<Map<String, dynamic>>()) {
+    final items = day['items']! as List<dynamic>;
+    for (final item in items.cast<Map<String, dynamic>>()) {
+      if (item['id'] == linkedPurchaseItemId) {
+        item['linkedPurchaseOptionIds'] = <String>['train'];
+      }
+    }
+  }
+  return TripSnapshot.fromJson(json);
+}
+
+TripSnapshot _snapshotWithLateSchedule() {
+  final snapshot = _snapshot();
+  return snapshot.copyWith(
+    days: <TripDaySnapshot>[
+      TripDaySnapshot(
+        id: 'day-1',
+        label: 'Giorno 1',
+        theme: 'Notte',
+        items: const <TripItemSnapshot>[
+          TripItemSnapshot(
+            id: 'sunset',
+            title: 'Tramonto',
+            category: 'Panorama',
+            startTime: '23:00',
+            durationMinutes: 30,
+            locked: false,
+          ),
+          TripItemSnapshot(
+            id: 'night-view',
+            title: 'Vista notturna',
+            category: 'Panorama',
+            startTime: '23:30',
+            durationMinutes: 30,
+            locked: false,
+          ),
+        ],
+      ),
+      snapshot.days[1],
+    ],
+  );
+}

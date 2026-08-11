@@ -200,9 +200,18 @@ class PlanEditor {
   PlanPatchPreview apply({
     required PlanPatchPreview preview,
     required TripSnapshot current,
+    required String currentConversationId,
     required DateTime timestamp,
     PlanChangeOrigin origin = PlanChangeOrigin.manual,
   }) {
+    if (preview.conversationId != currentConversationId) {
+      return preview.copyWith(
+        before: current,
+        after: current,
+        conflicts: <String>['L’anteprima appartiene a un’altra conversazione'],
+        status: PlanPatchStatus.stale,
+      );
+    }
     if (preview.baseRevision != current.revision) {
       return preview.copyWith(
         before: current,
@@ -307,6 +316,9 @@ class PlanEditor {
       changedItems,
       _anchorFor(day.items, item),
     );
+    if (recalculated == null) {
+      return _scheduleOverflow(conversationId, snapshot, intent);
+    }
     final days = <TripDaySnapshot>[...snapshot.days];
     days[dayIndex] = _withItems(day, recalculated);
     final after = snapshot.copyWith(days: days);
@@ -373,10 +385,14 @@ class PlanEditor {
     final changedDayIndexes = <int>{targetDayIndex};
     if (location.dayIndex != null) changedDayIndexes.add(location.dayIndex!);
     for (final index in changedDayIndexes) {
-      days[index] = _withItems(
-        days[index],
-        _recalculate(days[index].items, originalAnchors[index]!),
+      final recalculated = _recalculate(
+        days[index].items,
+        originalAnchors[index]!,
       );
+      if (recalculated == null) {
+        return _scheduleOverflow(conversationId, snapshot, intent);
+      }
+      days[index] = _withItems(days[index], recalculated);
     }
 
     final after = snapshot.copyWith(days: days, unplacedItems: unplaced);
@@ -384,14 +400,7 @@ class PlanEditor {
       '${location.item.title} si sposta in ${snapshot.days[targetDayIndex].label}',
       ..._timeEffects(snapshot, after),
     ];
-    return _result(
-      conversationId,
-      snapshot,
-      intent,
-      after,
-      _withStrongEffects(snapshot, location.item, effects),
-      strong: location.item.locked || _hasPurchasedSelection(snapshot),
-    );
+    return _result(conversationId, snapshot, intent, after, effects);
   }
 
   PlanPatchPreview _previewRemove(
@@ -417,24 +426,21 @@ class PlanEditor {
       final day = days[location.dayIndex!];
       final items = <TripItemSnapshot>[...day.items]
         ..removeAt(location.itemIndex);
-      days[location.dayIndex!] = _withItems(
-        day,
-        _recalculate(items, _anchorFor(day.items, location.item)),
+      final recalculated = _recalculate(
+        items,
+        _anchorFor(day.items, location.item),
       );
+      if (recalculated == null) {
+        return _scheduleOverflow(conversationId, snapshot, intent);
+      }
+      days[location.dayIndex!] = _withItems(day, recalculated);
     }
     final after = snapshot.copyWith(days: days, unplacedItems: unplaced);
     final effects = <PlanPatchEffect>[
       '${location.item.title} viene rimosso dal piano',
       ..._timeEffects(snapshot, after),
     ];
-    return _result(
-      conversationId,
-      snapshot,
-      intent,
-      after,
-      _withStrongEffects(snapshot, location.item, effects),
-      strong: location.item.locked || _hasPurchasedSelection(snapshot),
-    );
+    return _result(conversationId, snapshot, intent, after, effects);
   }
 
   PlanPatchPreview _previewTime(
@@ -486,14 +492,7 @@ class PlanEditor {
     final effects = <PlanPatchEffect>[
       '${changed.title} passa dalle ${location.item.startTime} alle ${changed.startTime}',
     ];
-    return _result(
-      conversationId,
-      snapshot,
-      intent,
-      after,
-      _withStrongEffects(snapshot, location.item, effects),
-      strong: location.item.locked || _hasPurchasedSelection(snapshot),
-    );
+    return _result(conversationId, snapshot, intent, after, effects);
   }
 
   PlanPatchPreview _previewLock(
@@ -527,7 +526,7 @@ class PlanEditor {
       changed.locked
           ? '${changed.title} viene bloccato'
           : '${changed.title} viene sbloccato',
-    ], strong: location.item.locked);
+    ]);
   }
 }
 
@@ -536,20 +535,44 @@ PlanPatchPreview _result(
   TripSnapshot before,
   PlanPatchIntent intent,
   TripSnapshot after,
-  List<PlanPatchEffect> effects, {
-  bool strong = false,
-}) => PlanPatchPreview(
-  conversationId: conversationId,
-  baseRevision: before.revision,
-  intent: intent,
-  before: before,
-  after: after,
-  effects: effects,
-  conflicts: const <String>[],
-  status: strong
-      ? PlanPatchStatus.requiresStrongConfirmation
-      : PlanPatchStatus.requiresConfirmation,
-);
+  List<PlanPatchEffect> effects,
+) {
+  final changes = _changedItems(before, after);
+  final lockedTitles = <String>{
+    for (final change in changes)
+      if (change.before?.locked == true || change.after?.locked == true)
+        (change.before ?? change.after!).title,
+  };
+  final purchasedOptionIds = _purchasedOptionIds(before);
+  final affectsPurchase = changes.any(
+    (change) => <TripItemSnapshot?>[change.before, change.after]
+        .whereType<TripItemSnapshot>()
+        .any(
+          (item) =>
+              item.linkedPurchaseOptionIds.any(purchasedOptionIds.contains),
+        ),
+  );
+  final strong = lockedTitles.isNotEmpty || affectsPurchase;
+  return PlanPatchPreview(
+    conversationId: conversationId,
+    baseRevision: before.revision,
+    intent: intent,
+    before: before,
+    after: after,
+    effects: <PlanPatchEffect>[
+      ...effects,
+      for (final title in lockedTitles)
+        if (!effects.contains('$title è bloccato')) '$title è bloccato',
+      if (affectsPurchase &&
+          !effects.contains('Il piano include una scelta acquistata'))
+        'Il piano include una scelta acquistata',
+    ],
+    conflicts: const <String>[],
+    status: strong
+        ? PlanPatchStatus.requiresStrongConfirmation
+        : PlanPatchStatus.requiresConfirmation,
+  );
+}
 
 PlanPatchPreview _conflict(
   String conversationId,
@@ -565,6 +588,17 @@ PlanPatchPreview _conflict(
   effects: const <PlanPatchEffect>[],
   conflicts: <String>[conflict],
   status: PlanPatchStatus.conflicted,
+);
+
+PlanPatchPreview _scheduleOverflow(
+  String conversationId,
+  TripSnapshot snapshot,
+  PlanPatchIntent intent,
+) => _conflict(
+  conversationId,
+  snapshot,
+  intent,
+  'Il ricalcolo supera la fine della giornata',
 );
 
 List<TripItemSnapshot> _allItems(TripSnapshot snapshot) => <TripItemSnapshot>[
@@ -600,7 +634,7 @@ _ItemLocation? _find(TripSnapshot snapshot, String id) {
 String _anchorFor(List<TripItemSnapshot> items, TripItemSnapshot fallback) =>
     items.isEmpty ? fallback.startTime : items.first.startTime;
 
-List<TripItemSnapshot> _recalculate(
+List<TripItemSnapshot>? _recalculate(
   List<TripItemSnapshot> items,
   String anchor,
 ) {
@@ -608,6 +642,11 @@ List<TripItemSnapshot> _recalculate(
   var next = _minutes(anchor) ?? _minutes(items.first.startTime) ?? 0;
   final recalculated = <TripItemSnapshot>[];
   for (final item in items) {
+    if (next > 23 * 60 + 59 ||
+        item.durationMinutes < 0 ||
+        next + item.durationMinutes > 24 * 60) {
+      return null;
+    }
     recalculated.add(_withItem(item, startTime: _formatMinutes(next)));
     next += item.durationMinutes;
   }
@@ -669,20 +708,12 @@ List<String> _overlaps(TripItemSnapshot changed, List<TripItemSnapshot> items) {
   return conflicts;
 }
 
-List<PlanPatchEffect> _withStrongEffects(
-  TripSnapshot snapshot,
-  TripItemSnapshot item,
-  List<PlanPatchEffect> effects,
-) => <PlanPatchEffect>[
-  ...effects,
-  if (item.locked) '${item.title} è bloccato',
-  if (_hasPurchasedSelection(snapshot))
-    'Il piano include una scelta acquistata',
-];
-
-bool _hasPurchasedSelection(TripSnapshot snapshot) =>
-    snapshot.travelSelection?.option.purchaseState == PurchaseState.purchased ||
-    snapshot.staySelection?.option.purchaseState == PurchaseState.purchased;
+Set<String> _purchasedOptionIds(TripSnapshot snapshot) => <String>{
+  if (snapshot.travelSelection?.option.purchaseState == PurchaseState.purchased)
+    snapshot.travelSelection!.option.id,
+  if (snapshot.staySelection?.option.purchaseState == PurchaseState.purchased)
+    snapshot.staySelection!.option.id,
+};
 
 int? _minutes(String value) {
   final match = RegExp(r'^(\d{2}):(\d{2})$').firstMatch(value);
@@ -694,9 +725,8 @@ int? _minutes(String value) {
 }
 
 String _formatMinutes(int value) {
-  final normalized = value % (24 * 60);
-  final hours = normalized ~/ 60;
-  final minutes = normalized % 60;
+  final hours = value ~/ 60;
+  final minutes = value % 60;
   return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
 }
 
@@ -719,4 +749,53 @@ class _ItemLocation {
   final int? dayIndex;
   final int itemIndex;
   final TripItemSnapshot item;
+}
+
+List<_ItemChange> _changedItems(TripSnapshot before, TripSnapshot after) {
+  final beforeItems = _itemStates(before);
+  final afterItems = _itemStates(after);
+  final changes = <_ItemChange>[];
+  for (final id in <String>{...beforeItems.keys, ...afterItems.keys}) {
+    final previous = beforeItems[id];
+    final next = afterItems[id];
+    if (previous == null ||
+        next == null ||
+        previous.location != next.location ||
+        previous.item.startTime != next.item.startTime ||
+        previous.item.locked != next.item.locked) {
+      changes.add(_ItemChange(before: previous?.item, after: next?.item));
+    }
+  }
+  return changes;
+}
+
+Map<String, _ItemState> _itemStates(TripSnapshot snapshot) =>
+    <String, _ItemState>{
+      for (final day in snapshot.days)
+        for (var index = 0; index < day.items.length; index++)
+          day.items[index].id: _ItemState(
+            item: day.items[index],
+            location: '${day.id}:$index',
+          ),
+      for (var index = 0; index < snapshot.unplacedItems.length; index++)
+        snapshot.unplacedItems[index].id: _ItemState(
+          item: snapshot.unplacedItems[index],
+          location: 'unplaced:$index',
+        ),
+    };
+
+@immutable
+class _ItemState {
+  const _ItemState({required this.item, required this.location});
+
+  final TripItemSnapshot item;
+  final String location;
+}
+
+@immutable
+class _ItemChange {
+  const _ItemChange({required this.before, required this.after});
+
+  final TripItemSnapshot? before;
+  final TripItemSnapshot? after;
 }

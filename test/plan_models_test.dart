@@ -183,4 +183,31 @@ void main() {
 
     expect(day.items.single.id, 'original');
   });
+
+  test('purchase links round trip and remain defensively immutable', () {
+    final suppliedLinks = <String>['train'];
+    final item = TripItemSnapshot.fromJson(<String, dynamic>{
+      'id': 'clerigos',
+      'title': 'Clérigos',
+      'category': 'Monumento',
+      'linkedPurchaseOptionIds': suppliedLinks,
+    });
+
+    suppliedLinks.add('stay');
+
+    expect(item.linkedPurchaseOptionIds, <String>['train']);
+    expect(item.toJson()['linkedPurchaseOptionIds'], <String>['train']);
+    expect(
+      () => item.linkedPurchaseOptionIds.add('stay'),
+      throwsUnsupportedError,
+    );
+    expect(
+      const TripItemSnapshot(
+        title: 'Legacy',
+        category: 'Luogo',
+        locked: false,
+      ).linkedPurchaseOptionIds,
+      isEmpty,
+    );
+  });
 }

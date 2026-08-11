@@ -249,7 +249,24 @@ class TripItemSnapshot {
     this.source = PlanItemSource.iter,
     this.place,
     required this.locked,
-  }) : startTime = startTime ?? time ?? '';
+  }) : startTime = startTime ?? time ?? '',
+       _linkedPurchaseOptionIds = const <String>[];
+
+  TripItemSnapshot.withPurchaseLinks({
+    this.id = '',
+    required this.title,
+    required this.category,
+    String? time,
+    String? startTime,
+    this.durationMinutes = 0,
+    this.source = PlanItemSource.iter,
+    this.place,
+    required this.locked,
+    List<String> linkedPurchaseOptionIds = const <String>[],
+  }) : startTime = startTime ?? time ?? '',
+       _linkedPurchaseOptionIds = List<String>.unmodifiable(
+         linkedPurchaseOptionIds,
+       );
 
   final String id;
   final String title;
@@ -259,8 +276,11 @@ class TripItemSnapshot {
   final PlanItemSource source;
   final PlanPlaceDetails? place;
   final bool locked;
+  final List<String> _linkedPurchaseOptionIds;
 
   String get time => startTime;
+
+  List<String> get linkedPurchaseOptionIds => _linkedPurchaseOptionIds;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'id': id,
@@ -271,10 +291,12 @@ class TripItemSnapshot {
     'source': source.name,
     if (place != null) 'place': place!.toJson(),
     'locked': locked,
+    if (linkedPurchaseOptionIds.isNotEmpty)
+      'linkedPurchaseOptionIds': linkedPurchaseOptionIds,
   };
 
   factory TripItemSnapshot.fromJson(Map<String, dynamic> json) =>
-      TripItemSnapshot(
+      TripItemSnapshot.withPurchaseLinks(
         id: (json['id'] as String?) ?? '',
         title: (json['title'] as String?) ?? '',
         category: (json['category'] as String?) ?? '',
@@ -286,6 +308,11 @@ class TripItemSnapshot {
             PlanItemSource.iter,
         place: _map(json['place'], PlanPlaceDetails.fromJson),
         locked: (json['locked'] as bool?) ?? false,
+        linkedPurchaseOptionIds:
+            (json['linkedPurchaseOptionIds'] as List<dynamic>?)
+                ?.whereType<String>()
+                .toList(growable: false) ??
+            const <String>[],
       );
 }
 
