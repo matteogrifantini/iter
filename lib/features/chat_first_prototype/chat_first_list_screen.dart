@@ -16,9 +16,7 @@ class ChatFirstListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final threads = List<ChatThread>.of(controller.threads);
-    threads.sort(
-      (a, b) => b.summary.timestamp.compareTo(a.summary.timestamp),
-    );
+    threads.sort((a, b) => b.summary.timestamp.compareTo(a.summary.timestamp));
     return SafeArea(
       child: Scaffold(
         appBar: AppBar(title: const Text('Chat')),
@@ -40,11 +38,12 @@ class ChatFirstListScreen extends StatelessWidget {
                   );
                 },
               ),
-        floatingActionButton: FloatingActionButton(
+        floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _startNewChat(context),
           tooltip: 'Nuova chat',
           elevation: 0,
-          child: const Icon(Icons.chat_outlined),
+          icon: const Icon(Icons.chat_outlined),
+          label: const Text('Nuova chat'),
         ),
       ),
     );
@@ -178,11 +177,11 @@ class _EmptyChats extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Parla con Iter di una destinazione: qui ritrovi i piani '
-                  'in corso e i promemoria.',
+              'in corso e i promemoria.',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
             ),
             const SizedBox(height: 20),
             FilledButton.icon(

@@ -1,161 +1,163 @@
-# Product
+# Iter — Product brief
 
-## Register
+## Stato canonico
 
-product
+Questo checkout descrive la versione nuova e unica di Iter. L'app parte da
+`lib/main.dart`, costruisce `ChatFirstPrototypeApp` e non sceglie più tra una
+vecchia app e un prototipo tramite feature flag. I documenti storici del Lab e
+della vecchia UI restano consultabili solo come archivio.
 
-## Platform
+Branch di lavoro: `codex/iter-new-only`.
 
-android
+## Scopo
 
-## Users
+Iter è un'app Flutter per persone italiane che vogliono costruire un viaggio dal
+telefono, anche partendo solo da una sensazione o da pochi giorni liberi. L'AI
+fa da regia e da editor: propone, spiega e prepara modifiche concrete; la
+persona può sempre controllare e cambiare il piano senza passare dalla chat.
 
-Italian-speaking travellers who are planning a short trip from their phone. They may have only a feeling, a few free days or an unfinished idea — not a technical brief. They want help turning that into a trip while still being able to inspect and edit every choice.
+Iter non è un questionario tecnico e non è un chatbot isolato.
 
-## Product Purpose
+## Principi di prodotto
 
-Iter is a native Android travel-planning app. It starts before the destination is known: it understands the kind of break a person needs, proposes a coherent journey, helps them collect places that genuinely fit, choose where to stay and shape a usable day-by-day itinerary.
+- Una decisione importante alla volta, con copy breve e comprensibile.
+- Il piano è un oggetto visibile e modificabile, non il risultato nascosto di
+  una conversazione.
+- Nessuna modifica materiale, acquisto o prenotazione avviene senza conferma.
+- I dati demo sono dichiarati; un link esterno non equivale a un acquisto.
+- Il tono è calmo, curioso e concreto: meno card, meno duplicazioni, più spazio
+  a immagini, timeline e scelte.
 
-Success is not a completed questionnaire. Success is a traveller who can open Iter, understand their next meaningful choice, and see a credible, editable trip steadily take form.
+## Architettura dell'esperienza
 
-## Positioning
+La navigazione principale è sempre una pillola flottante in basso con tre voci:
 
-The travel planner that grows a trip with you. AI is a guide and an editor inside the product, never an opaque chatbot that takes over the decision.
+- **Oggi** — home adattiva e accesso rapido al desiderio di un nuovo viaggio;
+- **Viaggi** — conversazioni e piani già creati, con **Nuova chat** in basso a
+  destra;
+- **Tu** — profilo leggero, disponibilità, statistiche e impostazioni.
 
-## Brand Personality
+Non esistono due percorsi separati per “piano” e “chat”. Il piano si apre dalla
+conversazione quando serve, mentre le azioni principali del piano stanno nella
+barra flottante inferiore.
 
-Calm, curious and decisive. Iter feels like a well-prepared travel companion: it asks one human question at a time, remembers context, explains a suggestion briefly, and leaves space for the traveller's taste.
-
-## Core Experience
+## Flussi
 
 ### Home
 
-Home is adaptive and AI-led, not a city catalog. It turns an incomplete wish
-into a readable route one question at a time, while keeping the product
-navigable and every material change confirmable. It has three states:
+La home mostra una domanda umana, un composer e segnali brevi. La superficie è
+neutra e usa i ruoli del tema; il blocco principale non è una card blu estranea
+al resto dell'app. Un invio esplicito crea o riapre una chat.
 
-- **Nessun viaggio:** the manifesto and free composer are the one dominant
-  action. The person can send text, demo voice or mock media; up to three
-  quick seeds can express time, feeling or budget. No city, trend, itinerary or
-  affinity percentage appears before Iter has understood enough context.
-- **Pianificazione aperta:** show one missing decision, three concise facts
-  Iter has understood, and **Continua il viaggio** as the primary action.
-  **Inizia un altro viaggio** remains quiet; the complete archive stays in
-  **Viaggi**.
-- **Viaggio in corso:** show the journey, current day and a short upcoming
-  timeline. A possible operational update is proposed but never applied; **Apri
-  il piano di oggi** is primary. Chat and composer remain reachable without
-  replacing the timeline.
+Quando esiste un viaggio in corso, la home mostra solo il giorno corrente, una
+timeline breve e l'eventuale modifica in attesa. Il riepilogo è rapido: mostra
+la modifica rilevante e usa **Vedi il piano completo** per il dettaglio.
 
-When several items exist, priority is: active trip today, changed or pending
-planning, most recent draft, then a new-trip entry. Home never shows more than
-one resumable item.
+### Chat
 
-Quick seeds only prefill or append semantic text to the composer. A tap never
-chooses a city, creates a conversation or starts a trip; the first explicit
-send creates or opens the FreeTalk thread. After that send, understood signals
-such as `4 giorni`, `fine settembre`, `ritmo lento`, `cibo` or `500 €` are
-visible and editable or removable. Iter asks one missing constraint at a time,
-then shows an editable summary before a complete proposal. Choosing or changing
-a proposal, and every material itinerary change, requires explicit
-confirmation.
+La chat mantiene una grammatica familiare, simile a WhatsApp, ma conserva
+l'identità di Iter. Il thread mock può contenere:
 
-The Material navigation labels are **Oggi** (adaptive Home), **Viaggi**
-(conversation/trip archive) and **Tu** (Profile). Availability remains an
-optional, lightweight MVP signal: no document upload or automatic calendar
-import.
+- proposte di destinazione e luoghi con immagini;
+- schede luogo con categoria, motivo, momento migliore e azioni;
+- confronto di volo e hotel dentro la conversazione;
+- riepilogo operativo e proposte **Accetta / Annulla**;
+- testo, vocale, foto e video demo;
+- composer ampio, multi-riga, con allegato a sinistra e invio/microfono a
+  destra.
 
-### Discover a journey
+Il riepilogo di una modifica non duplica il piano: comunica cosa cambia e porta
+al piano completo.
 
-Discovery is its own flow, before itinerary construction. The current
-**New trip Lab v2** asks one human question at a time and collects origin,
-dates, company, accepted transport, all-in budget per person, travel style,
-pace, and walking/accessibility needs. A detected approximate origin is always
-editable. Single complete choices advance automatically; multiple choices and
-calendars use a contextual confirmation. Free text appears only where it adds
-meaning, rather than as a permanent chat composer. No destination appears
-before the editable summary is confirmed.
+### Piano operativo
 
-**Semplice** is the selected and only presentation of the New trip Lab. In debug
-the Lab defaults on through `kDebugMode`, so Home's **Inizia un viaggio** opens
-it directly; `--dart-define=ITER_NEW_TRIP_LAB=false` explicitly disables it and
-preserves the existing product path. Release defaults the Lab off. Phase 1
-changes only presentation and intake: the shared controller, typed dates,
-deterministic mock proposal source, and no-persistence/provider contract remain
-unchanged. Semplice prioritises a
-dominant title and concise copy, with emoji-and-text options in two columns only
-above 360 dp at normal text size and one column at 360 dp or less or with large
-text. Its progress sits after the options and states the current and remaining
-questions, above a neutral Material surface derived from `ColorScheme` roles,
-including `secondaryContainer`, over the existing canvas.
+Il piano non usa una mappa in cima. Usa una hero fotografica/video, fatti
+essenziali, chip dei giorni e una timeline continua. Ogni tappa apribile mostra
+una scheda con foto, eventuale reel, dettagli, **Indicazioni** (Google Maps o
+launcher esterno) e **Chiedi a Iter**.
 
-Phase 1 integrated Browser QA is complete for Home, direct Lab entry and manual
-origin editing, including two columns at 390 dp, one at 360 dp, progress after
-the options, back navigation and both light and dark themes. The full Flutter
-suite has 49 tests; analyze, Web release and debug APK gates are complete.
+La barra inferiore contiene:
 
-The existing result is a vertical, information-rich set of complete journey ideas,
-which may connect cities, towns and landscapes. Each proposal explains dates
-or best period, duration, arrival mode, all-in estimated cost, cost breakdown,
-travel complexity, personal fit, price confidence, and the main compromise.
-The traveller keeps two to four ideas in a shortlist, compares them by
-criteria, and explicitly confirms one. In the lab this final choice is isolated
-and does not silently create or persist a trip. A redesign of results, shortlist
-and comparison, followed by an app-wide rollout of the intake, is future work
-and is not part of Phase 1.
+- **Aggiungi luogo** — catalogo locale e inserimento manuale;
+- **Chiedi** — ritorno alla conversazione;
+- **Costi** — riepilogo e conferma demo.
 
-### Curate places
+Le azioni rare stanno nel menu overflow, inclusa **Importa ispirazione**. Ogni
+aggiunta, spostamento, cambio orario, blocco o rimozione genera prima una
+preview. Solo **Applica** crea una revisione; la snackbar offre **Annulla**.
 
-Once a journey is chosen, Iter presents museums, streets, piazzas, events and local places along all its stops. A portrait reel makes the decision quick, while visible side controls always offer the equivalent choices: skip, save, or essential. Each recommendation says why it may suit the traveller, based on explicit choices and previous accepted trips. The prototype stops after four meaningful signals so the complete flow can be tested quickly.
+### Costi e conferma
 
-### Choose how to arrive
+Il foglio costi è lineare e ha tre sezioni:
 
-Iter compares flight, train, bus and car on one compact screen for reaching the first stop. The choice is a planning preference, not a ticket. Mock prices and duration ranges are visibly labelled as estimates, external search remains optional, and no selection books or purchases anything.
+1. **Da acquistare** — volo e hotel selezionati;
+2. **Stime non acquistate** — ingressi, pasti e trasporto locale;
+3. **Totali** — costo esterno, stime sul posto e totale previsto.
 
-### Choose where to stay
+**Conferma acquisti demo** apre un dialog esplicito. Dopo la conferma il piano
+mostra **Scelte confermate**. Il percorso è locale e non raccoglie carta, PNR o
+denaro: il copy **Demo: nessun pagamento reale** è sempre visibile. I link a
+provider allowlistati restano opzionali e separati dal CTA demo.
 
-Iter places the chosen POIs on a demo map and colours the possible bases so the spatial trade-off is visible before reading details. Booking is an optional outbound link only. Iter does not show availability, prices, affiliate results or checkout in the MVP.
+### Profilo
 
-### Shape the itinerary
+Il profilo usa poche sezioni, non una pila di card:
 
-The itinerary is always visible as a real, editable product surface: days, stops, timing, route context and warnings. A conversational composer is attached to this surface rather than replacing it. When a traveller asks for a slower afternoon or removes a stop, Iter shows the proposed local change in the itinerary; the traveller can undo, reject, lock or accept it.
+- header essenziale e qualche preferenza appresa in chip;
+- tre statistiche semplici: viaggi, luoghi, chilometri stimati;
+- tema Chiaro/Scuro/Sistema;
+- disponibilità con giorno, stato **Libero/Turno**, fascia e nota;
+- collegamenti a FAQ, Privacy e conversazioni.
 
-### Profile and personalization
+La disponibilità è un input mock locale: serve a proporre viaggi nel tempo
+libero, non importa calendari o documenti.
 
-The profile exposes the preferences Iter has learned from accepted choices, not inferred sensitive traits. The traveller can correct them and choose light or dark appearance. Light is the first-launch default and the preference persists locally.
+### Ispirazioni da Reel/TikTok
 
-## AI Behaviour and Trust
+Da chat o overflow del piano si può incollare un link Reel/TikTok. Il mock
+parser usa solo fixture locali approvate:
 
-- AI proposes drafts and local itinerary patches; it does not silently persist, book, pay for, or change locked stops.
-- The app exposes meaningful planning events and the resulting change, never hidden prompts or raw model reasoning.
-- Every accepted draft becomes an itinerary version. Manual edits and AI suggestions remain distinguishable and reversible.
-- A failed source, stale estimate or unavailable route is stated in plain Italian next to the affected choice.
-- The client never holds a Gemini or routing-provider secret. Planning requests pass through an authenticated Supabase Edge Function.
+- Instagram Porto → Livraria Lello;
+- TikTok Roma → Foro Romano.
 
-La Home adattiva e il flusso FreeTalk descritti sopra sono la decisione prodotto
-canonica approvata per questa esperienza: l'invio esplicito apre il thread,
-mostra gli indizi compresi e converge sull'intake condiviso prima della proposta
-confermabile. L'implementazione chat-first che li realizza resta però una
-sperimentazione isolata dietro `ITER_CHAT_FIRST_PROTOTYPE`: conserva messaggi
-multimodali, `TripSnapshot` read-only e viaggi come conversazioni, senza
-equivalere a rollout prodotto, provider reale o persistenza. La sua spec di
-dettaglio è nel branch `codex/chat-first-prototype` (vedi `HANDOFF.md`).
+Il flusso è: estrai → scegli il viaggio → salva in **Ispirazioni salvate** →
+**Proponi integrazione**. Il salvataggio non tocca il piano. La proposta arriva
+in chat e modifica la timeline solo dopo **Accetta**. Non è ancora una Share
+Target Android e non fa scraping o rete.
 
-## MVP Boundaries
+## Fiducia e confini
 
-- Launch language: Italian.
-- Initial discovery demo: three single-city ideas plus three wider routes, backed by a curated POI catalogue for Roma, Parigi, Barcellona, Lisbona, Porto, Amsterdam, Berlino e Praga.
-- Bundled portrait travel clips play as short local sequences and keep source attribution; no live video feed or remote media service is required.
-- Mock planning is the default developer and automated-test mode; a free-tier Gemini model is reserved for deliberate manual demos.
-- No live public-transit data, live opening hours, prices, reviews, GPS tracking, offline mode, social features, collaborative editing, payments or in-app booking.
-- Flight, train, bus and car options in the mock backend are indicative planning shapes, not live fares, schedules or availability.
-- No photos, documents, PNRs, payment data, private addresses or work-shift files are sent to an AI provider.
-- The New trip Lab uses deterministic mock proposals, performs no provider
-  search, and never writes to `IterStore`.
-- Saved free days are currently an injectable read-only input to the lab. Their
-  global persistence and snapshot lifecycle belong to the later domain/store
-  integration phase.
+- La modalità predefinita è mock, deterministica e locale.
+- Supabase è un seam opzionale per profilo, conversazioni e revisioni; non
+  cambia il contratto UI e non espone segreti nel client.
+- Nessun provider di viaggio, pagamento, GPS, calendario o AI remoto è
+  necessario per provare questi flussi.
+- Le selezioni e le revisioni restano osservabili nel controller.
+- I luoghi bloccati e le scelte acquistate non vengono alterati in silenzio.
+- Il testo deve restare comprensibile con tema scuro, testo grande, moto ridotto
+  e larghezze compatte.
 
-## Accessibility & Inclusion
+## Fuori scope di questo branch
 
-Italian is the launch language, with strings written so they can be localized. The app follows the device text scale, safe areas, screen-reader labels, keyboard and Android system-back behaviour. Swipe curation has labelled tap alternatives; maps or route visuals always have a timeline/list equivalent. Touch targets are at least 48 dp. Reduced-motion users receive an immediate state change or a crossfade.
+Checkout reale, prenotazioni in-app, prezzi live, disponibilità live, GPS in
+background, import automatico di turni, Share Target Android, scraping social,
+collaborazione e feed social. Sono estensioni future, non promesse del mock.
+
+## Verifica di accettazione
+
+Ogni modifica applicativa deve mantenere:
+
+```bash
+flutter analyze
+flutter test
+```
+
+Per UI/responsive:
+
+```bash
+flutter build web --release
+python3 -m http.server 7357 --directory build/web --bind 127.0.0.1
+```
+
+Provare almeno 320/360/390 dp, tema chiaro/scuro, testo 1.5 e riduzione del
+movimento. Il piano deve restare usabile senza aprire la chat.

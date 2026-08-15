@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
-# Starts Iter in the local browser through Flutter's web-server device.
-# Usage: ./tool/run_web.sh [flutter run arguments]
+# Builds and serves Iter's release Web bundle for local UI QA.
+# Usage: ./tool/run_web.sh [flutter build arguments]
 
 set -euo pipefail
 
-exec flutter run \
-  -d web-server \
-  --web-hostname=127.0.0.1 \
-  --web-port=7357 \
-  --dart-define=ITER_NEW_TRIP_LAB=true \
-  "$@"
+flutter build web --release "$@"
+exec python3 -m http.server 7357 \
+  --directory build/web \
+  --bind 127.0.0.1

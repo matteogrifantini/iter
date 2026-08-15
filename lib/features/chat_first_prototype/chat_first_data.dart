@@ -31,17 +31,20 @@ class OperationalTripFixture {
     required this.destinationId,
     required this.snapshot,
     required this.media,
+    List<PlanMedia> mediaGallery = const <PlanMedia>[],
     required List<OperationalPlaceFixture> placeCatalog,
     required List<FlightFixture> flights,
     required List<HotelFixture> hotels,
     required this.quotedAt,
-  }) : placeCatalog = List<OperationalPlaceFixture>.unmodifiable(placeCatalog),
+  }) : mediaGallery = List<PlanMedia>.unmodifiable(mediaGallery),
+       placeCatalog = List<OperationalPlaceFixture>.unmodifiable(placeCatalog),
        flights = List<FlightFixture>.unmodifiable(flights),
        hotels = List<HotelFixture>.unmodifiable(hotels);
 
   final String destinationId;
   final TripSnapshot snapshot;
   final PlanMedia media;
+  final List<PlanMedia> mediaGallery;
   final List<OperationalPlaceFixture> placeCatalog;
   final List<FlightFixture> flights;
   final List<HotelFixture> hotels;
@@ -702,13 +705,15 @@ class FreeTalkThread extends IntakeThread {
     preview = preview.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
     // A wish that was only a meta name strips down to function words
     // ("Vorrei andare a "): fall back gently instead of echoing the stumps.
-    final significant = preview.replaceAll(
-      RegExp(
-        r'\b(a|di|in|da|al|alla|nel|nella|per|verso|con|il|la|lo|gli|le|un|una|e|o|che|vorrei|andare)\b',
-        caseSensitive: false,
-      ),
-      ' ',
-    ).trim();
+    final significant = preview
+        .replaceAll(
+          RegExp(
+            r'\b(a|di|in|da|al|alla|nel|nella|per|verso|con|il|la|lo|gli|le|un|una|e|o|che|vorrei|andare)\b',
+            caseSensitive: false,
+          ),
+          ' ',
+        )
+        .trim();
     return significant.isEmpty ? 'la tua idea' : preview;
   }
 
@@ -897,6 +902,17 @@ abstract final class ChatFirstDemoData {
     return OperationalTripFixture(
       destinationId: 'porto',
       media: media,
+      mediaGallery: <PlanMedia>[
+        media,
+        const PlanMedia(
+          imageUrl: 'assets/images/travel/porto_river.jpg',
+          reelUrl: 'assets/videos/vertical/porto_river.mp4',
+        ),
+        const PlanMedia(
+          imageUrl: 'assets/images/travel/porto_rooftops.jpg',
+          reelUrl: 'assets/videos/vertical/porto_rooftops.mp4',
+        ),
+      ],
       quotedAt: _fixtureQuotedAt,
       snapshot: TripSnapshot(
         destinationTitle: 'Porto',
@@ -1150,6 +1166,16 @@ abstract final class ChatFirstDemoData {
         destinationId: 'roma',
         quotedAt: _fixtureQuotedAt,
         media: const PlanMedia(imageUrl: 'assets/images/travel/rome_vespa.jpg'),
+        mediaGallery: const <PlanMedia>[
+          PlanMedia(
+            imageUrl: 'assets/images/travel/rome_vespa.jpg',
+            reelUrl: 'assets/videos/vertical/rome_vespa.mp4',
+          ),
+          PlanMedia(
+            imageUrl: 'assets/images/travel/rome_city.jpg',
+            reelUrl: 'assets/videos/vertical/rome_city.mp4',
+          ),
+        ],
         snapshot: TripSnapshot(
           destinationTitle: 'Roma',
           country: 'Italia',
@@ -1432,7 +1458,7 @@ abstract final class ChatFirstDemoData {
           convergence,
           proposalDisclosure:
               'Per la demo convergo su ${journeyCity(convergence)}, che ha il '
-              'piano completo: da qui volo, hotel e mete sono reali.',
+              'piano completo: da qui volo, hotel e mete sono dati demo.',
         ),
       ],
     );

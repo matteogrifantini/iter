@@ -92,9 +92,12 @@ class SupabaseDataSource implements IterDataSource {
           .eq('conversation_id', conversationId)
           .order('sent_at');
       return rows
-          .map((row) => ChatMessage.fromJson(
+          .map(
+            (row) => ChatMessage.fromJson(
               (row['content'] as Map?)?.cast<String, dynamic>() ??
-                  const <String, dynamic>{}))
+                  const <String, dynamic>{},
+            ),
+          )
           .where((message) => message.id.isNotEmpty)
           .toList();
     } catch (_) {
@@ -150,16 +153,13 @@ class SupabaseDataSource implements IterDataSource {
   @override
   Future<ConversationRow?> createConversation(Conversation summary) async {
     try {
-      final rows = await _client
-          .from('conversations')
-          .insert(<String, dynamic>{
-            'user_id': _client.auth.currentUser?.id,
-            'title': summary.title,
-            'avatar_asset': summary.avatar.asset,
-            'unread': summary.unread,
-            'summary': summary.toJson(),
-          })
-          .select();
+      final rows = await _client.from('conversations').insert(<String, dynamic>{
+        'user_id': _client.auth.currentUser?.id,
+        'title': summary.title,
+        'avatar_asset': summary.avatar.asset,
+        'unread': summary.unread,
+        'summary': summary.toJson(),
+      }).select();
       if (rows.isEmpty) return null;
       return ConversationRow.fromDbRow(rows.first);
     } catch (_) {
@@ -208,9 +208,10 @@ class SupabaseDataSource implements IterDataSource {
       if (row == null) return null;
       return ProfileRow(
         themeMode: _themeModeFromColumn(row['theme_mode']),
-        memoryTags: (row['memory_tags'] as List<dynamic>?)
-                ?.whereType<String>()
-                .toList(growable: false) ??
+        memoryTags:
+            (row['memory_tags'] as List<dynamic>?)?.whereType<String>().toList(
+              growable: false,
+            ) ??
             const <String>[],
       );
     } catch (_) {
@@ -219,12 +220,17 @@ class SupabaseDataSource implements IterDataSource {
   }
 
   @override
-  Future<void> upsertProfile({ThemeMode? themeMode, List<String>? memoryTags}) async {
+  Future<void> upsertProfile({
+    ThemeMode? themeMode,
+    List<String>? memoryTags,
+  }) async {
     try {
       final client = _client;
       final userId = client.auth.currentUser?.id;
       if (userId == null) return;
-      final themeModeColumn = themeMode == null ? null : _themeModeColumn(themeMode);
+      final themeModeColumn = themeMode == null
+          ? null
+          : _themeModeColumn(themeMode);
       final payload = <String, dynamic>{
         'id': userId,
         'theme_mode': ?themeModeColumn,
@@ -241,15 +247,16 @@ class SupabaseDataSource implements IterDataSource {
   /// (`'user' | 'assistant'`); the travel-first [ChatRole] enums collapse onto
   /// the assistant bucket for divider/system rows.
   String _roleColumn(ChatRole role) => switch (role) {
-        ChatRole.traveler => 'user',
-        ChatRole.assistant || ChatRole.system => 'assistant',
-      };
+    ChatRole.traveler => 'user',
+    ChatRole.assistant || ChatRole.system => 'assistant',
+  };
 
   /// Maps a message kind onto the `messages.kind` check constraint. The full
   /// kind is also stored inside `content` so round-trips stay lossless even
   /// when the coarse column value differs (choices -> 'choice').
   String _kindColumn(ChatMessage message) {
-    if (message.kind == ChatMessageKind.media && message.media?.isVideo == true) {
+    if (message.kind == ChatMessageKind.media &&
+        message.media?.isVideo == true) {
       return 'video';
     }
     return switch (message.kind) {
@@ -270,27 +277,27 @@ class SupabaseDataSource implements IterDataSource {
   /// Maps a `profiles.theme_mode` column onto [ThemeMode]; unknown values
   /// degrade to the app default light theme.
   ThemeMode _themeModeFromColumn(Object? value) => switch (value) {
-        'dark' => ThemeMode.dark,
-        'system' => ThemeMode.system,
-        _ => ThemeMode.light,
-      };
+    'dark' => ThemeMode.dark,
+    'system' => ThemeMode.system,
+    _ => ThemeMode.light,
+  };
 
   /// Maps [ThemeMode] onto the `profiles.theme_mode` check constraint.
   String _themeModeColumn(ThemeMode mode) => switch (mode) {
-        ThemeMode.dark => 'dark',
-        ThemeMode.system => 'system',
-        ThemeMode.light => 'light',
-      };
+    ThemeMode.dark => 'dark',
+    ThemeMode.system => 'system',
+    ThemeMode.light => 'light',
+  };
 
   /// Maps a `pois` row to the light preview-sheet shape. Missing cosmetic
   /// fields degrade to friendly defaults so the sheet never breaks.
   DestinationPoint _fromPoiRow(Map<String, dynamic> row) => DestinationPoint(
-        id: (row['id'] as String),
-        name: (row['name'] as String?) ?? '',
-        category: (row['category'] as String?) ?? '',
-        emoji: (row['emoji'] as String?) ?? '📍',
-        whyFits: (row['why_fits'] as String?) ?? '',
-      );
+    id: (row['id'] as String),
+    name: (row['name'] as String?) ?? '',
+    category: (row['category'] as String?) ?? '',
+    emoji: (row['emoji'] as String?) ?? '📍',
+    whyFits: (row['why_fits'] as String?) ?? '',
+  );
 
   /// Maps a `destinations` row (city or route) to the shared journey model.
   /// A city without stops falls back to its own name and slug so the Home
@@ -299,8 +306,8 @@ class SupabaseDataSource implements IterDataSource {
     final id = row['slug'] as String;
     final name = row['name'] as String;
     final stops = (row['stops'] as List<dynamic>?)?.cast<String>();
-    final destinationIds =
-        (row['destination_ids'] as List<dynamic>?)?.cast<String>();
+    final destinationIds = (row['destination_ids'] as List<dynamic>?)
+        ?.cast<String>();
     return JourneyRoute(
       id: id,
       title: name,
@@ -313,7 +320,8 @@ class SupabaseDataSource implements IterDataSource {
       whyItFits: (row['why_it_fits'] as String?) ?? '',
       season: (row['season'] as String?) ?? '',
       travelMode: (row['travel_mode'] as String?) ?? '',
-      videoAssets: (row['video_assets'] as List<dynamic>?)?.cast<String>() ??
+      videoAssets:
+          (row['video_assets'] as List<dynamic>?)?.cast<String>() ??
           const <String>[],
       matchScore: (row['match_score'] as int?) ?? 0,
     );

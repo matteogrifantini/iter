@@ -9,10 +9,10 @@ class AdaptiveHomeModel {
   const AdaptiveHomeModel.empty() : this._(kind: AdaptiveHomeKind.empty);
 
   const AdaptiveHomeModel.planning({required ChatThread thread})
-      : this._(kind: AdaptiveHomeKind.planning, thread: thread);
+    : this._(kind: AdaptiveHomeKind.planning, thread: thread);
 
   const AdaptiveHomeModel.active({required ChatThread thread})
-      : this._(kind: AdaptiveHomeKind.active, thread: thread);
+    : this._(kind: AdaptiveHomeKind.active, thread: thread);
 
   const AdaptiveHomeModel._({required this.kind, this.thread});
 

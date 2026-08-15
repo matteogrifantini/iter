@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart'
-    show AppLifecycleState, ThemeMode;
+import 'package:flutter/material.dart' show AppLifecycleState, ThemeMode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
 
@@ -13,9 +12,11 @@ import 'package:iter/features/chat_first_prototype/chat_first_controller.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_data.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_models.dart';
 import 'package:iter/features/chat_first_prototype/data_source.dart';
+import 'package:iter/features/chat_first_prototype/inspiration_importer.dart';
 import 'package:iter/features/chat_first_prototype/mock_data_source.dart';
 import 'package:iter/features/chat_first_prototype/plan_editor.dart';
 import 'package:iter/features/chat_first_prototype/plan_external_launcher.dart';
+import 'package:iter/features/chat_first_prototype/profile_models.dart';
 import 'package:iter/features/chat_first_prototype/supabase_data_source.dart';
 import 'package:iter/models/trip_models.dart' show JourneyRoute;
 
@@ -29,6 +30,124 @@ void main() {
         controller.threads.any((t) => t.summary.title.contains('Roma')),
         isTrue,
       );
+    });
+
+    test('disponibilità e statistiche restano modificabili senza chat', () {
+      final controller = ChatFirstPrototypeController();
+      addTearDown(controller.dispose);
+
+      expect(controller.availability, isNotEmpty);
+      expect(controller.travelStats.completedTrips, 3);
+
+      final id = controller.addAvailability(
+        date: DateTime(2026, 10, 24, 18),
+        kind: AvailabilityKind.free,
+        timeRange: 'Dopo le 18:00',
+        note: 'Fine turno',
+      );
+
+      final entry = controller.availability.singleWhere(
+        (candidate) => candidate.id == id,
+      );
+      expect(entry.date, DateTime(2026, 10, 24));
+      expect(entry.kind, AvailabilityKind.free);
+      expect(controller.removeAvailability(id), isTrue);
+      expect(
+        controller.availability.any((candidate) => candidate.id == id),
+        isFalse,
+      );
+    });
+
+    test('salvare un reel propone un cambio senza mutare subito il piano', () {
+      final controller = _planController();
+      addTearDown(controller.dispose);
+      final conversationId = 'c-plan-porto';
+      final before = controller.conversationOf(conversationId).snapshot!;
+      final parsed = parseMockInspiration(
+        'https://www.instagram.com/reel/iter-porto',
+      );
+      final draft = parsed.draft!;
+
+      final saved = controller.saveInspiration(
+        conversationId: conversationId,
+        draft: draft,
+      );
+      expect(saved, isNotNull);
+      expect(controller.conversationOf(conversationId).snapshot, before);
+      expect(controller.proposeInspiration(conversationId, saved!.id), isTrue);
+
+      final proposal = controller
+          .threadOf(conversationId)
+          .messages
+          .lastWhere((message) => message.proposal != null);
+      expect(proposal.proposal!.changeLabel, contains('Livraria Lello'));
+      expect(
+        controller.conversationOf(conversationId).snapshot!.toJson(),
+        before.toJson(),
+      );
+
+      controller.acceptProposal(conversationId, proposal.id);
+
+      final accepted = controller.conversationOf(conversationId).snapshot!;
+      expect(
+        accepted.days
+            .expand((day) => day.items)
+            .any((item) => item.source == PlanItemSource.share),
+        isTrue,
+      );
+      expect(controller.savedInspirations.single.attachedToPlan, isTrue);
+      expect(accepted.revisionMetadata!.origin, PlanChangeOrigin.share);
+    });
+
+    test(
+      'un reel su un piano ancora vuoto resta tra le tappe da sistemare',
+      () {
+        final controller = ChatFirstPrototypeController();
+        addTearDown(controller.dispose);
+        const conversationId = 'c-porto-slow';
+        final parsed = parseMockInspiration(
+          'https://www.instagram.com/reel/iter-porto',
+        );
+        final saved = controller.saveInspiration(
+          conversationId: conversationId,
+          draft: parsed.draft!,
+        );
+
+        expect(saved, isNotNull);
+        expect(
+          controller.proposeInspiration(conversationId, saved!.id),
+          isTrue,
+        );
+        final proposal = controller
+            .threadOf(conversationId)
+            .messages
+            .lastWhere((message) => message.proposal != null);
+
+        controller.acceptProposal(conversationId, proposal.id);
+
+        final accepted = controller.conversationOf(conversationId).snapshot!;
+        expect(accepted.days, isEmpty);
+        expect(accepted.unplacedItems.single.title, 'Livraria Lello');
+      },
+    );
+
+    test('conferma acquisti demo marca le selezioni senza aprire provider', () {
+      final controller = _planController();
+      addTearDown(controller.dispose);
+      const conversationId = 'c-plan-porto';
+
+      expect(controller.confirmMockPurchases(conversationId), isTrue);
+      final snapshot = controller.conversationOf(conversationId).snapshot!;
+      expect(
+        snapshot.travelSelection!.option.purchaseState,
+        PurchaseState.purchased,
+      );
+      expect(
+        snapshot.staySelection!.option.purchaseState,
+        PurchaseState.purchased,
+      );
+      expect(controller.mockPurchasesConfirmed(conversationId), isTrue);
+      expect(snapshot.revisionMetadata!.label, 'Conferma acquisti demo');
     });
 
     test('openConversation azzera i non letti', () {
@@ -1854,38 +1973,40 @@ void main() {
       expect(controller.threads.length, 3);
     });
 
-    test('free talk reflects clues and offers trend metas as explicit choices', () {
-      final controller = ChatFirstPrototypeController();
-      final thread = controller.startFreeTalk();
-      controller.openConversation(thread.summary.id);
-      final freeTalk = controller.threadOf(thread.summary.id) as FreeTalkThread;
-      const forbiddenDestinations = <String>{'Lisbona', 'Porto', 'Roma'};
-      expect(
-        controller.trendJourneys.map(journeyCity).toSet(),
-        containsAll(forbiddenDestinations),
-      );
+    test(
+      'free talk reflects clues and offers trend metas as explicit choices',
+      () {
+        final controller = ChatFirstPrototypeController();
+        final thread = controller.startFreeTalk();
+        controller.openConversation(thread.summary.id);
+        final freeTalk =
+            controller.threadOf(thread.summary.id) as FreeTalkThread;
+        const forbiddenDestinations = <String>{'Lisbona', 'Porto', 'Roma'};
+        expect(
+          controller.trendJourneys.map(journeyCity).toSet(),
+          containsAll(forbiddenDestinations),
+        );
 
-      controller.sendText(
-        'Vorrei quattro giorni lenti a fine settembre, tipo Lisbona, con cibo',
-      );
-      final ack = freeTalk.messages.lastWhere((m) => m.id == kFreeTalkAckId);
-      expect(ack.kind, ChatMessageKind.text);
-      expect(ack.text, contains('quattro giorni lenti'));
-      // The echo strips destination names; the destination question offers the
-      // trend metas as explicit clickable choices instead of naming them.
-      expect(ack.text, isNot(contains('Lisbona')));
+        controller.sendText(
+          'Vorrei quattro giorni lenti a fine settembre, tipo Lisbona, con cibo',
+        );
+        final ack = freeTalk.messages.lastWhere((m) => m.id == kFreeTalkAckId);
+        expect(ack.kind, ChatMessageKind.text);
+        expect(ack.text, contains('quattro giorni lenti'));
+        // The echo strips destination names; the destination question offers the
+        // trend metas as explicit clickable choices instead of naming them.
+        expect(ack.text, isNot(contains('Lisbona')));
 
-      final destination = freeTalk.messages.lastWhere(
-        (m) => m.id == kFreeTalkDestinationId,
-      );
-      expect(destination.kind, ChatMessageKind.text);
-      expect(destination.choices.map((c) => c.label), containsAll(<String>[
-        'Lisbona',
-        'Porto',
-        'Roma',
-        'Consigliami tu',
-      ]));
-    });
+        final destination = freeTalk.messages.lastWhere(
+          (m) => m.id == kFreeTalkDestinationId,
+        );
+        expect(destination.kind, ChatMessageKind.text);
+        expect(
+          destination.choices.map((c) => c.label),
+          containsAll(<String>['Lisbona', 'Porto', 'Roma', 'Consigliami tu']),
+        );
+      },
+    );
 
     test(
       'free talk preserves ordinary words containing a destination label',
@@ -1935,47 +2056,41 @@ void main() {
       },
     );
 
-    test(
-      'free talk converges every meta choice on the Porto proposal',
-      () {
-        final controller = ChatFirstPrototypeController();
-        final thread = controller.startFreeTalk();
-        controller.openConversation(thread.summary.id);
+    test('free talk converges every meta choice on the Porto proposal', () {
+      final controller = ChatFirstPrototypeController();
+      final thread = controller.startFreeTalk();
+      controller.openConversation(thread.summary.id);
 
-        controller.sendText('Vorrei quattro giorni lenti e buon cibo.');
-        _tapChoice(controller, thread.summary.id, 'Lisbona');
-        _answerIntake(controller, thread.summary.id);
-        final proposal = controller
-            .threadOf(thread.summary.id)
-            .messages
-            .lastWhere((message) => message.kind == ChatMessageKind.planProposal);
-        expect(proposal.proposal?.snapshot.destinationTitle, 'Porto');
-        expect(proposal.text, contains('Porto'));
-        // F1: the free talk honestly discloses the demo convergence on Porto.
-        expect(proposal.text, contains('Per la demo convergo su Porto'));
-        expect(proposal.text, contains('volo, hotel e mete sono reali'));
-        expect(controller.threadOf(thread.summary.id).summary.title, 'Porto');
-      },
-    );
+      controller.sendText('Vorrei quattro giorni lenti e buon cibo.');
+      _tapChoice(controller, thread.summary.id, 'Lisbona');
+      _answerIntake(controller, thread.summary.id);
+      final proposal = controller
+          .threadOf(thread.summary.id)
+          .messages
+          .lastWhere((message) => message.kind == ChatMessageKind.planProposal);
+      expect(proposal.proposal?.snapshot.destinationTitle, 'Porto');
+      expect(proposal.text, contains('Porto'));
+      // F1: the free talk honestly discloses the demo convergence on Porto.
+      expect(proposal.text, contains('Per la demo convergo su Porto'));
+      expect(proposal.text, contains('volo, hotel e mete sono dati demo'));
+      expect(controller.threadOf(thread.summary.id).summary.title, 'Porto');
+    });
 
-    test(
-      'free talk "Consigliami tu" also converges on the Porto route',
-      () {
-        final controller = ChatFirstPrototypeController();
-        final thread = controller.startFreeTalk();
-        controller.openConversation(thread.summary.id);
+    test('free talk "Consigliami tu" also converges on the Porto route', () {
+      final controller = ChatFirstPrototypeController();
+      final thread = controller.startFreeTalk();
+      controller.openConversation(thread.summary.id);
 
-        controller.sendText('Vorrei partire senza una meta fissa.');
-        _tapChoice(controller, thread.summary.id, 'Consigliami tu');
-        _answerIntake(controller, thread.summary.id);
-        final proposal = controller
-            .threadOf(thread.summary.id)
-            .messages
-            .lastWhere((message) => message.kind == ChatMessageKind.planProposal);
-        expect(proposal.proposal?.snapshot.destinationTitle, 'Porto');
-        expect(controller.threadOf(thread.summary.id).summary.title, 'Porto');
-      },
-    );
+      controller.sendText('Vorrei partire senza una meta fissa.');
+      _tapChoice(controller, thread.summary.id, 'Consigliami tu');
+      _answerIntake(controller, thread.summary.id);
+      final proposal = controller
+          .threadOf(thread.summary.id)
+          .messages
+          .lastWhere((message) => message.kind == ChatMessageKind.planProposal);
+      expect(proposal.proposal?.snapshot.destinationTitle, 'Porto');
+      expect(controller.threadOf(thread.summary.id).summary.title, 'Porto');
+    });
 
     test(
       'home intent retries the same persisted batch without duplicate beats',
@@ -2126,66 +2241,70 @@ void main() {
       final freeProposal = free.script.firstWhere(
         (beat) => beat.assistant.id == kIntakeProposalId,
       );
-      expect(freeProposal.assistant.text, contains('Per la demo convergo su Porto'));
+      expect(
+        freeProposal.assistant.text,
+        contains('Per la demo convergo su Porto'),
+      );
     });
 
     test('free talk fallback: convergenza robusta senza catalogo porto', () {
-      final noPorto = ChatFirstDemoData.freeTalkThread(
-        <JourneyRoute>[
-          MockData.journeyById('atlantic-rail'),
-          MockData.journeyById('paris-city'),
-        ],
-      );
+      final noPorto = ChatFirstDemoData.freeTalkThread(<JourneyRoute>[
+        MockData.journeyById('atlantic-rail'),
+        MockData.journeyById('paris-city'),
+      ]);
       expect(noPorto.journey?.id, 'atlantic-rail');
 
       final empty = ChatFirstDemoData.freeTalkThread(const <JourneyRoute>[]);
       expect(empty.journey?.id, 'porto-slow');
     });
 
-    test('startFreeTalk apre un nuovo thread dopo una chat libera conclusa', () {
-      final controller = ChatFirstPrototypeController();
-      final first = controller.startFreeTalk();
-      controller.openConversation(first.summary.id);
+    test(
+      'startFreeTalk apre un nuovo thread dopo una chat libera conclusa',
+      () {
+        final controller = ChatFirstPrototypeController();
+        final first = controller.startFreeTalk();
+        controller.openConversation(first.summary.id);
 
-      controller.sendText('Vorrei quattro giorni lenti, con buon cibo.');
-      _tapChoice(controller, first.summary.id, 'Roma');
-      _answerIntake(controller, first.summary.id);
-      final proposal = controller
-          .threadOf(first.summary.id)
-          .messages
-          .lastWhere((message) => message.id == kIntakeProposalId);
-      controller.acceptProposal(first.summary.id, proposal.id);
-      for (var i = 0; i < 6; i++) {
-        _tapChoice(controller, first.summary.id, 'Passa');
-      }
-      _tapChoice(controller, first.summary.id, 'Aereo diretto');
-      final stay = controller
-          .threadOf(first.summary.id)
-          .messages
-          .lastWhere((message) => message.kind == ChatMessageKind.stayZone);
-      _tapChoice(controller, first.summary.id, stay.stayZone!.name);
-      final itinerary = controller
-          .threadOf(first.summary.id)
-          .messages
-          .lastWhere((message) => message.id == kItineraryProposalId);
-      controller.acceptProposal(first.summary.id, itinerary.id);
+        controller.sendText('Vorrei quattro giorni lenti, con buon cibo.');
+        _tapChoice(controller, first.summary.id, 'Roma');
+        _answerIntake(controller, first.summary.id);
+        final proposal = controller
+            .threadOf(first.summary.id)
+            .messages
+            .lastWhere((message) => message.id == kIntakeProposalId);
+        controller.acceptProposal(first.summary.id, proposal.id);
+        for (var i = 0; i < 6; i++) {
+          _tapChoice(controller, first.summary.id, 'Passa');
+        }
+        _tapChoice(controller, first.summary.id, 'Aereo diretto');
+        final stay = controller
+            .threadOf(first.summary.id)
+            .messages
+            .lastWhere((message) => message.kind == ChatMessageKind.stayZone);
+        _tapChoice(controller, first.summary.id, stay.stayZone!.name);
+        final itinerary = controller
+            .threadOf(first.summary.id)
+            .messages
+            .lastWhere((message) => message.id == kItineraryProposalId);
+        controller.acceptProposal(first.summary.id, itinerary.id);
 
-      final completed = controller.threadOf(first.summary.id);
-      expect(
-        completed.scriptIndex,
-        completed.script.length,
-        reason: 'la chat libera è conclusa: script consumato',
-      );
+        final completed = controller.threadOf(first.summary.id);
+        expect(
+          completed.scriptIndex,
+          completed.script.length,
+          reason: 'la chat libera è conclusa: script consumato',
+        );
 
-      final second = controller.startFreeTalk();
-      expect(second.summary.id, isNot(kFreeTalkConversationId));
-      expect(second.summary.id, startsWith('$kFreeTalkConversationId-'));
-      expect(second, isNot(same(first)));
+        final second = controller.startFreeTalk();
+        expect(second.summary.id, isNot(kFreeTalkConversationId));
+        expect(second.summary.id, startsWith('$kFreeTalkConversationId-'));
+        expect(second, isNot(same(first)));
 
-      // Una chat in corso viene invece riaperta: idempotenza di sessione.
-      final again = controller.startFreeTalk();
-      expect(again.summary.id, second.summary.id);
-    });
+        // Una chat in corso viene invece riaperta: idempotenza di sessione.
+        final again = controller.startFreeTalk();
+        expect(again.summary.id, second.summary.id);
+      },
+    );
   });
 
   group('Acquisti esterni e lifecycle', () {
@@ -2209,7 +2328,10 @@ void main() {
           ),
           isTrue,
         );
-        final revisionBefore = controller.conversationOf(cid).snapshot!.revision;
+        final revisionBefore = controller
+            .conversationOf(cid)
+            .snapshot!
+            .revision;
 
         final launchStarted = Completer<void>();
         final launchResult = Completer<bool>();
@@ -2254,75 +2376,78 @@ void main() {
       },
     );
 
-    test('launch fallito non marca acquisto aperto e pulisce il ritorno', () async {
-      final controller = _planController();
-      addTearDown(controller.dispose);
-      final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
-      final flight = fixture.flights[0];
-      controller.selectTravelOption(
-        conversationId: cid,
-        optionId: flight.id,
-      );
-      final revisionBefore = controller.conversationOf(cid).snapshot!.revision;
-      final failing = PlanExternalLauncher(
-        launchExternal: (_) async => false,
-        launchBrowser: (_) async => false,
-      );
+    test(
+      'launch fallito non marca acquisto aperto e pulisce il ritorno',
+      () async {
+        final controller = _planController();
+        addTearDown(controller.dispose);
+        final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+        final flight = fixture.flights[0];
+        controller.selectTravelOption(conversationId: cid, optionId: flight.id);
+        final revisionBefore = controller
+            .conversationOf(cid)
+            .snapshot!
+            .revision;
+        final failing = PlanExternalLauncher(
+          launchExternal: (_) async => false,
+          launchBrowser: (_) async => false,
+        );
 
-      final opened = await controller.openExternalPurchase(
-        conversationId: cid,
-        kind: ExternalPurchaseKind.travel,
-        optionId: flight.id,
-        uri: flight.providerUrl,
-        launcher: failing,
-      );
-      expect(opened, isFalse);
-      final snapshot = controller.conversationOf(cid).snapshot!;
-      expect(
-        snapshot.travelSelection!.option.purchaseState,
-        PurchaseState.selected,
-      );
-      expect(snapshot.revision, revisionBefore);
-      expect(controller.hasExpectedPurchaseReturn(cid), isFalse);
-      expect(controller.pendingPurchasePrompts, isEmpty);
-      controller.handleAppLifecycleState(AppLifecycleState.resumed);
-      expect(controller.pendingPurchasePrompts, isEmpty);
-    });
-
-    test('resume atteso mostra il prompt una volta sola e lo consuma', () async {
-      final controller = _planController();
-      addTearDown(controller.dispose);
-      final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
-      final flight = fixture.flights[0];
-      controller.selectTravelOption(
-        conversationId: cid,
-        optionId: flight.id,
-      );
-      expect(
-        await controller.openExternalPurchase(
+        final opened = await controller.openExternalPurchase(
           conversationId: cid,
           kind: ExternalPurchaseKind.travel,
           optionId: flight.id,
           uri: flight.providerUrl,
-          launcher: succeedingLauncher(),
-        ),
-        isTrue,
-      );
-      expect(controller.pendingPurchasePrompts, isEmpty);
+          launcher: failing,
+        );
+        expect(opened, isFalse);
+        final snapshot = controller.conversationOf(cid).snapshot!;
+        expect(
+          snapshot.travelSelection!.option.purchaseState,
+          PurchaseState.selected,
+        );
+        expect(snapshot.revision, revisionBefore);
+        expect(controller.hasExpectedPurchaseReturn(cid), isFalse);
+        expect(controller.pendingPurchasePrompts, isEmpty);
+        controller.handleAppLifecycleState(AppLifecycleState.resumed);
+        expect(controller.pendingPurchasePrompts, isEmpty);
+      },
+    );
 
-      controller.handleAppLifecycleState(AppLifecycleState.resumed);
-      var pending = controller.pendingPurchasePrompts;
-      expect(pending, hasLength(1));
-      expect(pending.single.conversationId, cid);
-      expect(pending.single.kind, ExternalPurchaseKind.travel);
-      expect(pending.single.optionId, flight.id);
+    test(
+      'resume atteso mostra il prompt una volta sola e lo consuma',
+      () async {
+        final controller = _planController();
+        addTearDown(controller.dispose);
+        final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
+        final flight = fixture.flights[0];
+        controller.selectTravelOption(conversationId: cid, optionId: flight.id);
+        expect(
+          await controller.openExternalPurchase(
+            conversationId: cid,
+            kind: ExternalPurchaseKind.travel,
+            optionId: flight.id,
+            uri: flight.providerUrl,
+            launcher: succeedingLauncher(),
+          ),
+          isTrue,
+        );
+        expect(controller.pendingPurchasePrompts, isEmpty);
 
-      expect(controller.consumePurchasePrompt(cid), isTrue);
-      expect(controller.pendingPurchasePrompts, isEmpty);
-      // A second resume does not re-show the consumed prompt.
-      controller.handleAppLifecycleState(AppLifecycleState.resumed);
-      expect(controller.pendingPurchasePrompts, isEmpty);
-    });
+        controller.handleAppLifecycleState(AppLifecycleState.resumed);
+        var pending = controller.pendingPurchasePrompts;
+        expect(pending, hasLength(1));
+        expect(pending.single.conversationId, cid);
+        expect(pending.single.kind, ExternalPurchaseKind.travel);
+        expect(pending.single.optionId, flight.id);
+
+        expect(controller.consumePurchasePrompt(cid), isTrue);
+        expect(controller.pendingPurchasePrompts, isEmpty);
+        // A second resume does not re-show the consumed prompt.
+        controller.handleAppLifecycleState(AppLifecycleState.resumed);
+        expect(controller.pendingPurchasePrompts, isEmpty);
+      },
+    );
 
     test('resume normale o cold start non genera prompt', () async {
       final controller = _planController();
@@ -2345,10 +2470,7 @@ void main() {
         addTearDown(controller.dispose);
         final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
         final flight = fixture.flights[0];
-        controller.selectTravelOption(
-          conversationId: cid,
-          optionId: flight.id,
-        );
+        controller.selectTravelOption(conversationId: cid, optionId: flight.id);
         await controller.openExternalPurchase(
           conversationId: cid,
           kind: ExternalPurchaseKind.travel,
@@ -2389,7 +2511,10 @@ void main() {
           confirmed.days.map((day) => day.toJson()).toList(),
           opened.days.map((day) => day.toJson()).toList(),
         );
-        expect(confirmed.staySelection?.toJson(), opened.staySelection?.toJson());
+        expect(
+          confirmed.staySelection?.toJson(),
+          opened.staySelection?.toJson(),
+        );
         expect(confirmed.transport, opened.transport);
         expect(confirmed.stay, opened.stay);
         // The settled purchase no longer lingers as a prompt.
@@ -2403,10 +2528,7 @@ void main() {
       addTearDown(controller.dispose);
       final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
       final flight = fixture.flights[0];
-      controller.selectTravelOption(
-        conversationId: cid,
-        optionId: flight.id,
-      );
+      controller.selectTravelOption(conversationId: cid, optionId: flight.id);
       await controller.openExternalPurchase(
         conversationId: cid,
         kind: ExternalPurchaseKind.travel,
@@ -2415,7 +2537,11 @@ void main() {
         launcher: succeedingLauncher(),
       );
       expect(
-        controller.conversationOf(cid).snapshot!.travelSelection!.option
+        controller
+            .conversationOf(cid)
+            .snapshot!
+            .travelSelection!
+            .option
             .purchaseState,
         PurchaseState.purchaseOpened,
       );
@@ -2452,10 +2578,7 @@ void main() {
       final controllerA = _planController(dataSource: source);
       final fixture = ChatFirstDemoData.operationalFixtureFor('porto');
       final flight = fixture.flights[0];
-      controllerA.selectTravelOption(
-        conversationId: cid,
-        optionId: flight.id,
-      );
+      controllerA.selectTravelOption(conversationId: cid, optionId: flight.id);
       await source.savedCount(1);
       expect(
         await controllerA.openExternalPurchase(
@@ -2469,7 +2592,11 @@ void main() {
       );
       await source.savedCount(2);
       expect(
-        controllerA.conversationOf(cid).snapshot!.travelSelection!.option
+        controllerA
+            .conversationOf(cid)
+            .snapshot!
+            .travelSelection!
+            .option
             .purchaseState,
         PurchaseState.purchaseOpened,
       );
@@ -2481,7 +2608,11 @@ void main() {
       addTearDown(controllerB.dispose);
       await controllerB.restoreConversations();
       expect(
-        controllerB.conversationOf(cid).snapshot!.travelSelection!.option
+        controllerB
+            .conversationOf(cid)
+            .snapshot!
+            .travelSelection!
+            .option
             .purchaseState,
         PurchaseState.purchaseOpened,
       );

@@ -64,9 +64,7 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
     final label = switch (prompt.kind) {
       ExternalPurchaseKind.travel => snapshot?.travelSelection?.option.label,
       ExternalPurchaseKind.stay => snapshot?.staySelection?.option.label,
-    }
-        ?.split(' · ')
-        .first;
+    }?.split(' · ').first;
     final confirmed = await showDialog<bool>(
       context: context,
       // The traveler is already back in the app: they must settle the
@@ -138,6 +136,17 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
                 themeMode: widget.themeMode,
                 onThemeChanged: widget.onThemeChanged,
                 memoryTags: widget.controller.memoryTags,
+                availability: widget.controller.availability,
+                stats: widget.controller.travelStats,
+                onAddAvailability: (entry) {
+                  widget.controller.addAvailability(
+                    date: entry.date,
+                    kind: entry.kind,
+                    timeRange: entry.timeRange,
+                    note: entry.note,
+                  );
+                },
+                onRemoveAvailability: widget.controller.removeAvailability,
                 onOpenChats: () => setState(() => _tabIndex = 1),
               ),
             ],
@@ -215,26 +224,134 @@ class _ChatBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: currentIndex,
-      onDestinationSelected: onChanged,
-      destinations: <NavigationDestination>[
-        const NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home),
-          label: 'Oggi',
+    final colors = Theme.of(context).colorScheme;
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Semantics(
+        label: 'Navigazione principale',
+        container: true,
+        explicitChildNodes: true,
+        child: Container(
+          height: 68,
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: colors.outlineVariant),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: _FloatingDestination(
+                  tooltip: 'Oggi',
+                  semantics: 'Oggi',
+                  selected: currentIndex == 0,
+                  icon: const Icon(Icons.home_outlined),
+                  selectedIcon: const Icon(Icons.home),
+                  onTap: () => onChanged(0),
+                ),
+              ),
+              Expanded(
+                child: _FloatingDestination(
+                  tooltip: 'Viaggi',
+                  semantics: unread > 0
+                      ? 'Viaggi, $unread messaggi non letti'
+                      : 'Viaggi',
+                  selected: currentIndex == 1,
+                  icon: _UnreadIcon(
+                    unread: unread,
+                    icon: Icons.chat_bubble_outline,
+                  ),
+                  selectedIcon: _UnreadIcon(
+                    unread: unread,
+                    icon: Icons.chat_bubble,
+                  ),
+                  onTap: () => onChanged(1),
+                ),
+              ),
+              Expanded(
+                child: _FloatingDestination(
+                  tooltip: 'Tu',
+                  semantics: 'Tu',
+                  selected: currentIndex == 2,
+                  icon: const Icon(Icons.person_outline),
+                  selectedIcon: const Icon(Icons.person),
+                  onTap: () => onChanged(2),
+                ),
+              ),
+            ],
+          ),
         ),
-        NavigationDestination(
-          icon: _UnreadIcon(unread: unread, icon: Icons.chat_bubble_outline),
-          selectedIcon: _UnreadIcon(unread: unread, icon: Icons.chat_bubble),
-          label: 'Viaggi',
+      ),
+    );
+  }
+}
+
+class _FloatingDestination extends StatelessWidget {
+  const _FloatingDestination({
+    required this.tooltip,
+    required this.semantics,
+    required this.selected,
+    required this.icon,
+    required this.selectedIcon,
+    required this.onTap,
+  });
+
+  final String tooltip;
+  final String semantics;
+  final bool selected;
+  final Widget icon;
+  final Widget selectedIcon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      label: semantics,
+      selected: selected,
+      button: true,
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              if (selected)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colors.primaryContainer,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: selectedIcon,
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 5,
+                  ),
+                  child: icon,
+                ),
+              const SizedBox(height: 3),
+              Text(
+                tooltip,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: selected ? colors.primary : colors.onSurfaceVariant,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
-        const NavigationDestination(
-          icon: Icon(Icons.person_outline),
-          selectedIcon: Icon(Icons.person),
-          label: 'Tu',
-        ),
-      ],
+      ),
     );
   }
 }

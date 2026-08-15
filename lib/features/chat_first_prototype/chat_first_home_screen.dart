@@ -110,7 +110,7 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
       child: ListView(
         padding: EdgeInsets.fromLTRB(side, 20, side, 112),
         children: <Widget>[
-          _HomeTopBar(unread: widget.unread, onOpenTrips: widget.onOpenTrips),
+          const _HomeTopBar(),
           const SizedBox(height: 32),
           if (widget.model.kind == AdaptiveHomeKind.empty) ...<Widget>[
             Text(
@@ -218,36 +218,16 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
 }
 
 class _HomeTopBar extends StatelessWidget {
-  const _HomeTopBar({required this.unread, required this.onOpenTrips});
-
-  final int unread;
-  final VoidCallback onOpenTrips;
+  const _HomeTopBar();
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return Row(
       children: <Widget>[
         Text('iter', style: IterTheme.wordmarkTextStyle),
         const SizedBox(width: 12),
         const RottaVivaMark(size: Size(54, 26)),
         const Spacer(),
-        Semantics(
-          label: unread > 0 ? 'Viaggi, $unread messaggi non letti' : 'Viaggi',
-          button: true,
-          child: IconButton(
-            tooltip: 'Viaggi',
-            onPressed: onOpenTrips,
-            icon: unread > 0
-                ? Badge.count(
-                    count: unread,
-                    backgroundColor: colors.primary,
-                    textColor: colors.onPrimary,
-                    child: const Icon(Icons.forum_outlined),
-                  )
-                : const Icon(Icons.forum_outlined),
-          ),
-        ),
       ],
     );
   }

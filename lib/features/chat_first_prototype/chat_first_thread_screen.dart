@@ -4,6 +4,7 @@ import '../../widgets/journey_media.dart';
 import 'chat_first_controller.dart';
 import 'chat_first_data.dart';
 import 'chat_first_models.dart';
+import 'inspiration_import_sheet.dart';
 
 class ChatFirstThreadScreen extends StatefulWidget {
   const ChatFirstThreadScreen({
@@ -69,6 +70,16 @@ class _ChatFirstThreadScreenState extends State<ChatFirstThreadScreen> {
       builder: (context) => const _AttachmentPicker(),
     );
     if (picked == null) return;
+    if (picked.isInspiration) {
+      if (!mounted) return;
+      final proposed = await showInspirationImportSheet(
+        context: context,
+        controller: widget.controller,
+        initialConversationId: widget.conversationId,
+      );
+      if (proposed == true) _jumpToBottom();
+      return;
+    }
     widget.controller.sendMedia(asset: picked.asset, isVideo: picked.isVideo);
     _jumpToBottom();
   }
@@ -142,6 +153,11 @@ class _ChatFirstThreadScreenState extends State<ChatFirstThreadScreen> {
                         );
                         _jumpToBottom();
                       },
+                      onOpenPlan: message.proposal == null
+                          ? null
+                          : () => widget.onOpenSnapshot(
+                              message.proposal!.snapshot,
+                            ),
                       onSelectFlight: (optionId) {
                         widget.controller.selectTravelOption(
                           conversationId: widget.conversationId,
@@ -247,6 +263,7 @@ class _MessageRow extends StatelessWidget {
     this.enabled = true,
     this.onAcceptProposal,
     this.onRejectProposal,
+    this.onOpenPlan,
     this.onSelectFlight,
     this.onSelectStay,
     this.onProposeNightsChange,
@@ -260,6 +277,7 @@ class _MessageRow extends StatelessWidget {
   final ValueChanged<ChatChoice> onChoice;
   final VoidCallback? onAcceptProposal;
   final VoidCallback? onRejectProposal;
+  final VoidCallback? onOpenPlan;
   final ValueChanged<String>? onSelectFlight;
   final ValueChanged<String>? onSelectStay;
   final ValueChanged<int>? onProposeNightsChange;
@@ -309,6 +327,7 @@ class _MessageRow extends StatelessWidget {
                         message: message,
                         onAcceptProposal: onAcceptProposal,
                         onRejectProposal: onRejectProposal,
+                        onOpenPlan: onOpenPlan,
                         onSelectFlight: onSelectFlight,
                         onSelectStay: onSelectStay,
                         onProposeNightsChange: onProposeNightsChange,
@@ -383,6 +402,7 @@ class _Bubble extends StatelessWidget {
     required this.message,
     this.onAcceptProposal,
     this.onRejectProposal,
+    this.onOpenPlan,
     this.onSelectFlight,
     this.onSelectStay,
     this.onProposeNightsChange,
@@ -393,6 +413,7 @@ class _Bubble extends StatelessWidget {
   final ChatMessage message;
   final VoidCallback? onAcceptProposal;
   final VoidCallback? onRejectProposal;
+  final VoidCallback? onOpenPlan;
   final ValueChanged<String>? onSelectFlight;
   final ValueChanged<String>? onSelectStay;
   final ValueChanged<int>? onProposeNightsChange;
@@ -417,6 +438,7 @@ class _Bubble extends StatelessWidget {
       isIncoming: isIncoming,
       onAcceptProposal: onAcceptProposal,
       onRejectProposal: onRejectProposal,
+      onOpenPlan: onOpenPlan,
       onSelectFlight: onSelectFlight,
       onSelectStay: onSelectStay,
       onProposeNightsChange: onProposeNightsChange,
@@ -461,6 +483,7 @@ class _MessageContent extends StatelessWidget {
     required this.isIncoming,
     this.onAcceptProposal,
     this.onRejectProposal,
+    this.onOpenPlan,
     this.onSelectFlight,
     this.onSelectStay,
     this.onProposeNightsChange,
@@ -472,6 +495,7 @@ class _MessageContent extends StatelessWidget {
   final bool isIncoming;
   final VoidCallback? onAcceptProposal;
   final VoidCallback? onRejectProposal;
+  final VoidCallback? onOpenPlan;
   final ValueChanged<String>? onSelectFlight;
   final ValueChanged<String>? onSelectStay;
   final ValueChanged<int>? onProposeNightsChange;
@@ -507,6 +531,7 @@ class _MessageContent extends StatelessWidget {
           message: message,
           onAccept: onAcceptProposal,
           onReject: onRejectProposal,
+          onOpenPlan: onOpenPlan,
         );
       case ChatMessageKind.placeCard:
         return _PlaceCardContent(message: message);
@@ -1454,19 +1479,23 @@ class _RecommendedChip extends StatelessWidget {
         color: colors.primaryContainer,
         borderRadius: BorderRadius.circular(99),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(Icons.recommend, size: 13, color: colors.primary),
-          const SizedBox(width: 4),
-          Text(
-            'Consigliato',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: colors.primary,
-              fontWeight: FontWeight.w700,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(Icons.recommend, size: 13, color: colors.primary),
+            const SizedBox(width: 4),
+            Text(
+              'Consigliato',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: colors.primary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1516,15 +1545,20 @@ String _dateLabel(DateTime time) {
   return '$day/$month/${time.year}';
 }
 
-/// An in-chat plan proposal: what changes, a preview of the resulting plan and
-/// explicit Accetta/Annulla actions. Once settled the actions become a status
-/// line and the decision is never re-openable.
+/// An in-chat plan proposal: the change stays compact and the full snapshot is
+/// opened on demand. Once settled the actions become a status line.
 class _ProposalCard extends StatelessWidget {
-  const _ProposalCard({required this.message, this.onAccept, this.onReject});
+  const _ProposalCard({
+    required this.message,
+    this.onAccept,
+    this.onReject,
+    this.onOpenPlan,
+  });
 
   final ChatMessage message;
   final VoidCallback? onAccept;
   final VoidCallback? onReject;
+  final VoidCallback? onOpenPlan;
 
   @override
   Widget build(BuildContext context) {
@@ -1536,17 +1570,8 @@ class _ProposalCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        if (message.text.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              message.text,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(color: colors.onSurface),
-            ),
-          ),
         Container(
+          key: const Key('chat-proposal-change'),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             color: colors.secondaryContainer,
@@ -1559,7 +1584,7 @@ class _ProposalCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   proposal.changeLabel,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: colors.onSecondaryContainer,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1569,23 +1594,33 @@ class _ProposalCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        _SummaryCard(snapshot: proposal.snapshot),
-        const SizedBox(height: 12),
         if (outcome == null)
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              Expanded(
-                child: FilledButton.tonal(
-                  onPressed: onAccept,
-                  child: const Text('Accetta'),
-                ),
+              OutlinedButton.icon(
+                key: const Key('chat-proposal-open-plan'),
+                onPressed: onOpenPlan,
+                icon: const Icon(Icons.route_outlined),
+                label: const Text('Vedi il piano completo'),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: onReject,
-                  child: const Text('Annulla'),
-                ),
+              const SizedBox(height: 8),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: FilledButton.tonal(
+                      onPressed: onAccept,
+                      child: const Text('Accetta'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: onReject,
+                      child: const Text('Annulla'),
+                    ),
+                  ),
+                ],
               ),
             ],
           )
@@ -1758,19 +1793,39 @@ class _Composer extends StatelessWidget {
               ),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: <Widget>[
                 IconButton(
                   onPressed: onAttach,
                   tooltip: 'Allegato',
                   icon: const Icon(Icons.add_circle_outline),
-                  iconSize: 26,
+                  iconSize: 28,
                 ),
+                const SizedBox(width: 6),
                 Expanded(
-                  child: TextField(
-                    controller: controller,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => onSend(),
-                    decoration: InputDecoration(hintText: 'Scrivi a Iter…'),
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 48),
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: colors.outlineVariant),
+                    ),
+                    child: TextField(
+                      controller: controller,
+                      minLines: 2,
+                      maxLines: 5,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => onSend(),
+                      decoration: InputDecoration(
+                        hintText: 'Scrivi a Iter…',
+                        filled: false,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 13,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1778,14 +1833,14 @@ class _Composer extends StatelessWidget {
                   IconButton.filled(
                     onPressed: onSend,
                     tooltip: 'Invia',
-                    icon: const Icon(Icons.arrow_upward),
+                    icon: const Icon(Icons.arrow_upward_rounded),
                   )
                 else
                   IconButton(
                     onPressed: onSendAudio,
                     tooltip: 'Registra vocale (demo)',
-                    icon: const Icon(Icons.mic_none),
-                    iconSize: 26,
+                    icon: const Icon(Icons.mic_none_rounded),
+                    iconSize: 28,
                   ),
               ],
             ),
@@ -1828,10 +1883,17 @@ String _dayLabel(DateTime time) {
 }
 
 class _PickedAsset {
-  const _PickedAsset({required this.asset, required this.isVideo});
+  const _PickedAsset({required this.asset, required this.isVideo})
+    : isInspiration = false;
+
+  const _PickedAsset.inspiration()
+    : asset = '',
+      isVideo = false,
+      isInspiration = true;
 
   final String asset;
   final bool isVideo;
+  final bool isInspiration;
 }
 
 class _AttachmentPicker extends StatelessWidget {
@@ -1862,6 +1924,19 @@ class _AttachmentPicker extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.link_outlined, color: colors.primary),
+              title: const Text('Importa link Reel/TikTok'),
+              subtitle: const Text(
+                'Salvalo nel viaggio e chiedi a Iter di integrarlo',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () =>
+                  Navigator.of(context).pop(const _PickedAsset.inspiration()),
+            ),
+            const Divider(height: 1),
+            const SizedBox(height: 14),
             Row(
               children: <Widget>[
                 Icon(

@@ -36,7 +36,12 @@ class PlanTimeline extends StatelessWidget {
         key: const Key('plan-timeline'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(day.theme, style: Theme.of(context).textTheme.titleLarge),
+          ExcludeSemantics(
+            child: Text(
+              day.theme,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
           const SizedBox(height: 14),
           if (items.isEmpty)
             const _TimelineEmptyState()

@@ -7,9 +7,11 @@ import '../../models/trip_models.dart' show JourneyRoute;
 import 'chat_first_data.dart';
 import 'chat_first_models.dart';
 import 'data_source.dart';
+import 'inspiration_models.dart';
 import 'mock_data_source.dart';
 import 'plan_editor.dart';
 import 'plan_external_launcher.dart';
+import 'profile_models.dart';
 
 enum PlanPersistenceStatus { idle, saving, saved, failed }
 
@@ -81,8 +83,9 @@ class _PlanSaveAttempt {
   final TripSnapshot snapshot;
 }
 
-/// Isolated demo store for the chat-first prototype. It never touches the
-/// legacy [IterStore]; data is deterministic and lives only for the session.
+/// Isolated controller for the new-only chat-first app. Mock data is
+/// deterministic and lives only for the session unless the optional data source
+/// is explicitly configured.
 class ChatFirstPrototypeController extends ChangeNotifier {
   ChatFirstPrototypeController({
     List<ChatThread>? seed,
@@ -90,7 +93,8 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     DateTime Function()? now,
   }) : _threads = seed ?? ChatFirstDemoData.seedThreads(),
        dataSource = dataSource ?? MockDataSource(),
-       _now = now ?? DateTime.now {
+       _now = now ?? DateTime.now,
+       _availability = List<AvailabilityEntry>.of(_demoAvailability) {
     _unread = _sumUnread();
   }
 
@@ -102,6 +106,14 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   final DateTime Function() _now;
 
   final List<ChatThread> _threads;
+  final List<AvailabilityEntry> _availability;
+  final TravelStats _travelStats = const TravelStats(
+    completedTrips: 3,
+    visitedPlaces: 18,
+    estimatedKilometers: 1240,
+  );
+  final List<SavedInspiration> _savedInspirations = <SavedInspiration>[];
+  final Map<String, String> _inspirationProposalIds = <String, String>{};
 
   /// Maps a stable client id (`c-<journey>`) to the persisted `conversations`
   /// row uuid, so message writes target the right row. Empty on the mock path.
@@ -157,12 +169,207 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   /// the persisted tags on Supabase.
   List<String> get memoryTags => List<String>.unmodifiable(_memoryTags);
 
+  List<AvailabilityEntry> get availability =>
+      List<AvailabilityEntry>.unmodifiable(_availability);
+
+  TravelStats get travelStats => _travelStats;
+
+  List<SavedInspiration> get savedInspirations =>
+      List<SavedInspiration>.unmodifiable(_savedInspirations);
+
+  List<SavedInspiration> savedInspirationsFor(String conversationId) =>
+      List<SavedInspiration>.unmodifiable(
+        _savedInspirations.where(
+          (inspiration) => inspiration.conversationId == conversationId,
+        ),
+      );
+
   static const _demoMemoryTags = <String>[
     'Ritmo lento e senza orari fissi',
     'Niente museo dopo il pomeriggio in città',
     'Almeno una tavola di quartiere per viaggio',
     'Preferisci la finestra sul corridoio in treno',
   ];
+
+  static final List<AvailabilityEntry> _demoAvailability = <AvailabilityEntry>[
+    AvailabilityEntry(
+      id: 'availability-1',
+      date: DateTime(2026, 10, 17),
+      kind: AvailabilityKind.free,
+      timeRange: 'Tutto il giorno',
+      note: 'Weekend libero',
+    ),
+    AvailabilityEntry(
+      id: 'availability-2',
+      date: DateTime(2026, 10, 20),
+      kind: AvailabilityKind.work,
+      timeRange: '09:00–18:00',
+      note: 'Turno in ufficio',
+    ),
+  ];
+
+  String addAvailability({
+    required DateTime date,
+    required AvailabilityKind kind,
+    required String timeRange,
+    String note = '',
+  }) {
+    final id = 'availability-${_nextAvailabilityId()}';
+    _availability.add(
+      AvailabilityEntry(
+        id: id,
+        date: date,
+        kind: kind,
+        timeRange: timeRange.trim(),
+        note: note.trim(),
+      ),
+    );
+    notifyListeners();
+    return id;
+  }
+
+  bool removeAvailability(String id) {
+    final before = _availability.length;
+    _availability.removeWhere((entry) => entry.id == id);
+    final removed = _availability.length != before;
+    if (removed) notifyListeners();
+    return removed;
+  }
+
+  int _nextAvailabilityId() {
+    var candidate = _availability.length + 1;
+    while (_availability.any(
+      (entry) => entry.id == 'availability-$candidate',
+    )) {
+      candidate++;
+    }
+    return candidate;
+  }
+
+  SavedInspiration? saveInspiration({
+    required String conversationId,
+    required InspirationDraft draft,
+  }) {
+    threadOf(conversationId);
+    for (final existing in _savedInspirations) {
+      if (existing.conversationId == conversationId &&
+          existing.url == draft.url) {
+        return existing;
+      }
+    }
+    final saved = SavedInspiration(
+      id: 'inspiration-${_savedInspirations.length + 1}',
+      conversationId: conversationId,
+      savedAt: _now().toUtc(),
+      attachedToPlan: false,
+      platform: draft.platform,
+      url: draft.url,
+      title: draft.title,
+      placeName: draft.placeName,
+      destinationId: draft.destinationId,
+      moment: draft.moment,
+      suggestedCategory: draft.suggestedCategory,
+      mediaAsset: draft.mediaAsset,
+    );
+    _savedInspirations.add(saved);
+    notifyListeners();
+    return saved;
+  }
+
+  bool proposeInspiration(String conversationId, String inspirationId) {
+    final inspiration = _savedInspirations.cast<SavedInspiration?>().firstWhere(
+      (candidate) =>
+          candidate?.id == inspirationId &&
+          candidate?.conversationId == conversationId,
+      orElse: () => null,
+    );
+    if (inspiration == null) return false;
+    final current = _planSnapshot(conversationId);
+    if (_destinationIdForSnapshot(current) != inspiration.destinationId) {
+      return false;
+    }
+
+    final item = TripItemSnapshot(
+      id: '${inspiration.id}-stop',
+      title: inspiration.placeName,
+      category: inspiration.suggestedCategory,
+      startTime: _inspirationTime(inspiration.moment),
+      durationMinutes: 90,
+      source: PlanItemSource.share,
+      place: PlanPlaceDetails(
+        id: '${inspiration.destinationId}-${inspiration.id}',
+        title: inspiration.placeName,
+        description: inspiration.title,
+      ),
+      locked: false,
+    );
+    final days = current.days.toList(growable: true);
+    final unplacedItems = current.unplacedItems.toList(growable: true);
+    if (days.isEmpty) {
+      // A new plan can exist before Iter has enough information to create its
+      // first day. Keep the shared place visible in the plan without inventing
+      // a date or time; the traveler can place it later from the editor.
+      unplacedItems.add(item);
+    } else {
+      final firstDay = days.first;
+      days[0] = TripDaySnapshot(
+        id: firstDay.id,
+        date: firstDay.date,
+        label: firstDay.label,
+        theme: firstDay.theme,
+        items: <TripItemSnapshot>[...firstDay.items, item],
+      );
+    }
+    final placeLabels = current.placeLabels.contains(inspiration.placeName)
+        ? current.placeLabels
+        : <String>[...current.placeLabels, inspiration.placeName];
+    final revision = current.revision + 1;
+    final candidate = current.copyWith(
+      placeLabels: placeLabels,
+      days: days,
+      unplacedItems: unplacedItems,
+      revision: revision,
+      revisionMetadata: PlanRevisionMetadata(
+        id: '$conversationId-r$revision',
+        number: revision,
+        timestamp: _now().toUtc(),
+        origin: PlanChangeOrigin.share,
+        label: 'Ispirazione salvata',
+      ),
+    );
+    final thread = threadOf(conversationId);
+    final messageId =
+        'm-$conversationId-inspiration-${inspiration.id}-r$revision-t${thread.messages.length}';
+    thread.messages.add(
+      ChatMessage(
+        id: messageId,
+        role: ChatRole.assistant,
+        kind: ChatMessageKind.planProposal,
+        text:
+            'Ho estratto ${inspiration.placeName} da “${inspiration.title}”. '
+            'Vuoi inserirlo nel piano?',
+        sentAt: _now().toUtc(),
+        proposal: PlanProposal(
+          changeLabel:
+              'Aggiungi ${inspiration.placeName} · ${inspiration.moment}',
+          snapshot: candidate,
+        ),
+      ),
+    );
+    _inspirationProposalIds[messageId] = inspiration.id;
+    _persistNewMessages(thread);
+    notifyListeners();
+    return true;
+  }
+
+  static String _inspirationTime(String moment) => switch (moment) {
+    'Mattina' => '09:30',
+    'Tramonto' => '18:00',
+    _ => '11:00',
+  };
+
+  static String _destinationIdForSnapshot(TripSnapshot snapshot) =>
+      snapshot.destinationTitle.trim().toLowerCase();
 
   /// Loads the persisted profile (theme and learned memory) from the resolved
   /// [dataSource]. On the mock path the row is always absent, so the light
@@ -619,6 +826,75 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     return true;
   }
 
+  bool mockPurchasesConfirmed(String conversationId) {
+    final snapshot = conversationOf(conversationId).snapshot;
+    return snapshot?.travelSelection?.option.purchaseState ==
+            PurchaseState.purchased &&
+        snapshot?.staySelection?.option.purchaseState ==
+            PurchaseState.purchased;
+  }
+
+  /// Settles the selected flight and stay in one explicit, local-only demo
+  /// action. It never opens a provider and never handles payment details.
+  bool confirmMockPurchases(String conversationId) {
+    final current = _planSnapshot(conversationId);
+    if (mockPurchasesConfirmed(conversationId)) return true;
+
+    final travelOptions = ChatFirstDemoData.travelOptionsFor(current);
+    final stayOptions = ChatFirstDemoData.stayOptionsFor(current);
+    if (travelOptions.isEmpty || stayOptions.isEmpty) return false;
+
+    final currentTravel = current.travelSelection;
+    final travelOption = currentTravel?.option ?? travelOptions.first;
+    final currentStay = current.staySelection;
+    final stayOption = currentStay?.option ?? stayOptions.first;
+    final travelAlternatives =
+        currentTravel?.alternatives ??
+        travelOptions
+            .where((option) => option.id != travelOption.id)
+            .toList(growable: false);
+    final stayAlternatives =
+        currentStay?.alternatives ??
+        stayOptions
+            .where((option) => option.id != stayOption.id)
+            .toList(growable: false);
+    final revision = current.revision + 1;
+    final next = current.copyWith(
+      travelSelection: TravelPlanSelection(
+        option: TravelOption(
+          id: travelOption.id,
+          label: travelOption.label,
+          priceCents: travelOption.priceCents,
+          purchaseState: PurchaseState.purchased,
+        ),
+        alternatives: travelAlternatives,
+      ),
+      staySelection: StayPlanSelection(
+        option: StayOption(
+          id: stayOption.id,
+          label: stayOption.label,
+          priceCents: stayOption.priceCents,
+          purchaseState: PurchaseState.purchased,
+        ),
+        alternatives: stayAlternatives,
+      ),
+      revision: revision,
+      revisionMetadata: PlanRevisionMetadata(
+        id: '$conversationId-r$revision',
+        number: revision,
+        timestamp: _now().toUtc(),
+        origin: PlanChangeOrigin.manual,
+        label: 'Conferma acquisti demo',
+      ),
+    );
+    _commitPlanRevision(
+      conversationId: conversationId,
+      before: current,
+      after: next,
+    );
+    return true;
+  }
+
   /// Proposes a concrete stay change (number of nights) without applying it:
   /// the traveler confirms or rejects through the standard proposal flow. The
   /// candidate mirrors the flight/hotel selections: proportional price from the
@@ -712,7 +988,8 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     return switch (kind) {
       ExternalPurchaseKind.travel =>
         snapshot.travelSelection?.option.id == optionId,
-      ExternalPurchaseKind.stay => snapshot.staySelection?.option.id == optionId,
+      ExternalPurchaseKind.stay =>
+        snapshot.staySelection?.option.id == optionId,
     };
   }
 
@@ -1002,6 +1279,7 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     if (message == null) return;
     _activeThreadId = conversationId;
     final proposal = message.proposal;
+    final inspirationId = _inspirationProposalIds.remove(message.id);
     final before = thread.summary.snapshot;
     final appliesAcceptedPlan =
         accept &&
@@ -1017,7 +1295,9 @@ class ChatFirstPrototypeController extends ChangeNotifier {
           id: '$conversationId-r$revision',
           number: revision,
           timestamp: _now().toUtc(),
-          origin: PlanChangeOrigin.chat,
+          origin: inspirationId == null
+              ? PlanChangeOrigin.chat
+              : PlanChangeOrigin.share,
           label: proposal.changeLabel,
         ),
       );
@@ -1026,6 +1306,16 @@ class ChatFirstPrototypeController extends ChangeNotifier {
         before: before,
         after: accepted,
       );
+      if (inspirationId != null) {
+        final index = _savedInspirations.indexWhere(
+          (inspiration) => inspiration.id == inspirationId,
+        );
+        if (index >= 0) {
+          _savedInspirations[index] = _savedInspirations[index].copyWith(
+            attachedToPlan: true,
+          );
+        }
+      }
     }
     _persistNewMessages(thread);
     notifyListeners();

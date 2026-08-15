@@ -80,6 +80,25 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
         .toList(growable: false);
   }
 
+  OperationalPlaceFixture _manualPlace(String name) {
+    final slug = name
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), '-')
+        .replaceAll(RegExp(r'[^a-z0-9-]'), '')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+    return OperationalPlaceFixture(
+      id: '${widget.fixture.destinationId}-custom-${slug.isEmpty ? 'place' : slug}',
+      destinationId: widget.fixture.destinationId,
+      name: name,
+      category: 'Luogo personalizzato',
+      latitude: 0,
+      longitude: 0,
+      description:
+          'Aggiunto da te. Puoi completare dettagli e indicazioni in seguito.',
+    );
+  }
+
   void _back() {
     setState(() {
       _step = switch (_step) {
@@ -177,6 +196,25 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
           ),
         ),
         const SizedBox(height: 16),
+        if (_searchController.text.trim().isNotEmpty)
+          ListTile(
+            key: const Key('place-picker-manual-result'),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            minTileHeight: 72,
+            leading: const CircleAvatar(
+              child: Icon(Icons.edit_location_alt_outlined),
+            ),
+            title: const Text('Aggiungi luogo personalizzato'),
+            subtitle: Text(
+              '“${_searchController.text.trim()}” · senza dati esterni',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => setState(() {
+              _selectedPlace = _manualPlace(_searchController.text.trim());
+              _step = _PickerStep.detail;
+            }),
+          ),
+        if (_searchController.text.trim().isNotEmpty) const SizedBox(height: 8),
         if (places.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 28),
@@ -239,7 +277,11 @@ class _PlacePickerSheetState extends State<_PlacePickerSheet> {
             _step = _PickerStep.placement;
           }),
           icon: const Icon(Icons.add_location_alt_outlined),
-          label: const Text('Scegli luogo'),
+          label: Text(
+            place.category == 'Luogo personalizzato'
+                ? 'Aggiungi al piano'
+                : 'Scegli luogo',
+          ),
         ),
       ],
     );

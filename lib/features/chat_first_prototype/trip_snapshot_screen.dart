@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'chat_first_controller.dart';
 import 'chat_first_data.dart';
 import 'chat_first_models.dart';
+import 'inspiration_import_sheet.dart';
+import 'inspiration_models.dart';
 import 'place_detail_sheet.dart';
 import 'place_picker_sheet.dart';
 import 'place_reel_screen.dart';
@@ -12,50 +14,22 @@ import 'plan_editor.dart';
 import 'plan_patch_sheet.dart';
 import 'plan_timeline.dart';
 
-typedef LegacyTripSnapshotControllerFactory =
-    ChatFirstPrototypeController Function(TripSnapshot snapshot);
-
 const double _globalPlanActionsHeight = 64;
 const double _globalPlanActionsBottomSpacing = 8;
 const double _planContentBottomSpacing = 16;
 
-class TripSnapshotScreen extends StatefulWidget {
-  factory TripSnapshotScreen({
-    Key? key,
-    ChatFirstPrototypeController? controller,
-    String? conversationId,
-    PlanExternalLauncher? externalLauncher,
-    @Deprecated('Use controller and conversationId') TripSnapshot? snapshot,
-    LegacyTripSnapshotControllerFactory legacyControllerFactory =
-        _legacyControllerFor,
-  }) {
-    assert(
-      (controller != null && conversationId != null && snapshot == null) ||
-          (controller == null && conversationId == null && snapshot != null),
-    );
-    return TripSnapshotScreen._(
-      key: key,
-      controller: controller,
-      conversationId: conversationId,
-      legacySnapshot: snapshot,
-      legacyControllerFactory: legacyControllerFactory,
-      externalLauncher: externalLauncher,
-    );
-  }
+enum _PlanOverflowAction { importInspiration }
 
-  const TripSnapshotScreen._({
+class TripSnapshotScreen extends StatefulWidget {
+  const TripSnapshotScreen({
     super.key,
     required this.controller,
     required this.conversationId,
-    required this.legacySnapshot,
-    required this.legacyControllerFactory,
-    required this.externalLauncher,
+    this.externalLauncher,
   });
 
-  final ChatFirstPrototypeController? controller;
-  final String? conversationId;
-  final TripSnapshot? legacySnapshot;
-  final LegacyTripSnapshotControllerFactory legacyControllerFactory;
+  final ChatFirstPrototypeController controller;
+  final String conversationId;
   final PlanExternalLauncher? externalLauncher;
 
   @override
@@ -67,50 +41,28 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
   String? _draggedItemId;
   late ChatFirstPrototypeController _controller;
   late String _conversationId;
-  var _ownsController = false;
 
   @override
   void initState() {
     super.initState();
-    _adoptConfiguration();
+    _controller = widget.controller;
+    _conversationId = widget.conversationId;
   }
 
   @override
   void didUpdateWidget(covariant TripSnapshotScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final legacyChanged =
-        widget.legacySnapshot != null &&
-        (!identical(widget.legacySnapshot, oldWidget.legacySnapshot) ||
-            widget.legacyControllerFactory !=
-                oldWidget.legacyControllerFactory);
-    final productionChanged =
-        widget.legacySnapshot == null &&
-        (!identical(widget.controller, oldWidget.controller) ||
-            widget.conversationId != oldWidget.conversationId);
-    if (!legacyChanged && !productionChanged) return;
-    final previousController = _controller;
-    final disposedByThisWidget = _ownsController;
-    _adoptConfiguration();
-    if (disposedByThisWidget) previousController.dispose();
-    _selectedDay = 0;
-  }
-
-  void _adoptConfiguration() {
-    final legacySnapshot = widget.legacySnapshot;
-    if (legacySnapshot != null) {
-      _controller = widget.legacyControllerFactory(legacySnapshot);
-      _conversationId = _legacyConversationId;
-      _ownsController = true;
+    if (identical(widget.controller, oldWidget.controller) &&
+        widget.conversationId == oldWidget.conversationId) {
       return;
     }
-    _controller = widget.controller!;
-    _conversationId = widget.conversationId!;
-    _ownsController = false;
+    _controller = widget.controller;
+    _conversationId = widget.conversationId;
+    _selectedDay = 0;
   }
 
   @override
   void dispose() {
-    if (_ownsController) _controller.dispose();
     super.dispose();
   }
 
@@ -131,6 +83,10 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
           snapshot,
         );
         final media = snapshot.destinationMedia ?? fixture?.media;
+        final mediaGallery = fixture?.mediaGallery ?? const <PlanMedia>[];
+        final savedInspirations = _controller.savedInspirationsFor(
+          _conversationId,
+        );
         const globalActionsScrollReserve =
             _planContentBottomSpacing + (kMinInteractiveDimension / 2);
         return Scaffold(
@@ -138,12 +94,32 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
             title: Semantics(
               label: 'Piano di ${snapshot.destinationTitle}',
               header: true,
-              child: Text(
-                snapshot.destinationTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: ExcludeSemantics(
+                child: Text(
+                  snapshot.destinationTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
+            actions: <Widget>[
+              PopupMenuButton<_PlanOverflowAction>(
+                tooltip: 'Altre azioni',
+                onSelected: (action) {
+                  switch (action) {
+                    case _PlanOverflowAction.importInspiration:
+                      _openInspirationImport();
+                  }
+                },
+                itemBuilder: (context) =>
+                    const <PopupMenuEntry<_PlanOverflowAction>>[
+                      PopupMenuItem<_PlanOverflowAction>(
+                        value: _PlanOverflowAction.importInspiration,
+                        child: Text('Importa ispirazione'),
+                      ),
+                    ],
+              ),
+            ],
           ),
           body: Stack(
             children: <Widget>[
@@ -151,9 +127,18 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
                 key: const Key('plan-scroll'),
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 children: <Widget>[
-                  _DestinationHero(snapshot: snapshot, media: media),
+                  _DestinationHero(
+                    snapshot: snapshot,
+                    media: media,
+                    mediaGallery: mediaGallery,
+                    onOpenMedia: () => _openDestinationMedia(mediaGallery),
+                  ),
                   const SizedBox(height: 24),
                   _PlanFacts(snapshot: snapshot),
+                  if (savedInspirations.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 24),
+                    _SavedInspirationsSection(items: savedInspirations),
+                  ],
                   if (snapshot.days.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 24),
                     _DayChips(
@@ -188,7 +173,7 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
                         action: action,
                       ),
                     ),
-                  ] else ...<Widget>[
+                  ] else if (snapshot.unplacedItems.isEmpty) ...<Widget>[
                     const SizedBox(height: 28),
                     const _UnplacedSection(items: <TripItemSnapshot>[]),
                   ],
@@ -204,24 +189,6 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
                         item: item,
                         action: action,
                       ),
-                    ),
-                  ],
-                  if (_ownsController) ...<Widget>[
-                    if (snapshot.placeLabels.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 24),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: <Widget>[
-                          for (final label in snapshot.placeLabels)
-                            Chip(label: Text(label)),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 18),
-                    Text(
-                      'Modifiche solo tramite chat nella precedente anteprima.',
-                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
                   SizedBox(height: globalActionsScrollReserve),
@@ -319,6 +286,44 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
     if (!mounted || action != PlaceDetailAction.askIter) return;
     _controller.setPlaceComposerContext(_conversationId, place);
     Navigator.of(context).pop();
+  }
+
+  void _openDestinationReel(PlanMedia media) {
+    if (media.reelUrl == null || media.reelUrl!.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PlaceReelScreen(
+          placeTitle: _controller
+              .conversationOf(_conversationId)
+              .snapshot!
+              .destinationTitle,
+          media: media,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openDestinationMedia(List<PlanMedia> media) async {
+    if (media.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        child: _DestinationMediaRail(
+          destination: _controller
+              .conversationOf(_conversationId)
+              .snapshot!
+              .destinationTitle,
+          media: media,
+          onOpenReel: (item) {
+            Navigator.of(sheetContext).pop();
+            _openDestinationReel(item);
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _openPlacePicker({
@@ -467,6 +472,22 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
     );
   }
 
+  Future<void> _openInspirationImport() async {
+    final proposed = await showInspirationImportSheet(
+      context: context,
+      controller: _controller,
+      initialConversationId: _conversationId,
+    );
+    if (!mounted || proposed != true) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Proposta inviata nella chat del viaggio'),
+        ),
+      );
+  }
+
   void _showPlannedAction(String message) {
     ScaffoldMessenger.of(
       context,
@@ -475,10 +496,17 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
 }
 
 class _DestinationHero extends StatelessWidget {
-  const _DestinationHero({required this.snapshot, required this.media});
+  const _DestinationHero({
+    required this.snapshot,
+    required this.media,
+    required this.mediaGallery,
+    required this.onOpenMedia,
+  });
 
   final TripSnapshot snapshot;
   final PlanMedia? media;
+  final List<PlanMedia> mediaGallery;
+  final VoidCallback onOpenMedia;
 
   @override
   Widget build(BuildContext context) {
@@ -487,68 +515,102 @@ class _DestinationHero extends StatelessWidget {
     return Semantics(
       image: true,
       label: 'Foto di ${snapshot.destinationTitle}',
-      child: AspectRatio(
-        key: const Key('plan-destination-hero'),
-        aspectRatio: 16 / 9,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
-              if (image == null || image.isEmpty)
-                _HeroFallback(destination: snapshot.destinationTitle)
-              else
-                ExcludeSemantics(
-                  child: Image.asset(
-                    image,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) =>
-                        _HeroFallback(destination: snapshot.destinationTitle),
-                  ),
-                ),
-              Align(
-                alignment: Alignment.bottomLeft,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Material(
-                    color: colors.inverseSurface.withValues(alpha: 0.88),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 9,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final height = (constraints.maxWidth / (16 / 9)).clamp(180.0, 320.0);
+          return SizedBox(
+            key: const Key('plan-destination-hero'),
+            height: height,
+            width: double.infinity,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  if (image == null || image.isEmpty)
+                    _HeroFallback(destination: snapshot.destinationTitle)
+                  else
+                    ExcludeSemantics(
+                      child: Image.asset(
+                        image,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _HeroFallback(
+                          destination: snapshot.destinationTitle,
+                        ),
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            '${snapshot.country} · ${snapshot.durationLabel}',
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(
-                                  color: colors.onInverseSurface,
-                                  fontWeight: FontWeight.w700,
+                    ),
+                  ExcludeSemantics(
+                    child: Align(
+                      alignment: Alignment.bottomLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Material(
+                          color: colors.inverseSurface.withValues(alpha: 0.88),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 9,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  '${snapshot.country} · ${snapshot.durationLabel}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(
+                                        color: colors.onInverseSurface,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                 ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            snapshot.dates,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: colors.onInverseSurface.withValues(
-                                    alpha: 0.82,
-                                  ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  snapshot.dates,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: colors.onInverseSurface
+                                            .withValues(alpha: 0.82),
+                                      ),
                                 ),
+                              ],
+                            ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
+                  if (mediaGallery.isNotEmpty)
+                    Positioned(
+                      right: 12,
+                      bottom: 12,
+                      child: Material(
+                        color: colors.inverseSurface.withValues(alpha: 0.88),
+                        borderRadius: BorderRadius.circular(12),
+                        child: TextButton.icon(
+                          key: const Key('plan-destination-media'),
+                          onPressed: onOpenMedia,
+                          icon: Icon(
+                            Icons.collections_outlined,
+                            color: colors.onInverseSurface,
+                            size: 18,
+                          ),
+                          label: Text(
+                            '${snapshot.destinationTitle} · immagini e video',
+                            style: TextStyle(color: colors.onInverseSurface),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -572,6 +634,225 @@ class _HeroFallback extends StatelessWidget {
           color: colors.primary,
         ),
       ),
+    );
+  }
+}
+
+class _DestinationMediaRail extends StatelessWidget {
+  const _DestinationMediaRail({
+    required this.destination,
+    required this.media,
+    required this.onOpenReel,
+  });
+
+  final String destination;
+  final List<PlanMedia> media;
+  final ValueChanged<PlanMedia> onOpenReel;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final firstReel = media.cast<PlanMedia?>().firstWhere(
+      (item) => item?.reelUrl?.isNotEmpty ?? false,
+      orElse: () => null,
+    );
+    return Column(
+      key: const Key('plan-destination-media-sheet'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          '$destination · immagini e video',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 132,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: media.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final item = media[index];
+              final hasReel = item.reelUrl?.isNotEmpty ?? false;
+              return Semantics(
+                button: hasReel,
+                label: hasReel
+                    ? 'Apri video ${index + 1} di $destination'
+                    : 'Immagine ${index + 1} di $destination',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: hasReel ? () => onOpenReel(item) : null,
+                  child: Container(
+                    width: 156,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: colors.outlineVariant),
+                    ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: <Widget>[
+                        if (item.imageUrl case final image?)
+                          Image.asset(
+                            image,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) =>
+                                const _MediaTileFallback(),
+                          )
+                        else
+                          const _MediaTileFallback(),
+                        if (hasReel)
+                          Align(
+                            alignment: Alignment.bottomLeft,
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: colors.inverseSurface.withValues(
+                                    alpha: 0.88,
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(6),
+                                  child: Icon(
+                                    Icons.play_arrow_rounded,
+                                    color: colors.onInverseSurface,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        if (firstReel != null) ...<Widget>[
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => onOpenReel(firstReel),
+              icon: const Icon(Icons.play_circle_outline),
+              label: const Text('Vedi video della destinazione'),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MediaTileFallback extends StatelessWidget {
+  const _MediaTileFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return ColoredBox(
+      color: colors.surfaceContainerHighest,
+      child: Center(
+        child: Icon(Icons.landscape_outlined, color: colors.primary, size: 32),
+      ),
+    );
+  }
+}
+
+class _SavedInspirationsSection extends StatelessWidget {
+  const _SavedInspirationsSection({required this.items});
+
+  final List<SavedInspiration> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      key: const Key('plan-saved-inspirations'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'Ispirazioni salvate',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 10),
+        for (final item in items) ...<Widget>[
+          Container(
+            key: Key('saved-inspiration-${item.id}'),
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: colors.outlineVariant),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    width: 64,
+                    height: 64,
+                    child: Image.asset(
+                      item.mediaAsset,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => const _MediaTileFallback(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${item.placeName} · ${item.moment}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        item.attachedToPlan
+                            ? 'Integrata nel piano'
+                            : 'Da integrare',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: item.attachedToPlan
+                              ? colors.tertiary
+                              : colors.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (item != items.last) const SizedBox(height: 8),
+        ],
+      ],
     );
   }
 }
@@ -780,22 +1061,24 @@ class _PlanAction extends StatelessWidget {
     return Semantics(
       button: true,
       label: label,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Icon(icon, size: 22, color: colors.primary),
-              const SizedBox(height: 3),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
-            ],
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Icon(icon, size: 22, color: colors.primary),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -837,25 +1120,4 @@ TimeOfDay? _parseTime(String value) {
   final minute = int.tryParse(match.group(2)!);
   if (hour == null || minute == null || hour > 23 || minute > 59) return null;
   return TimeOfDay(hour: hour, minute: minute);
-}
-
-const _legacyConversationId = 'legacy-plan-preview';
-
-ChatFirstPrototypeController _legacyControllerFor(TripSnapshot snapshot) {
-  return ChatFirstPrototypeController(
-    seed: <ChatThread>[
-      ChatThread(
-        summary: Conversation(
-          id: _legacyConversationId,
-          title: snapshot.destinationTitle,
-          subtitle: snapshot.statusLabel,
-          avatar: const ChatAvatar('', label: 'Piano'),
-          timestamp: DateTime.fromMillisecondsSinceEpoch(0),
-          lastPreview: 'Anteprima Piano',
-          snapshot: snapshot,
-        ),
-        script: const <ScriptedBeat>[],
-      ),
-    ],
-  );
 }

@@ -55,11 +55,7 @@ class ChatPreviewSheet extends StatelessWidget {
                 children: <Widget>[
                   _MediaStrip(destinationId: journey.destinationIds.first),
                   const SizedBox(height: 18),
-                  Container(
-                    width: 30,
-                    height: 3,
-                    color: colors.primary,
-                  ),
+                  Container(width: 30, height: 3, color: colors.primary),
                   const SizedBox(height: 12),
                   Text(
                     city,
@@ -77,9 +73,9 @@ class ChatPreviewSheet extends StatelessWidget {
                   const SizedBox(height: 14),
                   Text(
                     journey.summary,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      height: 1.5,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyLarge?.copyWith(height: 1.5),
                   ),
                   const SizedBox(height: 18),
                   Container(
@@ -92,8 +88,11 @@ class ChatPreviewSheet extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Icon(Icons.route_outlined,
-                            size: 20, color: colors.primary),
+                        Icon(
+                          Icons.route_outlined,
+                          size: 20,
+                          color: colors.primary,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -101,17 +100,13 @@ class ChatPreviewSheet extends StatelessWidget {
                             children: <Widget>[
                               Text(
                                 'Perché sceglierla',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
+                                style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(fontWeight: FontWeight.w800),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 journey.whyItFits,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
+                                style: Theme.of(context).textTheme.bodyMedium
                                     ?.copyWith(
                                       color: colors.onSurfaceVariant,
                                       height: 1.45,
@@ -128,10 +123,7 @@ class ChatPreviewSheet extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: <Widget>[
-                      _MetaChip(
-                        emoji: '🕒',
-                        label: journey.durationLabel,
-                      ),
+                      _MetaChip(emoji: '🕒', label: journey.durationLabel),
                       _MetaChip(
                         emoji: _modeEmoji(journey.travelMode),
                         label: journey.travelMode,
@@ -220,12 +212,14 @@ class _MediaStrip extends StatelessWidget {
     final posters = DemoMedia.postersForDestination(destinationId);
     final media = <Widget>[
       for (final asset in videos)
-        _MediaTile(child: JourneyVideoSequence(
-          assets: <String>[asset],
-          showControl: true,
-          showProgress: false,
-          borderRadius: BorderRadius.circular(16),
-        )),
+        _MediaTile(
+          child: JourneyVideoSequence(
+            assets: <String>[asset],
+            showControl: true,
+            showProgress: false,
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
       for (final poster in posters.take(2))
         _MediaTile(
           child: ClipRRect(
@@ -283,9 +277,9 @@ class _MetaChip extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -314,9 +308,9 @@ class _PoisSection extends StatelessWidget {
           children: <Widget>[
             Text(
               'Da non perdere',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             for (final point in points) _PoiRow(point: point),
@@ -354,9 +348,9 @@ class _PoiRow extends StatelessWidget {
               children: <Widget>[
                 Text(
                   point.name,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 if (point.category.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 2),

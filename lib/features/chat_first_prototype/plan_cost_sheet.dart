@@ -8,11 +8,11 @@ import 'plan_external_launcher.dart';
 /// Deterministic demo estimates for on-site costs (spec §7.1, "Stime non
 /// acquistate"). Inline in the cost sheet so the data model stays untouched.
 const List<({String label, String detail, int priceCents})>
-    _demoOnSiteEstimates = <({String label, String detail, int priceCents})>[
-      (label: 'Ingressi', detail: '2 × 18 €', priceCents: 3600),
-      (label: 'Pasti al giorno', detail: '3 × 25 €', priceCents: 7500),
-      (label: 'Trasporto locale', detail: '1 × 15 €', priceCents: 1500),
-    ];
+_demoOnSiteEstimates = <({String label, String detail, int priceCents})>[
+  (label: 'Ingressi', detail: '2 × 18 €', priceCents: 3600),
+  (label: 'Pasti al giorno', detail: '3 × 25 €', priceCents: 7500),
+  (label: 'Trasporto locale', detail: '1 × 15 €', priceCents: 1500),
+];
 
 /// One cost row: a purchase (flight/hotel), an on-site estimate or a total.
 @immutable
@@ -76,6 +76,16 @@ class PlanCostSheetData {
   const PlanCostSheetData({required this.sections});
 
   final List<PlanCostSectionData> sections;
+
+  bool get canConfirmMockPurchases {
+    if (sections.isEmpty) return false;
+    return sections.first.rows.any(
+      (row) =>
+          (row.kind == ExternalPurchaseKind.travel ||
+              row.kind == ExternalPurchaseKind.stay) &&
+          row.priceCents > 0,
+    );
+  }
 }
 
 /// Builds the linear cost sheet from a plan snapshot and its operational
@@ -99,8 +109,7 @@ PlanCostSheetData buildPlanCostSheetData(
   final toBuyCents = purchaseRows.fold<int>(
     0,
     (sum, row) =>
-        sum +
-        (row.state == PurchaseState.estimate ? 0 : row.priceCents),
+        sum + (row.state == PurchaseState.estimate ? 0 : row.priceCents),
   );
   final onSiteCents = _demoOnSiteEstimates.fold<int>(
     0,
@@ -166,11 +175,15 @@ PlanCostRowData _travelRow(
   final option = snapshot.travelSelection?.option;
   if (option == null) {
     final flights = fixture?.flights;
-    final recommended = (flights == null || flights.isEmpty) ? null : flights.first;
+    final recommended = (flights == null || flights.isEmpty)
+        ? null
+        : flights.first;
     return PlanCostRowData(
       kind: ExternalPurchaseKind.travel,
       optionId: recommended?.id ?? '',
-      label: recommended == null ? 'Da scegliere' : 'Da scegliere · ${recommended.provider}',
+      label: recommended == null
+          ? 'Da scegliere'
+          : 'Da scegliere · ${recommended.provider}',
       priceCents: recommended?.priceCents ?? 0,
       state: PurchaseState.estimate,
     );
@@ -199,11 +212,15 @@ PlanCostRowData _stayRow(
   final option = snapshot.staySelection?.option;
   if (option == null) {
     final hotels = fixture?.hotels;
-    final recommended = (hotels == null || hotels.isEmpty) ? null : hotels.first;
+    final recommended = (hotels == null || hotels.isEmpty)
+        ? null
+        : hotels.first;
     return PlanCostRowData(
       kind: ExternalPurchaseKind.stay,
       optionId: recommended?.id ?? '',
-      label: recommended == null ? 'Da scegliere' : 'Da scegliere · ${recommended.name}',
+      label: recommended == null
+          ? 'Da scegliere'
+          : 'Da scegliere · ${recommended.name}',
       priceCents: recommended?.priceCents ?? 0,
       state: PurchaseState.estimate,
     );
@@ -282,6 +299,17 @@ Future<void> showPlanCostSheet({
           return PlanCostSheet(
             sections: data.sections,
             scrollController: scrollController,
+            mockPurchasesConfirmed: controller.mockPurchasesConfirmed(
+              conversationId,
+            ),
+            showNoPurchasesMessage:
+                !data.canConfirmMockPurchases &&
+                !controller.mockPurchasesConfirmed(conversationId),
+            onConfirmMockPurchases: data.canConfirmMockPurchases
+                ? () {
+                    controller.confirmMockPurchases(conversationId);
+                  }
+                : null,
             onOpenPurchase: (row) {
               final uri = row.purchaseUri;
               if (uri == null) return Future<void>.value();
@@ -307,11 +335,17 @@ class PlanCostSheet extends StatelessWidget {
     super.key,
     required this.sections,
     required this.onOpenPurchase,
+    this.mockPurchasesConfirmed = false,
+    this.onConfirmMockPurchases,
+    this.showNoPurchasesMessage = false,
     this.scrollController,
   });
 
   final List<PlanCostSectionData> sections;
   final Future<void> Function(PlanCostRowData row) onOpenPurchase;
+  final bool mockPurchasesConfirmed;
+  final VoidCallback? onConfirmMockPurchases;
+  final bool showNoPurchasesMessage;
   final ScrollController? scrollController;
 
   @override
@@ -353,11 +387,21 @@ class PlanCostSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Stime e stati di acquisto in tempo reale.',
+                  'Stime demo: prezzi e disponibilità non sono in tempo reale.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: colors.onSurfaceVariant,
                   ),
                 ),
+                if (showNoPurchasesMessage) ...<Widget>[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Nessuna scelta demo da confermare',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 for (final section in sections) ...<Widget>[
                   _CostSectionHeader(section: section),
@@ -373,6 +417,53 @@ class PlanCostSheet extends StatelessWidget {
                   ],
                   const SizedBox(height: 10),
                 ],
+                if (onConfirmMockPurchases != null) ...<Widget>[
+                  const SizedBox(height: 4),
+                  if (mockPurchasesConfirmed)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: colors.primaryContainer,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Icon(
+                            Icons.check_circle_outline,
+                            color: colors.primary,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Scelte confermate',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        key: const Key('plan-cost-confirm-demo'),
+                        onPressed: () => _confirmMockPurchases(context),
+                        icon: const Icon(Icons.check_circle_outline),
+                        label: const Text('Conferma acquisti demo'),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Demo: nessun pagamento reale',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: colors.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 6),
                 Text(
                   'Dati demo · prezzi e disponibilità non sono in tempo reale.',
@@ -386,6 +477,58 @@ class PlanCostSheet extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _confirmMockPurchases(BuildContext context) async {
+    final total = sections
+        .expand((section) => section.rows)
+        .where((row) => row.emphasized)
+        .firstOrNull;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Conferma le scelte del piano?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text(
+              'Volo, hotel e totale restano una simulazione locale. '
+              'Nessun ordine verrà inviato.',
+            ),
+            if (total != null) ...<Widget>[
+              const SizedBox(height: 12),
+              Text(
+                'Totale previsto · ${formatEuroCents(total.priceCents)}',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              'Demo: nessun pagamento reale',
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            key: const Key('plan-cost-confirm-dialog'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Conferma acquisti demo'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) onConfirmMockPurchases?.call();
   }
 }
 
@@ -412,9 +555,9 @@ class _CostSectionHeader extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               section.subtitle,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
             ),
           ],
         ],
@@ -500,29 +643,43 @@ class _CostRow extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           if (row.hasAction && onOpen != null)
-            Semantics(
-              button: true,
-              label: 'Si apre la pagina di $provider',
-              child: FilledButton.tonalIcon(
-                onPressed: onOpen,
-                icon: const Icon(Icons.open_in_new),
-                label: const Text('Apri nel sito'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(48, 48),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 160),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Semantics(
+                  button: true,
+                  label: 'Si apre la pagina di $provider',
+                  child: FilledButton.tonalIcon(
+                    onPressed: onOpen,
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('Apri nel sito'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                    ),
+                  ),
                 ),
               ),
             )
           else if (row.hasAction)
-            Semantics(
-              label: 'Acquisto non disponibile per ${row.label}',
-              child: Tooltip(
-                message: 'Pagina esterna non disponibile per questa voce',
-                child: OutlinedButton.icon(
-                  onPressed: null,
-                  icon: const Icon(Icons.open_in_new),
-                  label: const Text('Apri nel sito'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(48, 48),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 160),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Semantics(
+                  label: 'Acquisto non disponibile per ${row.label}',
+                  child: Tooltip(
+                    message: 'Pagina esterna non disponibile per questa voce',
+                    child: OutlinedButton.icon(
+                      onPressed: null,
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('Apri nel sito'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                      ),
+                    ),
                   ),
                 ),
               ),

@@ -42,7 +42,10 @@ class MockDataSource implements IterDataSource {
       const <ChatMessage>[];
 
   @override
-  Future<void> insertMessage(String conversationId, ChatMessage message) async {}
+  Future<void> insertMessage(
+    String conversationId,
+    ChatMessage message,
+  ) async {}
 
   @override
   Future<void> setConversationRead(String conversationId) async {}
@@ -51,7 +54,8 @@ class MockDataSource implements IterDataSource {
   Future<void> incrementUnread(String conversationId) async {}
 
   @override
-  Future<ConversationRow?> createConversation(Conversation summary) async => null;
+  Future<ConversationRow?> createConversation(Conversation summary) async =>
+      null;
 
   @override
   Future<PlanSaveResult> saveTripVersion({
@@ -64,22 +68,27 @@ class MockDataSource implements IterDataSource {
   Future<ProfileRow?> fetchProfile() async => null;
 
   @override
-  Future<void> upsertProfile({ThemeMode? themeMode, List<String>? memoryTags}) async {}
+  Future<void> upsertProfile({
+    ThemeMode? themeMode,
+    List<String>? memoryTags,
+  }) async {}
 
   /// Maps a mock [Place] to the light [DestinationPoint] shape the preview
   /// sheet needs. The emoji is derived from the category so the demo stays
   /// deterministic and needs no extra data.
   DestinationPoint _fromPlace(Place place) => DestinationPoint(
-        id: place.id,
-        name: place.name,
-        category: place.category,
-        emoji: _emojiFor(place.category),
-        whyFits: place.whyItFits,
-      );
+    id: place.id,
+    name: place.name,
+    category: place.category,
+    emoji: _emojiFor(place.category),
+    whyFits: place.whyItFits,
+  );
 
   static String _emojiFor(String category) {
     final text = category.toLowerCase();
-    if (text.contains('cibo') || text.contains('colazione') || text.contains('degustazione')) {
+    if (text.contains('cibo') ||
+        text.contains('colazione') ||
+        text.contains('degustazione')) {
       return '🍽️';
     }
     if (text.contains('mare')) return '🌊';

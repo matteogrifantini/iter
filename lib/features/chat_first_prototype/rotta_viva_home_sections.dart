@@ -40,11 +40,8 @@ class RottaVivaComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final isDark = colors.brightness == Brightness.dark;
-    final composerBackground = isDark ? colors.surface : colors.inverseSurface;
-    final composerForeground = isDark
-        ? colors.onSurface
-        : colors.onInverseSurface;
+    final composerBackground = colors.surfaceContainerHigh;
+    final composerForeground = colors.onSurface;
     final enabled = controller.text.trim().isNotEmpty;
     return Semantics(
       container: true,
@@ -53,7 +50,8 @@ class RottaVivaComposer extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: composerBackground,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colors.outlineVariant),
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
@@ -369,35 +367,46 @@ class ActiveTimelineSection extends StatelessWidget {
         ),
         if (update != null) ...<Widget>[
           const SizedBox(height: 4),
-          Card(
-            color: colors.secondaryContainer,
-            margin: EdgeInsets.zero,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      const Icon(Icons.notifications_active_outlined),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Aggiornamento da confermare',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: colors.secondaryContainer,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    const Icon(Icons.notifications_active_outlined, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Nuovo nel piano',
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  update,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colors.onSecondaryContainer,
                   ),
-                  const SizedBox(height: 8),
-                  Text(update, style: Theme.of(context).textTheme.bodyMedium),
-                  const SizedBox(height: 16),
-                  FilledButton.tonal(
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilledButton.tonal(
                     onPressed: () => onOpenThread(thread),
-                    child: const Text('Apri il piano di oggi'),
+                    child: const Text('Vedi il piano completo'),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ] else ...<Widget>[
@@ -406,7 +415,7 @@ class ActiveTimelineSection extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: TextButton(
               onPressed: () => onOpenThread(thread),
-              child: const Text('Apri il piano di oggi'),
+              child: const Text('Vedi il piano completo'),
             ),
           ),
         ],

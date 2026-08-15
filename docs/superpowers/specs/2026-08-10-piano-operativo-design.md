@@ -220,6 +220,22 @@ dell'ultima modifica. La revisione corrente del Piano è sempre persistita nel
 riepilogo della conversazione; non dipende dalla presenza del messaggio che ha
 originato il cambiamento.
 
+### Note di implementazione (12 agosto 2026)
+
+- Editing manuale realizzato con anteprima, conferma e annullamento:
+  `place_picker_sheet.dart` (cerca → scheda → posizionamento, con esito
+  **Da sistemare** quando non c'è uno slot coerente), `plan_patch_sheet.dart`
+  (anteprima degli effetti con **Applica/Annulla**) e menu della tappa per
+  **Sposta** (drag o menu), **Cambia orario**, **Blocca/Sblocca** e **Rimuovi**
+  (`plan_timeline.dart`, `trip_snapshot_screen.dart`).
+- Ogni comando produce una `PlanPatchPreview`; una conferma stale viene
+  ricalcolata sulla revisione corrente (rebase) e resta in attesa di una
+  conferma esplicita. La cronologia tiene al massimo 10 revisioni e
+  `undoLastPlanRevision` ripristina l'ultima modifica, esposta anche come
+  snackbar **Annulla** dopo la conferma.
+- Copertura: `plan_models_test.dart`, `plan_editor_test.dart`,
+  `trip_snapshot_screen_test.dart`.
+
 ## 6. Volo e hotel guidati dalla chat
 
 ### 6.1 Principio
@@ -268,6 +284,20 @@ Iter può proporre una notte in più o in meno soltanto collegandola alle date d
 viaggio e mostrando il nuovo totale. La scelta non modifica silenziosamente
 volo o Piano: produce una proposta coordinata da confermare.
 
+### Note di implementazione (12 agosto 2026)
+
+- In chat i moduli `FlightCompare` e `StayCompare`
+  (`chat_first_thread_screen.dart`, dati da `ChatFirstDemoData`) mostrano tutte
+  le opzioni della fixture con la raccomandazione in evidenza; la selezione è
+  esplicita e salva scelta e alternative nel Piano
+  (`selectTravelOption`/`selectStayOption`).
+- Per l'hotel il widget include uno stepper delle notti che produce una proposta
+  coordinata (`PlanProposal` "Soggiorno ricalcolato") da confermare, senza
+  modificare volo o Piano; la tariffa notturna è derivata deterministicamente
+  dal prezzo totale (`stayNightlyPriceCents`).
+- Le voci demo sono dichiarate: "Dati demo · prezzi e disponibilità non in
+  tempo reale".
+
 ## 7. Riepilogo costi e acquisti esterni
 
 ### 7.1 Struttura
@@ -307,6 +337,26 @@ Sì, aggiorna il Piano · Non ancora
 Con **Sì** vengono salvati soltanto provider, opzione, prezzo mostrato,
 timestamp e stato `acquistato`. Non vengono richiesti PNR, ricevute, documenti,
 numero carta o indirizzo. **Non ancora** mantiene lo stato precedente.
+
+### Note di implementazione (12 agosto 2026)
+
+- Cost sheet lineare a tre sezioni come da vincolo (`plan_cost_sheet.dart`):
+  **Da acquistare** / **Stime non acquistate** / **Totali**, con stato per voce
+  (`stima`, `selezionato`, `acquisto aperto`, `acquistato`) e **Cambia scelta**
+  / **Acquista ↗** su volo e hotel.
+- **Acquista ↗** apre soltanto URI HTTPS il cui host è nell'allowlist di
+  `PlanExternalLauncher.allowedHosts`; altrimenti l'azione è disabilitata e non
+  tenta aperture permissive.
+- `ChatFirstPrototypeApp` osserva `WidgetsBinding` e traduce `resumed` in una
+  domanda di conferma solo se il launch è riuscito nella sessione; la shell
+  consuma il prompt una volta prima di mostrarlo. **Sì, aggiorna** salva
+  soltanto provider, opzione, prezzo, timestamp e stato; **Non ancora**
+  ripristina `selezionato`; se il processo è stato terminato la voce resta
+  `acquisto aperto` (i flag di launch sono stato di sessione, nessun prompt a
+  cold start).
+- Copertura: `trip_snapshot_screen_test.dart`,
+  `chat_first_prototype_controller_test.dart`,
+  `chat_first_prototype_widget_test.dart`.
 
 ## 8. Modello e flusso dati
 
@@ -410,6 +460,26 @@ modifica, segnala **Non salvato** e offre **Riprova**. La navigazione non finge
 successo mentre la conferma è ancora in corso. Per questo slice, il risultato
 delle scritture del Piano diventa osservabile dal controller invece di essere
 sempre assorbito internamente dalla sorgente dati.
+
+### Note di implementazione (12 agosto 2026)
+
+- `TripSnapshot` resta un valore immutabile serializzabile; implementati anche
+  `PlanRevisionMetadata` (id, numero, timestamp, origine, etichetta),
+  `PlanChangeOrigin` (`manuale|chat|share`) e `PlanItemSource`
+  (`iter|manual|chat|share`). Nel mock `PlanPlaceDetails` è ridotto a
+  id/titolo/descrizione: coordinate, media e attribuzione vivono nella fixture
+  operativa (`OperationalPlaceFixture`/`PlanMedia`).
+- Comandi realizzati: `previewAddPlace`, `previewMoveStop`, `previewRemoveStop`,
+  `previewChangeTime`, `previewToggleLock`, `confirmPlanPatch`,
+  `cancelPlanPatch`, `selectTravelOption`, `selectStayOption`,
+  `openExternalPurchase`, `confirmExternalPurchase`, `undoLastPlanRevision`.
+  Le conferme stale vengono ricalcolate (rebase) sulla revisione corrente.
+- La persistenza è osservabile dal controller (`PlanPersistenceState`:
+  `idle|saving|saved|failed`) con `retryPlanPersistence`; `saveTripVersion`
+  usa l'RPC `save_trip_revision` oppure il no-op del mock. `trip_versions` ha
+  RLS con policy owner per select/insert e privilegi ristretti a
+  `authenticated`
+  (`supabase/migrations/20260811153441_tighten_trip_version_privileges.sql`).
 
 ## 9. Stati ed errori
 
@@ -523,3 +593,16 @@ Il Piano operativo è accettato quando:
 7. il ritorno dal provider aggiorna il Piano soltanto dopo conferma;
 8. temi, accessibilità, responsive e gate Flutter/Android passano;
 9. documentazione prodotto e design vengono aggiornate insieme al codice.
+
+### Note di implementazione — stato (12 agosto 2026)
+
+I task 1–9 del piano operativo sono implementati e verificati sul branch
+`codex/chat-first-prototype`: 261 test PASS (210 sui moduli
+chat-first/piano operativo), `flutter analyze` pulito. I fix emersi dal QA
+Browser sono applicati: la nuova chat libera converge subito su Porto
+(disclosure "Dati demo"), rimossa la selezione "Con chi vuoi parlare?" e la
+card della Home con pianificazione aperta è neutra
+(`surfaceContainerLow` + bordo). I gate finali del task 10 (QA Browser
+integrato, `flutter build web --release`, `flutter build apk --debug`,
+verifica Supabase e commit) restano da eseguire. Nessuna decisione approvata in
+questa spec è stata modificata.

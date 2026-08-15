@@ -1,182 +1,143 @@
-# Iter Design System
+# Iter — Design system
 
-## Scene
+## Direzione
 
-Someone is planning from a phone between everyday commitments: a free evening, a train ride, a pause at work. The interface must make a trip feel possible without asking them to become a travel agent.
+Iter usa **Rotta viva**: un sistema di orientamento affettivo per costruire un
+viaggio. La personalità viene da immagini, ritmo della timeline, microcopy e
+segnali di percorso; non da chrome decorativo o da una dashboard.
 
-## Platform Strategy
+La modalità di lavoro è **Operate**: l'utente deve capire rapidamente cosa può
+fare, cosa è solo una proposta e cosa è stato confermato.
 
-Iter ships as a Flutter app for Android. Its interaction model follows Material 3: navigation, top app bars, system back, tonal elevation and expanded layouts that graduate to a navigation rail on larger screens. The app respects safe areas, light/dark appearance, device text scale and reduced motion.
+## Superfici e navigazione
 
-Do not recreate a website inside a phone. Brand is carried through content,
-route context and the way a plan changes — not through bespoke navigation or
-ornamental chrome.
+- Canvas semantico dal tema Iter, mai colori raw nei widget.
+- Material 3 e safe area native.
+- Bottom navigation flottante: **Oggi / Viaggi / Tu**.
+- Una sola barra di azioni principali nel piano, ancorata in basso.
+- Menu overflow solo per azioni rare.
+- Sheet e dialog per attività brevi che richiedono focus protetto.
 
-## Visual Direction
+La navigazione non deve sembrare un sito ridotto su mobile e non deve offrire
+percorsi duplicati per la stessa azione.
 
-The direction is **Rotta viva**: cartografia affettiva and orientation systems
-for an AI-guided travel planner. The Home is a manifesto operativo — a human
-question, a free input and a route made from understood signals — rather than a
-photographic catalog or a permanent chat transcript. Its approved composition
-is **Manifesto + input**: wordmark and a discreet conversation shortcut,
-dominant question **Che viaggio ti farebbe bene adesso?**, promise
-**Raccontami il momento. Alla destinazione penso io.**, one dark composer, up
-to three quick signals, and a route line leading to subsequent content.
+## Palette semantica
 
-Rotta viva uses this controlled five-role palette. Tokens live in `ColorScheme`
-and `IterColorRoles`; widgets do not own raw colors.
+I token vivono in `lib/app/iter_theme.dart` e nei ruoli `ColorScheme` /
+`IterColorRoles`.
 
-| Role | Light | Dark | Use |
+| Ruolo | Light | Dark | Uso |
 | --- | --- | --- | --- |
-| Ink | `#18204B` | `#F9F7EF` | primary text; decisive light/dark surfaces |
-| Rotta | `#2D63FF` | `#7EA0FF` | primary action, active state, route line |
-| Segnale | `#FF5C42` | `#FF7A63` | arrow, attention, decision awaiting confirmation |
-| Possibilità | `#E7FF67` | `#E7FF67` | new signal, opportunity, positive progress |
-| Canvas | `#F9F7EF` | `#0B1028` | mineral page background |
+| Ink | `#18204B` | `#F9F7EF` | testo principale |
+| Canvas | `#F9F7EF` | `#0B1028` | sfondo |
+| Surface | `#FFFFFF` | `#141C3B` | contenuto |
+| Raised | `#F0EEE6` | `#1D2750` | superfici secondarie |
+| Rotta | `#2D63FF` | `#7EA0FF` | azione e stato attivo |
+| Segnale | `#FF5C42` | `#FF7A63` | attenzione e decisione |
+| Possibilità | `#E7FF67` | `#E7FF67` | nuovo segnale positivo |
 
-Dark also uses `#141C3B` for surface. Light contrast is fixed: Ink on Canvas
-`14.53:1`, Rotta on Canvas `4.51:1`, white on Rotta `4.84:1`, Ink on Segnale
-`5.09:1`, Ink on Possibilità `14.03:1`. Segnale never carries normal white
-text; use Ink or treat it as a graphic signal. Color fills a meaningful field
-or communicates state, never a scatter of decorative accents. No gradients,
-glass panels, neon glows or oversized radii.
+Il blocco principale della home usa una superficie neutra (`surfaceContainerLow`)
+e un bordo sottile. Niente box blu imposto fuori gerarchia, gradienti, glass o
+ombre decorative.
 
-## Content Architecture
+## Tipografia
 
-### Home
+- **Bricolage Grotesque** per wordmark, display e titoli decisivi.
+- **Figtree** per corpo, controlli, chat e timeline.
+- Copy in frase normale, senza maiuscole decorative.
+- Body leggibile, line-height generosa e testi lunghi sempre scrollabili.
+- Il testo di stato deve dire cosa succede: `Proposta pronta`, `Scelte
+  confermate`, `Dati demo`.
 
-The adaptive Home has three product-led states, not a selectable visual mode.
-With no trip, the manifesto and composer dominate; cities, affinity percentages
-and destination carousels do not appear. With open planning, show exactly one
-missing decision, three understood signals and **Continua il viaggio**; a new
-trip is quiet. With an active trip, show the current day and a short timeline;
-**Apri il piano di oggi** is primary and any operational alternative remains a
-proposal. Priority is active trip today, pending planning, recent draft, then a
-new trip; only one resumable item is visible.
+## Piano operativo
 
-The bottom navigation is Material and has three destinations: **Oggi** for
-Home, **Viaggi** for the archive, and **Tu** for Profile. The route line is
-wide enough to be recognizable but never obstructs text or touch targets. It
-links actual signals and states: a first waypoint after send, an extended trace
-for another signal, and an arrow for the complete proposal.
+La composizione è verticale:
 
-### Destination discovery
+1. hero immagine/video della destinazione;
+2. fatti brevi;
+3. chip dei giorni;
+4. timeline fotografica/operativa;
+5. contenuto `Da sistemare`;
+6. barra flottante delle azioni.
 
-Use one prompt at a time and show honest progress through the eight shared
-decisions. **Semplice** is the selected and only Lab presentation. In debug the
-Lab defaults on through `kDebugMode`, so Home's **Inizia un viaggio** opens it
-directly; `--dart-define=ITER_NEW_TRIP_LAB=false` explicitly disables it and
-preserves the product's existing path. Release defaults the Lab off. Phase 1
-changes presentation and intake only: the shared controller, typed dates,
-deterministic mock proposal source and no-persistence/provider contract stay
-unchanged. Single complete answers
-advance after brief feedback; multiple choices, calendars and counters use only
-contextual confirmation. Do not keep a permanent open-response composer and
-never reveal candidate destinations before the editable summary.
+Non mettere una mappa sopra il piano. La mappa o il link di navigazione è una
+azione contestuale della scheda luogo. La scheda mostra immagine, reel, dettagli,
+indicazioni e domanda a Iter senza perdere il contesto del piano.
 
-Semplice uses a dominant title and less copy. Answer options combine emoji and
-text in two columns only above 360 dp at normal text size; use one column at
-360 dp or less and with large text. Anchor progress immediately after the
-options and state both the current and remaining questions. Its neutral
-background comes from Material `ColorScheme` roles — including
-`secondaryContainer` — layered above the existing canvas; do not introduce
-parallel palettes, raw colours, gradients or cream surfaces.
+Una tappa ha un'azione accessibile equivalente al drag: sposta, orario,
+blocca/sblocca e rimuovi. La modifica passa sempre da preview → conferma →
+revisione → snackbar Annulla.
 
-Phase 1 integrated Browser QA is complete for Home, direct Lab entry and manual
-origin editing: two columns at 390 dp, one at 360 dp, progress after the
-options, back navigation and light/dark themes. The complete Flutter suite has
-49 tests; analyze, Web release and debug APK gates are complete.
+## Chat
 
-The existing results are a vertical comparison surface rather than a portrait reel. A
-proposal must keep date/period, duration, estimated all-in cost, breakdown,
-travel complexity, fit and compromise visible together. Shortlist state stays
-visible, enables comparison from two items and stops at four. The comparison
-is grouped vertically by cost, dates, arrival, contents and trade-offs; the
-destination is confirmed only after the person has enough information.
+La bolla segue una grammatica familiare: ingresso a sinistra, risposta della
+persona a destra, card solo quando rappresenta un contenuto azionabile reale.
+Le schede di volo/hotel e i luoghi restano nel thread, non aprono una pagina
+esterna per mostrare i dati mock.
 
-The redesign of results, shortlist and comparison, and the app-wide rollout of
-the Semplice intake, are subsequent plans rather than Phase 1 work.
+Il composer è una bolla ampia multi-riga, simile a WhatsApp:
 
-### Place curation
+- allegato a sinistra;
+- campo con almeno due righe visuali;
+- invio o microfono a destra;
+- safe area rispettata;
+- feedback pressed e tooltip/semantics su ogni icona.
 
-The current place owns a portrait video surface. Its name, neighbourhood and useful time stay visible; the personal-fit score remains supporting evidence. A horizontal swipe accelerates the choice while **Info**, **Passa**, **Salva** and **Must** remain 48 dp controls in a right-hand rail. Show progress as context, not as a test.
+## Home e profilo
 
-### Transport choice
+La home ha un solo invito principale. Un aggiornamento operativo è una riga
+breve con una modifica concreta e **Vedi il piano completo**; non è un testo
+lungo da confermare direttamente in poco spazio.
 
-Show flight, train, bus and car together. Each compact row uses the real company mark and keeps timing, duration, changes and indicative cost in the same order. Selection is explicit and reversible. Keep the trust line next to the commitment: values are demo estimates and no ticket is purchased.
+Il profilo evita la griglia di card ripetute. Usa titoli con icona vettoriale,
+separatori hairline, statistiche compatte, chip per la memoria e `ListTile` per
+FAQ/Privacy/conversazioni. Le emoji possono accompagnare un significato
+editoriale, mai sostituire un'icona di navigazione o controllo.
 
-### Stay choice
+## Ispirazioni
 
-Treat a neighbourhood as a base, not a hotel result. The map is the primary surface: accepted places are pins and possible zones are translucent coloured areas. One compact summary shows atmosphere and walking time. **Scegli base** is the commitment, while external accommodation search remains secondary.
+Il foglio Reel/TikTok è una progressione a tre stati:
 
-### Itinerary workspace
+1. incolla o usa un link demo;
+2. guarda ciò che Iter ha estratto e scegli il viaggio;
+3. salva, poi chiedi una proposta di integrazione.
 
-The day plan is a visual travel strip. A short video hero contains arrivals and base, then image-led stops follow a continuous timeline without a card around every item. Locked state is visible in the route marker. The compact conversation composer is anchored to the bottom and applies a visible, undoable patch; it is not a floating chat bot.
+La miniatura e i dati estratti sono locali. Lo stato `salvata` è distinto da
+`applicata`: la timeline cambia solo dopo l'accettazione della `PlanProposal`.
 
-## Component Language
+## Costi
 
-- Prefer native list rows, buttons, chips, bottom sheets and system dialogs over decorative containers.
-- A card earns its place when it is a trip, destination, place or area the user can act on. Avoid nested cards and repeated icon-heading-copy grids.
-- Use one button vocabulary across flows: filled for the next meaningful commitment, tonal/outlined for alternatives, text for low-risk actions.
-- Status is written as useful language: “Bozza pronta da rivedere”, “Due tappe bloccate”, “Percorso stimato”. Never use a fake AI loader.
-- Every action has default, disabled, loading, error and success feedback. Empty states teach the next action.
-- Video is content, not decoration: bundled clips loop silently, have a pause action and fall back to a semantic route illustration when playback is unavailable.
-- Corner radii stop at 14 dp for components, 16 dp for cards. Route progress, typography and media provide character; containers do not need to look like bubbles. Hairline separators, not shadows, define structure.
-- The proprietary route glyph is only a continuous rounded stroke, waypoint and
-  direction arrow. It marks start, progress and passage from signal to proposal;
-  it never replaces familiar Android icons.
-- Standard actions use Material rounded/outlined icons with an approximately
-  `1.8 dp` visual stroke, a minimum `48 dp` target, and a label or tooltip.
-  Icons do not sit in decorative tiles or change family by surface.
-- Emoji are labeled semantic seeds, not decoration: `🌊 Voglio respirare`,
-  `📅 Ho pochi giorni`, `💶 Ho 500 €`, `🐢 Voglio rallentare`. They remain out
-  of semantics when adjacent text already says the meaning; never use them for
-  bottom navigation, icon-only controls or title ornament.
+Il foglio costi è un documento lineare, non una schermata di checkout. Le tre
+sezioni sono sempre leggibili con testo grande. Il CTA demo apre un dialog con
+totale e disclaimer `Demo: nessun pagamento reale`; il successo diventa
+`Scelte confermate`.
 
-## Typography
+## Motion e stati
 
-**Bricolage Grotesque** is the local variable-font asset for the lowercase
-`iter` wordmark, display, headlines and decisive questions. **Figtree** is the
-local variable-font asset for body, labels, controls, chat, results and
-itineraries. Map both through `TextTheme`; do not load fonts remotely at
-runtime. Bricolage never enters body copy or dense lists; Figtree remains the
-operational fallback for large text and long Italian content. Display may use
-strong weight, compact line-height and negative tracking only; labels, buttons
-and copy use sentence case without decorative all-caps.
+- 150–300 ms, ease-out, nessuna animazione infinita decorativa.
+- Con moto ridotto: stato immediato o crossfade.
+- Tutti i controlli hanno stato normale, pressed, disabled e feedback di errore.
+- Le sheet scrollano; nessun testo o CTA è nascosto dietro la barra inferiore.
+- Nessun loading finto o ragionamento AI simulato.
 
-## Motion
+## Accessibilità e responsive
 
-Motion communicates a planning result:
+- Target interattivi minimi 48 dp e almeno 8 dp di spazio.
+- Semantics per immagini, azioni, luoghi, stato di acquisto e aggiornamenti.
+- Contrasto corpo almeno 4.5:1 in entrambi i temi.
+- Test obbligatori a 320, 360 e 390 dp, text scale 1.5, dark mode e
+  `disableAnimations`.
+- Il piano mantiene sempre una rappresentazione testuale della timeline.
+- Il back chiude prima tastiera, sheet o dialog e non perde il testo composto.
 
-- A chosen place settles into the collection.
-- An accepted AI patch updates the relevant day and preserves the surrounding context.
-- Navigation uses platform transitions; temporary tasks use native sheets.
+## File visuali principali
 
-Most transitions are 150–250 ms with a calm ease-out. The Rotta viva trace uses
-`180–260 ms`, ease-out and one main transformation: waypoint after first send,
-extension for a new signal, arrow for the proposal. Never loop, glow, fake
-type, bounce an itinerary or hide content behind an AI loader. With
-`disableAnimations` or reduced motion, the trace reaches its final state by
-crossfade or immediate update.
-
-## Appearance setting
-
-Light is the default on first launch. The profile contains an explicit two-way **Chiaro / Scuro** control and stores the choice locally. All screen colors come from Material `ColorScheme` roles or the small `IterColorRoles` theme extension; no feature screen owns a parallel palette. Light and dark are both first-class.
-
-## Accessibility Checklist
-
-- Minimum `48×48 dp` targets, with at least `8 dp` spacing and labelled
-  alternatives to gestures.
-- Semantic order follows context, question, composer, signals, primary action,
-  secondary content, then navigation. After an update, screen-reader focus
-  moves to the new signal or next question.
-- Required responsive gates are `320 dp`, `360 dp`, `390 dp`, the minimum
-  compact Android width, and text scale `1.5`. At every gate, headline,
-  composer and signals flow vertically; the route line never fixes their
-  height. The keyboard never obscures the input, error or send action.
-- Semantic labels for personal-fit scores, route changes, locked stops and outbound booking links.
-- Text and state never rely on colour alone; maintain contrast in both themes.
-- Screen-reader order follows the visible decision order.
-- Spatial diagrams are supplemental; the textual day timeline remains complete.
-- System Back closes a media sheet or keyboard before leaving the flow and
-  preserves composed text. Light and dark themes are both first-class.
+```text
+lib/app/iter_theme.dart
+lib/features/chat_first_prototype/chat_first_shell.dart
+lib/features/chat_first_prototype/chat_first_home_screen.dart
+lib/features/chat_first_prototype/chat_first_thread_screen.dart
+lib/features/chat_first_prototype/trip_snapshot_screen.dart
+lib/features/chat_first_prototype/chat_first_profile_screen.dart
+lib/features/chat_first_prototype/plan_cost_sheet.dart
+```

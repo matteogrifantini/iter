@@ -332,12 +332,16 @@ class FlightCompare {
   };
 
   factory FlightCompare.fromJson(Map<String, dynamic> json) => FlightCompare(
-    options: (json['options'] as List<dynamic>?)
-            ?.map((item) => FlightOptionInfo.fromJson(item as Map<String, dynamic>))
+    options:
+        (json['options'] as List<dynamic>?)
+            ?.map(
+              (item) => FlightOptionInfo.fromJson(item as Map<String, dynamic>),
+            )
             .toList(growable: false) ??
         const <FlightOptionInfo>[],
     recommendedId: (json['recommendedId'] as String?) ?? '',
-    quotedAt: DateTime.tryParse((json['quotedAt'] as String?) ?? '') ??
+    quotedAt:
+        DateTime.tryParse((json['quotedAt'] as String?) ?? '') ??
         DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
   );
 }
@@ -371,22 +375,37 @@ class FlightOptionInfo {
   final String tradeoff;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'id': id, 'provider': provider, 'departureAirport': departureAirport,
-    'arrivalAirport': arrivalAirport, 'departureAt': departureAt.toIso8601String(),
-    'arrivalAt': arrivalAt.toIso8601String(), 'durationMinutes': durationMinutes,
-    'stops': stops, 'baggage': baggage, 'priceCents': priceCents, 'tradeoff': tradeoff,
+    'id': id,
+    'provider': provider,
+    'departureAirport': departureAirport,
+    'arrivalAirport': arrivalAirport,
+    'departureAt': departureAt.toIso8601String(),
+    'arrivalAt': arrivalAt.toIso8601String(),
+    'durationMinutes': durationMinutes,
+    'stops': stops,
+    'baggage': baggage,
+    'priceCents': priceCents,
+    'tradeoff': tradeoff,
   };
 
-  factory FlightOptionInfo.fromJson(Map<String, dynamic> json) => FlightOptionInfo(
-    id: (json['id'] as String?) ?? '', provider: (json['provider'] as String?) ?? '',
-    departureAirport: (json['departureAirport'] as String?) ?? '',
-    arrivalAirport: (json['arrivalAirport'] as String?) ?? '',
-    departureAt: DateTime.tryParse((json['departureAt'] as String?) ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-    arrivalAt: DateTime.tryParse((json['arrivalAt'] as String?) ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-    durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
-    stops: (json['stops'] as num?)?.toInt() ?? 0, baggage: (json['baggage'] as String?) ?? '',
-    priceCents: (json['priceCents'] as num?)?.toInt() ?? 0, tradeoff: (json['tradeoff'] as String?) ?? '',
-  );
+  factory FlightOptionInfo.fromJson(Map<String, dynamic> json) =>
+      FlightOptionInfo(
+        id: (json['id'] as String?) ?? '',
+        provider: (json['provider'] as String?) ?? '',
+        departureAirport: (json['departureAirport'] as String?) ?? '',
+        arrivalAirport: (json['arrivalAirport'] as String?) ?? '',
+        departureAt:
+            DateTime.tryParse((json['departureAt'] as String?) ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+        arrivalAt:
+            DateTime.tryParse((json['arrivalAt'] as String?) ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+        durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
+        stops: (json['stops'] as num?)?.toInt() ?? 0,
+        baggage: (json['baggage'] as String?) ?? '',
+        priceCents: (json['priceCents'] as num?)?.toInt() ?? 0,
+        tradeoff: (json['tradeoff'] as String?) ?? '',
+      );
 }
 
 @immutable
@@ -394,20 +413,72 @@ class StayCompare {
   const StayCompare({required this.options, required this.recommendedId});
   final List<StayOptionInfo> options;
   final String recommendedId;
-  StayOptionInfo get recommended => options.firstWhere((option) => option.id == recommendedId);
-  Map<String, dynamic> toJson() => <String, dynamic>{'options': options.map((option) => option.toJson()).toList(growable: false), 'recommendedId': recommendedId};
+  StayOptionInfo get recommended =>
+      options.firstWhere((option) => option.id == recommendedId);
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'options': options.map((option) => option.toJson()).toList(growable: false),
+    'recommendedId': recommendedId,
+  };
   factory StayCompare.fromJson(Map<String, dynamic> json) => StayCompare(
-    options: (json['options'] as List<dynamic>?)?.map((item) => StayOptionInfo.fromJson(item as Map<String, dynamic>)).toList(growable: false) ?? const <StayOptionInfo>[],
+    options:
+        (json['options'] as List<dynamic>?)
+            ?.map(
+              (item) => StayOptionInfo.fromJson(item as Map<String, dynamic>),
+            )
+            .toList(growable: false) ??
+        const <StayOptionInfo>[],
     recommendedId: (json['recommendedId'] as String?) ?? '',
   );
 }
 
 @immutable
 class StayOptionInfo {
-  const StayOptionInfo({required this.id, required this.name, required this.zone, required this.nights, required this.priceCents, required this.conditions, required this.averageWalkMinutes, required this.atmosphere, required this.tradeoff, required this.provider});
-  final String id; final String name; final String zone; final int nights; final int priceCents; final String conditions; final int averageWalkMinutes; final String atmosphere; final String tradeoff; final String provider;
-  Map<String, dynamic> toJson() => <String, dynamic>{'id': id, 'name': name, 'zone': zone, 'nights': nights, 'priceCents': priceCents, 'conditions': conditions, 'averageWalkMinutes': averageWalkMinutes, 'atmosphere': atmosphere, 'tradeoff': tradeoff, 'provider': provider};
-  factory StayOptionInfo.fromJson(Map<String, dynamic> json) => StayOptionInfo(id: (json['id'] as String?) ?? '', name: (json['name'] as String?) ?? '', zone: (json['zone'] as String?) ?? '', nights: (json['nights'] as num?)?.toInt() ?? 0, priceCents: (json['priceCents'] as num?)?.toInt() ?? 0, conditions: (json['conditions'] as String?) ?? '', averageWalkMinutes: (json['averageWalkMinutes'] as num?)?.toInt() ?? 0, atmosphere: (json['atmosphere'] as String?) ?? '', tradeoff: (json['tradeoff'] as String?) ?? '', provider: (json['provider'] as String?) ?? '');
+  const StayOptionInfo({
+    required this.id,
+    required this.name,
+    required this.zone,
+    required this.nights,
+    required this.priceCents,
+    required this.conditions,
+    required this.averageWalkMinutes,
+    required this.atmosphere,
+    required this.tradeoff,
+    required this.provider,
+  });
+  final String id;
+  final String name;
+  final String zone;
+  final int nights;
+  final int priceCents;
+  final String conditions;
+  final int averageWalkMinutes;
+  final String atmosphere;
+  final String tradeoff;
+  final String provider;
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'id': id,
+    'name': name,
+    'zone': zone,
+    'nights': nights,
+    'priceCents': priceCents,
+    'conditions': conditions,
+    'averageWalkMinutes': averageWalkMinutes,
+    'atmosphere': atmosphere,
+    'tradeoff': tradeoff,
+    'provider': provider,
+  };
+  factory StayOptionInfo.fromJson(Map<String, dynamic> json) => StayOptionInfo(
+    id: (json['id'] as String?) ?? '',
+    name: (json['name'] as String?) ?? '',
+    zone: (json['zone'] as String?) ?? '',
+    nights: (json['nights'] as num?)?.toInt() ?? 0,
+    priceCents: (json['priceCents'] as num?)?.toInt() ?? 0,
+    conditions: (json['conditions'] as String?) ?? '',
+    averageWalkMinutes: (json['averageWalkMinutes'] as num?)?.toInt() ?? 0,
+    atmosphere: (json['atmosphere'] as String?) ?? '',
+    tradeoff: (json['tradeoff'] as String?) ?? '',
+    provider: (json['provider'] as String?) ?? '',
+  );
 }
 
 /// The recommended stay zone for a destination, rendered with atmosphere and

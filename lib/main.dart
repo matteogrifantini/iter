@@ -2,8 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/app_config.dart';
-import 'app/iter_app.dart';
-import 'features/chat_first_prototype/chat_first_app.dart';
+import 'app/app_entry.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,9 +15,5 @@ Future<void> main() async {
     );
   }
 
-  runApp(
-    config.chatFirstPrototype
-        ? const ChatFirstPrototypeApp()
-        : IterApp(config: config),
-  );
+  runApp(buildIterApp());
 }

@@ -14,6 +14,7 @@ import 'package:iter/features/chat_first_prototype/chat_first_profile_screen.dar
 import 'package:iter/features/chat_first_prototype/chat_first_shell.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_thread_screen.dart';
 import 'package:iter/features/chat_first_prototype/plan_external_launcher.dart';
+import 'package:iter/features/chat_first_prototype/profile_models.dart';
 import 'package:iter/features/chat_first_prototype/rotta_viva_mark.dart';
 import 'package:iter/features/chat_first_prototype/trip_snapshot_screen.dart';
 import 'package:iter/models/trip_models.dart' show JourneyRoute;
@@ -93,6 +94,27 @@ void main() {
     await tester.tap(find.text('Finestrino sul mare'));
     await tester.pumpAndSettle();
     expect(selectedPhoto, 'assets/images/travel/rail_window.jpg');
+  });
+
+  testWidgets('home non duplica il percorso Viaggi nella barra superiore', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      wrapIter(
+        ChatFirstHomeScreen(
+          model: const AdaptiveHomeModel.empty(),
+          unread: 2,
+          onSubmitIntent: (_) {},
+          onVoiceIntent: () {},
+          onPhotoIntent: (_) {},
+          onOpenThread: (_) {},
+          onOpenTrips: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Viaggi'), findsNothing);
   });
 
   testWidgets('home vuota conserva il testo se l handoff sincrono fallisce', (
@@ -220,9 +242,8 @@ void main() {
 
     // Una chat libera gia conclusa (script consumato) nel controller di partenza.
     final concluded = controller.startFreeTalk();
-    final concludedThread = controller.threadOf(
-      concluded.summary.id,
-    ) as FreeTalkThread;
+    final concludedThread =
+        controller.threadOf(concluded.summary.id) as FreeTalkThread;
     concludedThread.scriptIndex = concludedThread.script.length;
     await tester.pumpWidget(
       wrap(
@@ -336,6 +357,40 @@ void main() {
     expect(find.text('Modifica applicata'), findsOneWidget);
     expect(find.text('Annulla'), findsNothing);
   });
+
+  testWidgets(
+    'proposta chat mostra solo la modifica e apre il piano completo',
+    (tester) async {
+      final controller = ChatFirstPrototypeController();
+      addTearDown(controller.dispose);
+      final roma = controller.threads.firstWhere(
+        (t) => t.summary.title.contains('Roma'),
+      );
+      TripSnapshot? openedSnapshot;
+      await tester.pumpWidget(
+        wrap(
+          ChatFirstThreadScreen(
+            controller: controller,
+            conversationId: roma.summary.id,
+            onOpenSnapshot: (snapshot) => openedSnapshot = snapshot,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Rallenta la mattina'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Foro Romano alle 10:30, passeggiata ai Fori alle 14:00.'),
+        findsOneWidget,
+      );
+      expect(find.text('2 giorni · In viaggio'), findsNothing);
+      expect(find.byKey(const Key('chat-proposal-open-plan')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('chat-proposal-open-plan')));
+      expect(openedSnapshot?.destinationTitle, 'Roma');
+    },
+  );
 
   testWidgets('intake: domande, proposta e accettazione nel thread', (
     tester,
@@ -970,14 +1025,58 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.byType(SegmentedButton<ThemeMode>), findsOneWidget);
     final scrollable = find.byType(Scrollable).first;
     await tester.scrollUntilVisible(
       find.text('Sistema'),
       200,
       scrollable: scrollable,
     );
+    expect(tester.takeException(), isNull);
+    expect(find.byType(SegmentedButton<ThemeMode>), findsOneWidget);
     expect(find.text('Sistema'), findsOneWidget);
+  });
+
+  testWidgets('profilo apre la gestione disponibilità in un foglio dedicato', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      wrap(
+        ChatFirstProfileScreen(
+          themeMode: ThemeMode.light,
+          onThemeChanged: (_) {},
+          onOpenChats: () {},
+          availability: const <AvailabilityEntry>[],
+          stats: const TravelStats(
+            completedTrips: 3,
+            visitedPlaces: 18,
+            estimatedKilometers: 1240,
+          ),
+          onAddAvailability: (_) {},
+          onRemoveAvailability: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Disponibilità'), findsOneWidget);
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.text('Aggiungi disponibilità'),
+      240,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Aggiungi disponibilità'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nuova disponibilità'), findsOneWidget);
+    expect(find.text('Libero'), findsOneWidget);
+    expect(find.text('Turno'), findsOneWidget);
+    expect(find.text('Salva disponibilità'), findsOneWidget);
   });
 
   testWidgets('snapshot read-only mostra dati e giorni', (tester) async {
@@ -989,14 +1088,20 @@ void main() {
     final roma = controller.threads.firstWhere(
       (t) => t.summary.title.contains('Roma'),
     );
-    final snapshot = roma.summary.snapshot!;
-    await tester.pumpWidget(wrap(TripSnapshotScreen(snapshot: snapshot)));
+    await tester.pumpWidget(
+      wrap(
+        TripSnapshotScreen(
+          controller: controller,
+          conversationId: roma.summary.id,
+        ),
+      ),
+    );
 
     expect(find.text('Roma'), findsOneWidget);
     expect(find.text('In viaggio'), findsOneWidget);
     expect(find.text('Oggi'), findsOneWidget);
-    expect(find.text('Foro Romano'), findsNWidgets(2));
-    expect(find.textContaining('Modifiche solo tramite chat'), findsOneWidget);
+    expect(find.text('Foro Romano'), findsOneWidget);
+    expect(find.text('Aggiungi luogo'), findsOneWidget);
   });
 
   testWidgets('home pianificazione promuove una scelta e continua il thread', (
@@ -1109,7 +1214,7 @@ void main() {
     expect(find.text('Roma · Oggi'), findsOneWidget);
     expect(find.text('Foro Romano'), findsOneWidget);
     expect(find.text('Aggiornamento da confermare'), findsNothing);
-    await tester.tap(find.text('Apri il piano di oggi'));
+    await tester.tap(find.text('Vedi il piano completo'));
     await tester.pump();
     expect(opened, same(active));
     expect(snapshot.days.first.items.first.time, '09:30');
@@ -1227,7 +1332,7 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.text('Apri il piano di oggi'));
+    await tester.tap(find.text('Vedi il piano completo'));
     await tester.pumpAndSettle();
     expect(activeController.activeThreadId, active.summary.id);
   });
@@ -1363,14 +1468,13 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('composer mantiene contrasto semantico in chiaro e scuro', (
+  testWidgets('composer usa una superficie neutra in chiaro e scuro', (
     tester,
   ) async {
     for (final theme in <ThemeData>[IterTheme.light(), IterTheme.dark()]) {
       final colors = theme.colorScheme;
-      final isDark = colors.brightness == Brightness.dark;
-      final background = isDark ? colors.surface : colors.inverseSurface;
-      final foreground = isDark ? colors.onSurface : colors.onInverseSurface;
+      final background = colors.surfaceContainerHigh;
+      final foreground = colors.onSurface;
       await tester.pumpWidget(
         MaterialApp(
           theme: theme,
@@ -1404,6 +1508,7 @@ void main() {
       final decoration = composer.decoration as BoxDecoration;
 
       expect(decoration.color, background);
+      expect(decoration.border, Border.all(color: colors.outlineVariant));
       expect(decorator.decoration.filled, isFalse);
       expect(field.style?.color, foreground);
       expect(field.decoration?.labelStyle?.color, foreground);
@@ -1448,7 +1553,12 @@ void main() {
       (t) => t.summary.title.contains('Roma'),
     );
     await tester.pumpWidget(
-      wrap(TripSnapshotScreen(snapshot: roma.summary.snapshot!)),
+      wrap(
+        TripSnapshotScreen(
+          controller: controller,
+          conversationId: roma.summary.id,
+        ),
+      ),
     );
     await tester.pump();
 
@@ -1463,22 +1573,20 @@ void main() {
       launchBrowser: (_) async => false,
     );
 
-    String planningPortoId(ChatFirstPrototypeController controller) => controller
-        .threads
-        .firstWhere(
-          (thread) => thread.summary.snapshot?.statusLabel == 'In pianificazione',
-        )
-        .summary
-        .id;
+    String planningPortoId(ChatFirstPrototypeController controller) =>
+        controller.threads
+            .firstWhere(
+              (thread) =>
+                  thread.summary.snapshot?.statusLabel == 'In pianificazione',
+            )
+            .summary
+            .id;
 
     Future<void> openPortoPurchase(
       ChatFirstPrototypeController controller,
     ) async {
       final id = planningPortoId(controller);
-      controller.selectTravelOption(
-        conversationId: id,
-        optionId: flight.id,
-      );
+      controller.selectTravelOption(conversationId: id, optionId: flight.id);
       expect(
         await controller.openExternalPurchase(
           conversationId: id,
@@ -1501,8 +1609,13 @@ void main() {
         await tester.pumpWidget(ChatFirstPrototypeApp(controller: controller));
         await tester.pumpAndSettle();
 
-        expect(find.text('Sei tornato dal sito di prenotazione.'), findsNothing);
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        expect(
+          find.text('Sei tornato dal sito di prenotazione.'),
+          findsNothing,
+        );
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
         await tester.pumpAndSettle();
 
         expect(
@@ -1515,16 +1628,28 @@ void main() {
         // The prompt is consumed: a second resume stays silent.
         await tester.tap(find.text('Non ancora'));
         await tester.pumpAndSettle();
-        expect(find.text('Sei tornato dal sito di prenotazione.'), findsNothing);
+        expect(
+          find.text('Sei tornato dal sito di prenotazione.'),
+          findsNothing,
+        );
         final id = planningPortoId(controller);
         expect(
-          controller.conversationOf(id).snapshot!.travelSelection!.option
+          controller
+              .conversationOf(id)
+              .snapshot!
+              .travelSelection!
+              .option
               .purchaseState,
           PurchaseState.selected,
         );
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
         await tester.pumpAndSettle();
-        expect(find.text('Sei tornato dal sito di prenotazione.'), findsNothing);
+        expect(
+          find.text('Sei tornato dal sito di prenotazione.'),
+          findsNothing,
+        );
       },
     );
 
