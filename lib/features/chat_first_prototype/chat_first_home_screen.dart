@@ -111,7 +111,7 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
         padding: EdgeInsets.fromLTRB(side, 20, side, 112),
         children: <Widget>[
           const _HomeTopBar(),
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
           if (widget.model.kind == AdaptiveHomeKind.empty) ...<Widget>[
             Text(
               'Che viaggio ti farebbe bene adesso?',
@@ -126,6 +126,7 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
             ),
             const SizedBox(height: 24),
             RottaVivaComposer(
+              key: const Key('home-composer'),
               controller: _composer,
               onChanged: (_) => setState(() {}),
               onSubmit: _submit,
@@ -183,6 +184,11 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
               ),
             ),
           ] else ...<Widget>[
+            ActiveDestinationStage(
+              thread: widget.model.thread!,
+              onOpenThread: widget.onOpenThread,
+            ),
+            const SizedBox(height: 28),
             ActiveTimelineSection(
               thread: widget.model.thread!,
               onOpenThread: widget.onOpenThread,
@@ -194,6 +200,7 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
             ),
             const SizedBox(height: 12),
             RottaVivaComposer(
+              key: const Key('home-composer'),
               controller: _composer,
               onChanged: (_) => setState(() {}),
               onSubmit: _submit,
@@ -223,6 +230,7 @@ class _HomeTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      key: const Key('home-top-bar'),
       children: <Widget>[
         Text('iter', style: IterTheme.wordmarkTextStyle),
         const SizedBox(width: 12),

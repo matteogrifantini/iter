@@ -5,6 +5,7 @@ import 'chat_first_data.dart';
 import 'chat_first_models.dart';
 import 'inspiration_import_sheet.dart';
 import 'inspiration_models.dart';
+import 'iter_ui_primitives.dart';
 import 'place_detail_sheet.dart';
 import 'place_picker_sheet.dart';
 import 'place_reel_screen.dart';
@@ -14,9 +15,8 @@ import 'plan_editor.dart';
 import 'plan_patch_sheet.dart';
 import 'plan_timeline.dart';
 
-const double _globalPlanActionsHeight = 64;
 const double _globalPlanActionsBottomSpacing = 8;
-const double _planContentBottomSpacing = 16;
+const double _planContentBottomSpacing = 32;
 
 enum _PlanOverflowAction { importInspiration }
 
@@ -87,8 +87,6 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
         final savedInspirations = _controller.savedInspirationsFor(
           _conversationId,
         );
-        const globalActionsScrollReserve =
-            _planContentBottomSpacing + (kMinInteractiveDimension / 2);
         return Scaffold(
           appBar: AppBar(
             title: Semantics(
@@ -121,103 +119,123 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
               ),
             ],
           ),
-          body: Stack(
-            children: <Widget>[
-              ListView(
-                key: const Key('plan-scroll'),
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                children: <Widget>[
-                  _DestinationHero(
-                    snapshot: snapshot,
-                    media: media,
-                    mediaGallery: mediaGallery,
-                    onOpenMedia: () => _openDestinationMedia(mediaGallery),
-                  ),
-                  const SizedBox(height: 24),
-                  _PlanFacts(snapshot: snapshot),
-                  if (savedInspirations.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: 24),
-                    _SavedInspirationsSection(items: savedInspirations),
-                  ],
-                  if (snapshot.days.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: 24),
-                    _DayChips(
-                      days: snapshot.days,
-                      selectedIndex: _selectedDay,
-                      onSelected: (index) =>
-                          setState(() => _selectedDay = index),
-                    ),
-                    const SizedBox(height: 22),
-                    PlanTimeline(
-                      day: snapshot.days[_selectedDay],
-                      mediaForItem: (item) =>
-                          _cataloguePlaceFor(fixture, item)?.media,
-                      canOpenPlace: (item) =>
-                          _cataloguePlaceFor(fixture, item) != null ||
-                          item.place != null,
-                      onOpenPlace: (item, index) => _openPlace(
-                        snapshot: snapshot,
-                        fixture: fixture,
-                        day: snapshot.days[_selectedDay],
-                        item: item,
-                        index: index,
+          body: IterPageFrame(
+            padding: EdgeInsets.zero,
+            expandHeight: true,
+            child: Column(
+              children: <Widget>[
+                Expanded(
+                  child: Stack(
+                    children: <Widget>[
+                      ListView(
+                        key: const Key('plan-scroll'),
+                        padding: const EdgeInsets.fromLTRB(
+                          16,
+                          8,
+                          16,
+                          _planContentBottomSpacing,
+                        ),
+                        children: <Widget>[
+                          _DestinationHero(
+                            snapshot: snapshot,
+                            media: media,
+                            mediaGallery: mediaGallery,
+                            onOpenMedia: () =>
+                                _openDestinationMedia(mediaGallery),
+                          ),
+                          const SizedBox(height: 24),
+                          _PlanFacts(snapshot: snapshot),
+                          if (savedInspirations.isNotEmpty) ...<Widget>[
+                            const SizedBox(height: 24),
+                            _SavedInspirationsSection(items: savedInspirations),
+                          ],
+                          if (snapshot.days.isNotEmpty) ...<Widget>[
+                            const SizedBox(height: 24),
+                            _DayChips(
+                              days: snapshot.days,
+                              selectedIndex: _selectedDay,
+                              onSelected: (index) =>
+                                  setState(() => _selectedDay = index),
+                            ),
+                            const SizedBox(height: 22),
+                            PlanTimeline(
+                              day: snapshot.days[_selectedDay],
+                              mediaForItem: (item) =>
+                                  _cataloguePlaceFor(fixture, item)?.media,
+                              canOpenPlace: (item) =>
+                                  _cataloguePlaceFor(fixture, item) != null ||
+                                  item.place != null,
+                              onOpenPlace: (item, index) => _openPlace(
+                                snapshot: snapshot,
+                                fixture: fixture,
+                                day: snapshot.days[_selectedDay],
+                                item: item,
+                                index: index,
+                              ),
+                              onDragStarted: (itemId) =>
+                                  setState(() => _draggedItemId = itemId),
+                              onDragEnded: () {
+                                if (mounted) {
+                                  setState(() => _draggedItemId = null);
+                                }
+                              },
+                              onAction: (item, action) => _handleTimelineAction(
+                                snapshot: snapshot,
+                                item: item,
+                                action: action,
+                              ),
+                            ),
+                          ] else if (snapshot
+                              .unplacedItems
+                              .isEmpty) ...<Widget>[
+                            const SizedBox(height: 28),
+                            const _UnplacedSection(items: <TripItemSnapshot>[]),
+                          ],
+                          if (snapshot.unplacedItems.isNotEmpty) ...<Widget>[
+                            const SizedBox(height: 28),
+                            PlanUnplacedItems(
+                              items: snapshot.unplacedItems,
+                              canMove: buildPlanMoveTargets(
+                                snapshot: snapshot,
+                              ).isNotEmpty,
+                              onAction: (item, action) => _handleTimelineAction(
+                                snapshot: snapshot,
+                                item: item,
+                                action: action,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                      onDragStarted: (itemId) =>
-                          setState(() => _draggedItemId = itemId),
-                      onDragEnded: () {
-                        if (mounted) setState(() => _draggedItemId = null);
-                      },
-                      onAction: (item, action) => _handleTimelineAction(
-                        snapshot: snapshot,
-                        item: item,
-                        action: action,
-                      ),
-                    ),
-                  ] else if (snapshot.unplacedItems.isEmpty) ...<Widget>[
-                    const SizedBox(height: 28),
-                    const _UnplacedSection(items: <TripItemSnapshot>[]),
-                  ],
-                  if (snapshot.unplacedItems.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: 28),
-                    PlanUnplacedItems(
-                      items: snapshot.unplacedItems,
-                      canMove: buildPlanMoveTargets(
-                        snapshot: snapshot,
-                      ).isNotEmpty,
-                      onAction: (item, action) => _handleTimelineAction(
-                        snapshot: snapshot,
-                        item: item,
-                        action: action,
-                      ),
-                    ),
-                  ],
-                  SizedBox(height: globalActionsScrollReserve),
-                ],
-              ),
-              if (_draggedItemId case final itemId?)
-                Positioned(
-                  left: 12,
-                  right: 12,
-                  bottom: 8,
-                  child: PlanDragDestinations(
-                    snapshot: snapshot,
-                    itemId: itemId,
-                    onAccept: (target) {
-                      setState(() => _draggedItemId = null);
-                      _previewMove(
-                        itemId: itemId,
-                        targetDayId: target.dayId,
-                        targetIndex: target.targetIndex,
-                      );
-                    },
+                      if (_draggedItemId case final itemId?)
+                        Positioned(
+                          left: 12,
+                          right: 12,
+                          bottom: 8,
+                          child: PlanDragDestinations(
+                            snapshot: snapshot,
+                            itemId: itemId,
+                            onAccept: (target) {
+                              setState(() => _draggedItemId = null);
+                              _previewMove(
+                                itemId: itemId,
+                                targetDayId: target.dayId,
+                                targetIndex: target.targetIndex,
+                              );
+                            },
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-            ],
-          ),
-          bottomNavigationBar: _GlobalPlanActions(
-            onAdd: () => _openPlacePicker(snapshot: snapshot, fixture: fixture),
-            onAsk: () => Navigator.of(context).maybePop(),
-            onCosts: _openCostSheet,
+                _GlobalPlanActions(
+                  onAdd: () =>
+                      _openPlacePicker(snapshot: snapshot, fixture: fixture),
+                  onAsk: () => Navigator.of(context).maybePop(),
+                  onCosts: _openCostSheet,
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -996,7 +1014,6 @@ class _GlobalPlanActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.fromLTRB(
@@ -1005,38 +1022,42 @@ class _GlobalPlanActions extends StatelessWidget {
         12,
         _globalPlanActionsBottomSpacing,
       ),
-      child: Material(
-        elevation: 3,
-        color: colors.surfaceContainer,
-        borderRadius: BorderRadius.circular(14),
-        clipBehavior: Clip.antiAlias,
-        child: SizedBox(
-          key: const Key('plan-global-actions'),
-          height: _globalPlanActionsHeight,
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: _PlanAction(
-                  icon: Icons.add_location_alt_outlined,
-                  label: 'Aggiungi luogo',
-                  onTap: onAdd,
-                ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: IterMaterialSurface(
+            key: const Key('plan-global-actions'),
+            padding: const EdgeInsets.all(6),
+            borderRadius: BorderRadius.circular(32),
+            translucent: true,
+            child: SizedBox(
+              height: 52,
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: _PlanAction(
+                      icon: Icons.add_location_alt_outlined,
+                      label: 'Aggiungi luogo',
+                      onTap: onAdd,
+                    ),
+                  ),
+                  Expanded(
+                    child: _PlanAction(
+                      icon: Icons.chat_outlined,
+                      label: 'Chiedi',
+                      onTap: onAsk,
+                    ),
+                  ),
+                  Expanded(
+                    child: _PlanAction(
+                      icon: Icons.receipt_long_outlined,
+                      label: 'Costi',
+                      onTap: onCosts,
+                    ),
+                  ),
+                ],
               ),
-              Expanded(
-                child: _PlanAction(
-                  icon: Icons.chat_outlined,
-                  label: 'Chiedi',
-                  onTap: onAsk,
-                ),
-              ),
-              Expanded(
-                child: _PlanAction(
-                  icon: Icons.receipt_long_outlined,
-                  label: 'Costi',
-                  onTap: onCosts,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1065,17 +1086,19 @@ class _PlanAction extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Icon(icon, size: 22, color: colors.primary),
-                const SizedBox(height: 3),
+                Icon(icon, size: 18, color: colors.primary),
                 Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelMedium?.copyWith(fontSize: 11, height: 1),
                 ),
               ],
             ),

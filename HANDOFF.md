@@ -1,7 +1,7 @@
 # Iter — Handoff
 
-Aggiornato il 14 agosto 2026. Questo è il punto di ingresso per riprendere il
-lavoro sul branch `codex/iter-new-only`.
+Aggiornato il 15 agosto 2026. Questo è il punto di ingresso per riprendere il
+lavoro sul branch `codex/iter-ui-rebuild`.
 
 ## Stato
 
@@ -10,8 +10,9 @@ chiama `buildIterApp()` e monta solo `ChatFirstPrototypeApp`. Sono stati rimossi
 il routing con feature flag, `IterStore` e le schermate legacy che non servono
 alla nuova esperienza. Non sono stati fatti commit o push.
 
-Il branch è nato preservando le modifiche già presenti nel worktree. Prima di
-toccare altro controllare sempre:
+Il branch è nato pulito da `codex/iter-new-only` (`0e4453e`), lasciando il
+precedente pass visuale su `codex/iter-design-polish` come archivio confrontabile.
+Prima di toccare altro controllare sempre:
 
 ```bash
 git status --short --branch
@@ -37,8 +38,27 @@ provider o dati live:
   fuori scope come dichiarato in `PRODUCT.md`.
 
 Verifica eseguita dopo queste modifiche: `flutter analyze` senza issue, `flutter
-test` con 238 test superati, `flutter build web --release` riuscito e
-`git diff --check` pulito. Il worktree resta non committato.
+test` con 243 test superati, `flutter build web --release` riuscito e
+`git diff --check` pulito. Il rebuild visuale è stato verificato nel Browser
+integrato su `http://127.0.0.1:7359/?v=iter-ui-rebuild-final`: Home, Chat,
+Piano, Viaggi, Tu e tema scuro. Il worktree resta non committato.
+
+## Rebuild visuale 15 agosto
+
+Il branch `codex/iter-ui-rebuild` rende esplicito il nuovo mondo visivo:
+
+- frame centrato da 760 dp e dock inferiore flottante da 360 dp;
+- Home attiva con scena fotografica, timeline lineare e composer pronto alla
+  modifica;
+- Viaggi senza FAB ambiguo: nuova chat esplicita nella testata;
+- Chat con composer grande in una superficie flottante tipo WhatsApp;
+- Piano con hero/media, timeline editabile e isola azioni riservata sotto il
+  contenuto;
+- Profilo lineare con statistiche, emoji, disponibilità, tema e collegamenti,
+  senza griglia di card.
+
+La vecchia implementazione resta fuori dal percorso di avvio e non è stata
+riattivata per ottenere questo risultato.
 
 ## Contratto prodotto
 
@@ -48,6 +68,8 @@ Le fonti operative sono:
 - `DESIGN.md` — gerarchia, colori, interazioni e accessibilità;
 - `docs/superpowers/specs/2026-08-14-iter-new-only-design.md` — decisioni
   approvate del nuovo perimetro;
+- `docs/superpowers/specs/2026-08-15-iter-ui-rebuild-design.md` — contratto
+  visuale del rebuild corrente;
 - `docs/superpowers/plans/2026-08-14-iter-new-only-implementation.md` — piano
   esecutivo e gate.
 
@@ -127,10 +149,10 @@ Flutter:
 
 ```bash
 flutter build web --release
-python3 -m http.server 7357 --directory build/web --bind 127.0.0.1
+python3 -m http.server 7359 --directory build/web --bind 127.0.0.1
 ```
 
-Poi aprire `http://127.0.0.1:7357` nel Browser integrato. Percorrere almeno:
+Poi aprire `http://127.0.0.1:7359` nel Browser integrato. Percorrere almeno:
 
 1. Oggi → nuova chat → composer e allegato;
 2. Viaggi → Porto → piano → scheda luogo/indicazioni;

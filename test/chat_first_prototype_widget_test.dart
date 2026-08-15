@@ -13,6 +13,7 @@ import 'package:iter/features/chat_first_prototype/chat_first_models.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_profile_screen.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_shell.dart';
 import 'package:iter/features/chat_first_prototype/chat_first_thread_screen.dart';
+import 'package:iter/features/chat_first_prototype/iter_ui_primitives.dart';
 import 'package:iter/features/chat_first_prototype/plan_external_launcher.dart';
 import 'package:iter/features/chat_first_prototype/profile_models.dart';
 import 'package:iter/features/chat_first_prototype/rotta_viva_mark.dart';
@@ -200,7 +201,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Chat'), findsOneWidget);
+    expect(find.text('Viaggi'), findsOneWidget);
     expect(find.text('Roma'), findsOneWidget);
     expect(find.text('Porto'), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
@@ -990,6 +991,8 @@ void main() {
 
     expect(find.text('Memoria appresa'), findsOneWidget);
     expect(find.text('Aspetto'), findsOneWidget);
+    expect(find.byKey(const Key('profile-header')), findsOneWidget);
+    expect(find.byKey(const Key('profile-stats')), findsOneWidget);
 
     final scrollable = find.byType(Scrollable).first;
     await tester.scrollUntilVisible(
@@ -1079,6 +1082,27 @@ void main() {
     expect(find.text('Salva disponibilità'), findsOneWidget);
   });
 
+  testWidgets('viaggi usa una lista lineare con nuova chat esplicita', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final controller = ChatFirstPrototypeController();
+    await tester.pumpWidget(
+      wrapIter(
+        ChatFirstListScreen(controller: controller, onOpenThread: (_) {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('trips-heading')), findsOneWidget);
+    expect(find.byKey(const Key('trips-new-chat')), findsOneWidget);
+    expect(find.text('Nuova chat'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
+  });
+
   testWidgets('snapshot read-only mostra dati e giorni', (tester) async {
     tester.view.physicalSize = const Size(800, 2600);
     tester.view.devicePixelRatio = 1.0;
@@ -1102,6 +1126,37 @@ void main() {
     expect(find.text('Oggi'), findsOneWidget);
     expect(find.text('Foro Romano'), findsOneWidget);
     expect(find.text('Aggiungi luogo'), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const Key('plan-global-actions'))).width,
+      lessThanOrEqualTo(560),
+    );
+  });
+
+  testWidgets('chat mantiene un composer grande e flottante', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final controller = ChatFirstPrototypeController();
+    final active = controller.threads.firstWhere(
+      (thread) => thread.summary.snapshot?.statusLabel == 'In viaggio',
+    );
+    await tester.pumpWidget(
+      wrapIter(
+        ChatFirstThreadScreen(
+          controller: controller,
+          conversationId: active.summary.id,
+          onOpenSnapshot: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('chat-composer')), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const Key('chat-composer'))).height,
+      greaterThanOrEqualTo(64),
+    );
   });
 
   testWidgets('home pianificazione promuove una scelta e continua il thread', (
@@ -1173,18 +1228,12 @@ void main() {
     await tester.pumpAndSettle();
 
     final colors = IterTheme.light().colorScheme;
-    final card = tester.widget<Card>(
-      find
-          .ancestor(
-            of: find.text('Prossima scelta'),
-            matching: find.byType(Card),
-          )
-          .first,
+    final surface = tester.widget<IterMaterialSurface>(
+      find.byKey(const Key('planning-next-choice')),
     );
-    expect(card.color, colors.surfaceContainerLow);
-    expect(card.color, isNot(colors.primaryContainer));
-    final shape = card.shape! as RoundedRectangleBorder;
-    expect(shape.side, BorderSide(color: colors.outlineVariant));
+    expect(surface.translucent, isFalse);
+    expect(surface.borderRadius, BorderRadius.circular(24));
+    expect(colors.surfaceContainerLow, isNot(colors.primaryContainer));
   });
 
   testWidgets('home attiva apre il thread senza mutare il piano', (
@@ -1214,10 +1263,44 @@ void main() {
     expect(find.text('Roma · Oggi'), findsOneWidget);
     expect(find.text('Foro Romano'), findsOneWidget);
     expect(find.text('Aggiornamento da confermare'), findsNothing);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -240));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Vedi il piano completo'));
     await tester.pump();
     expect(opened, same(active));
     expect(snapshot.days.first.items.first.time, '09:30');
+  });
+
+  testWidgets('home attiva mette la destinazione prima della timeline', (
+    tester,
+  ) async {
+    final controller = ChatFirstPrototypeController();
+    final active = controller.threads.firstWhere(
+      (thread) => thread.summary.snapshot?.statusLabel == 'In viaggio',
+    );
+    await tester.pumpWidget(
+      wrapIter(
+        ChatFirstHomeScreen(
+          model: AdaptiveHomeModel.active(thread: active),
+          unread: 0,
+          onSubmitIntent: (_) {},
+          onVoiceIntent: () {},
+          onPhotoIntent: (_) {},
+          onOpenThread: (_) {},
+          onOpenTrips: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('home-destination-stage')), findsOneWidget);
+    expect(find.byKey(const Key('home-route')), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('home-composer')),
+      160,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.byKey(const Key('home-composer')), findsOneWidget);
   });
 
   testWidgets('home resta leggibile a 320x640, testo 1.5 e moto ridotto', (
@@ -1258,6 +1341,9 @@ void main() {
   testWidgets('shell usa Oggi Viaggi Tu e apre il FreeTalk dopo invio', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
     final controller = ChatFirstPrototypeController();
     await tester.pumpWidget(
       MaterialApp(
@@ -1274,6 +1360,11 @@ void main() {
     expect(find.text('Oggi'), findsOneWidget);
     expect(find.text('Viaggi'), findsOneWidget);
     expect(find.text('Tu'), findsOneWidget);
+    expect(find.byKey(const Key('shell-floating-dock')), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const Key('shell-floating-dock'))).width,
+      lessThanOrEqualTo(360),
+    );
     await tester.scrollUntilVisible(
       find.byType(TextField),
       200,
@@ -1332,6 +1423,8 @@ void main() {
         ),
       ),
     );
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -240));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Vedi il piano completo'));
     await tester.pumpAndSettle();
     expect(activeController.activeThreadId, active.summary.id);

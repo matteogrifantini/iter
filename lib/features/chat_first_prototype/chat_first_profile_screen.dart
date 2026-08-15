@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'iter_ui_primitives.dart';
 import 'profile_availability_sheet.dart';
 import 'profile_models.dart';
 
@@ -34,11 +35,13 @@ class ChatFirstProfileScreen extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 112),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 128),
         children: <Widget>[
           const _ProfileHeader(),
           const SizedBox(height: 24),
           _StatsRow(stats: stats),
+          const SizedBox(height: 18),
+          const IterRouteDivider(active: true),
           const SizedBox(height: 26),
           Text(
             'Il tuo modo di partire',
@@ -240,43 +243,21 @@ class _ProfileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Row(
+    return Column(
+      key: const Key('profile-header'),
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: colors.primary, width: 2),
-          ),
-          child: CircleAvatar(
-            radius: 26,
-            backgroundColor: colors.surfaceContainerHighest,
-            child: Icon(Icons.person_outline, size: 30, color: colors.primary),
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'Tu',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              Text(
-                'Un profilo leggero, costruito viaggiando ✨',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
-              ),
-            ],
-          ),
+        Text('Tu', style: Theme.of(context).textTheme.displaySmall),
+        const SizedBox(height: 4),
+        Text('🌿  🎒  ✨', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 6),
+        Text(
+          'Un profilo leggero, costruito viaggiando.',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
         ),
       ],
     );
@@ -297,6 +278,7 @@ class _StatsRow extends StatelessWidget {
       (value: '${stats.estimatedKilometers}', label: 'km stimati'),
     ];
     return Semantics(
+      key: const Key('profile-stats'),
       container: true,
       label: 'Statistiche di viaggio',
       child: Row(

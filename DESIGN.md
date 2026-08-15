@@ -3,8 +3,9 @@
 ## Direzione
 
 Iter usa **Rotta viva**: un sistema di orientamento affettivo per costruire un
-viaggio. La personalità viene da immagini, ritmo della timeline, microcopy e
-segnali di percorso; non da chrome decorativo o da una dashboard.
+viaggio. La nuova UI rebuild rende questa idea visibile già nel primo viewport:
+una scena della destinazione, una rotta leggibile e un composer che resta pronto
+alla modifica. Non è una dashboard e non è una raccolta di card.
 
 La modalità di lavoro è **Operate**: l'utente deve capire rapidamente cosa può
 fare, cosa è solo una proposta e cosa è stato confermato.
@@ -13,7 +14,8 @@ fare, cosa è solo una proposta e cosa è stato confermato.
 
 - Canvas semantico dal tema Iter, mai colori raw nei widget.
 - Material 3 e safe area native.
-- Bottom navigation flottante: **Oggi / Viaggi / Tu**.
+- Contenuto centrato con larghezza massima 760 dp sulle finestre ampie.
+- Bottom navigation flottante e compatta: **Oggi / Viaggi / Tu**.
 - Una sola barra di azioni principali nel piano, ancorata in basso.
 - Menu overflow solo per azioni rare.
 - Sheet e dialog per attività brevi che richiedono focus protetto.
@@ -36,9 +38,14 @@ I token vivono in `lib/app/iter_theme.dart` e nei ruoli `ColorScheme` /
 | Segnale | `#FF5C42` | `#FF7A63` | attenzione e decisione |
 | Possibilità | `#E7FF67` | `#E7FF67` | nuovo segnale positivo |
 
-Il blocco principale della home usa una superficie neutra (`surfaceContainerLow`)
-e un bordo sottile. Niente box blu imposto fuori gerarchia, gradienti, glass o
-ombre decorative.
+La Home attiva usa una scena fotografica della destinazione come primo ancoraggio,
+poi una timeline lineare e un composer flottante. La Home vuota usa il composer
+come oggetto principale, non come campo dentro una card. Niente box blu imposto
+fuori gerarchia, griglie di card, gradienti o ombre decorative.
+
+Le superfici traslucide sono ammesse solo per chrome flottante e sheet, dove
+separano un'azione dal canvas. Devono avere fallback opaco con trasparenza ridotta
+e non possono essere impilate una sopra l'altra.
 
 ## Tipografia
 
@@ -135,6 +142,7 @@ totale e disclaimer `Demo: nessun pagamento reale`; il successo diventa
 ```text
 lib/app/iter_theme.dart
 lib/features/chat_first_prototype/chat_first_shell.dart
+lib/features/chat_first_prototype/iter_ui_primitives.dart
 lib/features/chat_first_prototype/chat_first_home_screen.dart
 lib/features/chat_first_prototype/chat_first_thread_screen.dart
 lib/features/chat_first_prototype/trip_snapshot_screen.dart

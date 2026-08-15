@@ -7,7 +7,7 @@ Questo checkout descrive la versione nuova e unica di Iter. L'app parte da
 vecchia app e un prototipo tramite feature flag. I documenti storici del Lab e
 della vecchia UI restano consultabili solo come archivio.
 
-Branch di lavoro: `codex/iter-new-only`.
+Branch di lavoro: `codex/iter-ui-rebuild`.
 
 ## Scopo
 

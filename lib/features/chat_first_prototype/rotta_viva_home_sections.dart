@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'chat_first_data.dart';
 import 'chat_first_models.dart';
+import 'iter_ui_primitives.dart';
 
 const rottaVivaSeeds = <({String label, String clue, String semantics})>[
   (
@@ -207,47 +208,40 @@ class AdaptivePlanningSection extends StatelessWidget {
           ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
         ),
         const SizedBox(height: 24),
-        Card(
-          color: colors.surfaceContainerLow,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: colors.outlineVariant),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'Prossima scelta',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Decidiamo il ritmo del viaggio',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Iter ha abbastanza contesto per proporti il passo giusto.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: () => onOpenThread(thread),
-                  icon: const Icon(Icons.arrow_forward_rounded),
-                  label: const Text('Continua il viaggio'),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: onStartAnotherJourney == null
-                      ? null
-                      : () => onStartAnotherJourney!(),
-                  child: const Text('Inizia un altro viaggio'),
-                ),
-              ],
-            ),
+        IterMaterialSurface(
+          key: const Key('planning-next-choice'),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Prossima scelta',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Decidiamo il ritmo del viaggio',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Iter ha abbastanza contesto per proporti il passo giusto.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: () => onOpenThread(thread),
+                icon: const Icon(Icons.arrow_forward_rounded),
+                label: const Text('Continua il viaggio'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: onStartAnotherJourney == null
+                    ? null
+                    : () => onStartAnotherJourney!(),
+                child: const Text('Inizia un altro viaggio'),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 24),
@@ -294,6 +288,7 @@ class ActiveTimelineSection extends StatelessWidget {
       }
     }
     return Column(
+      key: const Key('home-route'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
@@ -327,19 +322,11 @@ class ActiveTimelineSection extends StatelessWidget {
                             style: Theme.of(context).textTheme.labelLarge,
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Icon(
-                            item.locked
-                                ? Icons.lock_rounded
-                                : Icons.location_on_outlined,
-                            semanticLabel: item.locked
-                                ? 'Tappa bloccata'
-                                : 'Tappa flessibile',
-                            color: item.locked
-                                ? colors.primary
-                                : colors.onSurfaceVariant,
-                          ),
+                        Semantics(
+                          label: item.locked
+                              ? 'Tappa bloccata'
+                              : 'Tappa flessibile',
+                          child: IterRouteDivider(active: item.locked),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -421,6 +408,141 @@ class ActiveTimelineSection extends StatelessWidget {
         ],
       ],
     );
+  }
+}
+
+class ActiveDestinationStage extends StatelessWidget {
+  const ActiveDestinationStage({
+    super.key,
+    required this.thread,
+    required this.onOpenThread,
+  });
+
+  final ChatThread thread;
+  final ValueChanged<ChatThread> onOpenThread;
+
+  @override
+  Widget build(BuildContext context) {
+    final snapshot = thread.summary.snapshot;
+    if (snapshot == null) return const SizedBox.shrink();
+    final colors = Theme.of(context).colorScheme;
+    final image = _destinationImage(snapshot.destinationTitle);
+    final stopCount = snapshot.days.isEmpty
+        ? 0
+        : snapshot.days.first.items.length;
+    return Semantics(
+      container: true,
+      label: 'Scena della destinazione ${snapshot.destinationTitle}',
+      child: ClipRRect(
+        key: const Key('home-destination-stage'),
+        borderRadius: BorderRadius.circular(28),
+        child: SizedBox(
+          height: 250,
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              Image.asset(
+                image,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => ColoredBox(
+                  color: colors.inverseSurface,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: <Color>[
+                        Colors.transparent,
+                        colors.inverseSurface.withValues(alpha: .84),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 18,
+                top: 18,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.surface.withValues(alpha: .86),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      'In viaggio',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.labelLarge?.copyWith(color: colors.onSurface),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 20,
+                right: 20,
+                bottom: 18,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            snapshot.destinationTitle,
+                            style: Theme.of(context).textTheme.displaySmall
+                                ?.copyWith(color: colors.onInverseSurface),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Oggi · $stopCount ${stopCount == 1 ? 'tappa' : 'tappe'} · ${snapshot.days.firstOrNull?.theme ?? snapshot.stay}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: colors.onInverseSurface),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    IconButton.filledTonal(
+                      tooltip: 'Apri la chat del viaggio',
+                      onPressed: () => onOpenThread(thread),
+                      icon: const Icon(Icons.chat_bubble_outline_rounded),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _destinationImage(String title) {
+    final normalized = title.toLowerCase();
+    if (normalized.contains('porto')) {
+      return 'assets/images/travel/porto_livraria_lello.jpg';
+    }
+    if (normalized.contains('parigi')) {
+      return 'assets/images/travel/paris_eiffel.jpg';
+    }
+    if (normalized.contains('barcellona')) {
+      return 'assets/images/travel/barcelona_square.jpg';
+    }
+    if (normalized.contains('lisbona')) {
+      return 'assets/images/travel/lisbon_street.jpg';
+    }
+    return 'assets/images/travel/rome_city.jpg';
   }
 }
 

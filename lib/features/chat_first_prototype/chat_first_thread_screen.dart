@@ -5,6 +5,7 @@ import 'chat_first_controller.dart';
 import 'chat_first_data.dart';
 import 'chat_first_models.dart';
 import 'inspiration_import_sheet.dart';
+import 'iter_ui_primitives.dart';
 
 class ChatFirstThreadScreen extends StatefulWidget {
   const ChatFirstThreadScreen({
@@ -112,95 +113,104 @@ class _ChatFirstThreadScreenState extends State<ChatFirstThreadScreen> {
                 ),
             ],
           ),
-          body: Column(
-            children: <Widget>[
-              Expanded(
-                child: ListView.builder(
-                  controller: _scroll,
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final message = messages[index];
-                    final showDayDivider =
-                        index == 0 ||
-                        messages[index - 1].sentAt.day != message.sentAt.day;
-                    final interactive =
-                        messages.isNotEmpty && messages.last.choices.isNotEmpty;
-                    return _MessageRow(
-                      message: message,
-                      showDayDivider: showDayDivider,
-                      avatar: summary.avatar,
-                      enabled: interactive && index == messages.length - 1,
-                      onChoice: (choice) {
-                        widget.controller.choose(
-                          choice,
-                          conversationId: widget.conversationId,
-                          messageId: message.id,
-                        );
-                        _jumpToBottom();
-                      },
-                      onAcceptProposal: () {
-                        widget.controller.acceptProposal(
-                          widget.conversationId,
-                          message.id,
-                        );
-                        _jumpToBottom();
-                      },
-                      onRejectProposal: () {
-                        widget.controller.rejectProposal(
-                          widget.conversationId,
-                          message.id,
-                        );
-                        _jumpToBottom();
-                      },
-                      onOpenPlan: message.proposal == null
-                          ? null
-                          : () => widget.onOpenSnapshot(
-                              message.proposal!.snapshot,
-                            ),
-                      onSelectFlight: (optionId) {
-                        widget.controller.selectTravelOption(
-                          conversationId: widget.conversationId,
-                          optionId: optionId,
-                        );
-                        _jumpToBottom();
-                      },
-                      onSelectStay: (optionId) {
-                        widget.controller.selectStayOption(
-                          conversationId: widget.conversationId,
-                          optionId: optionId,
-                        );
-                        _jumpToBottom();
-                      },
-                      onProposeNightsChange: (nights) {
-                        widget.controller.proposeStayNightsChange(
-                          conversationId: widget.conversationId,
-                          nights: nights,
-                        );
-                        _jumpToBottom();
-                      },
-                      selectedFlightId: selectedFlightId,
-                      selectedStayId: selectedStayId,
-                      reducedMotion: reducedMotion,
-                    );
-                  },
-                ),
-              ),
-              if (widget.controller.placeComposerContext(widget.conversationId)
-                  case final place?)
-                _PlaceComposerContext(
-                  place: place,
-                  onClear: () => widget.controller.clearPlaceComposerContext(
-                    widget.conversationId,
+          body: IterPageFrame(
+            padding: EdgeInsets.zero,
+            expandHeight: true,
+            child: Column(
+              children: <Widget>[
+                Expanded(
+                  child: ListView.builder(
+                    key: const Key('thread-message-list'),
+                    controller: _scroll,
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) {
+                      final message = messages[index];
+                      final showDayDivider =
+                          index == 0 ||
+                          messages[index - 1].sentAt.day != message.sentAt.day;
+                      final interactive =
+                          messages.isNotEmpty &&
+                          messages.last.choices.isNotEmpty;
+                      return _MessageRow(
+                        message: message,
+                        showDayDivider: showDayDivider,
+                        avatar: summary.avatar,
+                        enabled: interactive && index == messages.length - 1,
+                        onChoice: (choice) {
+                          widget.controller.choose(
+                            choice,
+                            conversationId: widget.conversationId,
+                            messageId: message.id,
+                          );
+                          _jumpToBottom();
+                        },
+                        onAcceptProposal: () {
+                          widget.controller.acceptProposal(
+                            widget.conversationId,
+                            message.id,
+                          );
+                          _jumpToBottom();
+                        },
+                        onRejectProposal: () {
+                          widget.controller.rejectProposal(
+                            widget.conversationId,
+                            message.id,
+                          );
+                          _jumpToBottom();
+                        },
+                        onOpenPlan: message.proposal == null
+                            ? null
+                            : () => widget.onOpenSnapshot(
+                                message.proposal!.snapshot,
+                              ),
+                        onSelectFlight: (optionId) {
+                          widget.controller.selectTravelOption(
+                            conversationId: widget.conversationId,
+                            optionId: optionId,
+                          );
+                          _jumpToBottom();
+                        },
+                        onSelectStay: (optionId) {
+                          widget.controller.selectStayOption(
+                            conversationId: widget.conversationId,
+                            optionId: optionId,
+                          );
+                          _jumpToBottom();
+                        },
+                        onProposeNightsChange: (nights) {
+                          widget.controller.proposeStayNightsChange(
+                            conversationId: widget.conversationId,
+                            nights: nights,
+                          );
+                          _jumpToBottom();
+                        },
+                        selectedFlightId: selectedFlightId,
+                        selectedStayId: selectedStayId,
+                        reducedMotion: reducedMotion,
+                      );
+                    },
                   ),
                 ),
-              _Composer(
-                controller: _composer,
-                onSend: _send,
-                onSendAudio: _sendAudio,
-                onAttach: _showAttachments,
-              ),
-            ],
+                if (widget.controller.placeComposerContext(
+                      widget.conversationId,
+                    )
+                    case final place?)
+                  _PlaceComposerContext(
+                    place: place,
+                    onClear: () => widget.controller.clearPlaceComposerContext(
+                      widget.conversationId,
+                    ),
+                  ),
+                _Composer(
+                  key: const Key('chat-composer'),
+                  controller: _composer,
+                  onSend: _send,
+                  onSendAudio: _sendAudio,
+                  onAttach: _showAttachments,
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -1764,6 +1774,7 @@ class _PlaceComposerContext extends StatelessWidget {
 
 class _Composer extends StatelessWidget {
   const _Composer({
+    super.key,
     required this.controller,
     required this.onSend,
     required this.onSendAudio,
@@ -1784,65 +1795,66 @@ class _Composer extends StatelessWidget {
         final hasText = controller.text.isNotEmpty;
         return SafeArea(
           top: false,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            decoration: BoxDecoration(
-              color: colors.surface,
-              border: Border(
-                top: BorderSide(color: colors.outlineVariant, width: 1),
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: <Widget>[
-                IconButton(
-                  onPressed: onAttach,
-                  tooltip: 'Allegato',
-                  icon: const Icon(Icons.add_circle_outline),
-                  iconSize: 28,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 48),
-                    decoration: BoxDecoration(
-                      color: colors.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: colors.outlineVariant),
+          minimum: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: IterMaterialSurface(
+                padding: const EdgeInsets.all(6),
+                borderRadius: BorderRadius.circular(30),
+                translucent: true,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    IconButton(
+                      onPressed: onAttach,
+                      tooltip: 'Allegato',
+                      icon: const Icon(Icons.add_circle_outline),
+                      iconSize: 28,
                     ),
-                    child: TextField(
-                      controller: controller,
-                      minLines: 2,
-                      maxLines: 5,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => onSend(),
-                      decoration: InputDecoration(
-                        hintText: 'Scrivi a Iter…',
-                        filled: false,
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 13,
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: colors.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: colors.outlineVariant),
+                        ),
+                        child: TextField(
+                          controller: controller,
+                          minLines: 2,
+                          maxLines: 5,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => onSend(),
+                          decoration: InputDecoration(
+                            hintText: 'Scrivi a Iter…',
+                            filled: false,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 13,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 4),
+                    if (hasText)
+                      IconButton.filled(
+                        onPressed: onSend,
+                        tooltip: 'Invia',
+                        icon: const Icon(Icons.arrow_upward_rounded),
+                      )
+                    else
+                      IconButton(
+                        onPressed: onSendAudio,
+                        tooltip: 'Registra vocale (demo)',
+                        icon: const Icon(Icons.mic_none_rounded),
+                        iconSize: 28,
+                      ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                if (hasText)
-                  IconButton.filled(
-                    onPressed: onSend,
-                    tooltip: 'Invia',
-                    icon: const Icon(Icons.arrow_upward_rounded),
-                  )
-                else
-                  IconButton(
-                    onPressed: onSendAudio,
-                    tooltip: 'Registra vocale (demo)',
-                    icon: const Icon(Icons.mic_none_rounded),
-                    iconSize: 28,
-                  ),
-              ],
+              ),
             ),
           ),
         );

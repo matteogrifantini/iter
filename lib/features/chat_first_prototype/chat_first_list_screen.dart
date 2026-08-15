@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'chat_first_controller.dart';
 import 'chat_first_data.dart';
+import 'iter_ui_primitives.dart';
 
 class ChatFirstListScreen extends StatelessWidget {
   const ChatFirstListScreen({
@@ -18,33 +19,39 @@ class ChatFirstListScreen extends StatelessWidget {
     final threads = List<ChatThread>.of(controller.threads);
     threads.sort((a, b) => b.summary.timestamp.compareTo(a.summary.timestamp));
     return SafeArea(
-      child: Scaffold(
-        appBar: AppBar(title: const Text('Chat')),
-        body: threads.isEmpty
-            ? _EmptyChats(onStart: () => _startNewChat(context))
-            : ListView.separated(
-                padding: const EdgeInsets.only(bottom: 96),
-                itemCount: threads.length,
-                separatorBuilder: (_, _) =>
-                    const Divider(height: 1, indent: 82),
-                itemBuilder: (context, index) {
-                  final thread = threads[index];
-                  return _ConversationTile(
-                    thread: thread,
-                    onTap: () {
-                      controller.openConversation(thread.summary.id);
-                      onOpenThread(thread);
-                    },
-                  );
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 128),
+        children: <Widget>[
+          IterSectionHeading(
+            key: const Key('trips-heading'),
+            eyebrow: 'Le tue rotte',
+            title: 'Viaggi',
+            trailing: Tooltip(
+              message: 'Nuova chat',
+              child: TextButton.icon(
+                key: const Key('trips-new-chat'),
+                onPressed: () => _startNewChat(context),
+                icon: const Icon(Icons.add_comment_outlined),
+                label: const Text('Nuova chat'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 22),
+          if (threads.isEmpty)
+            _EmptyChats(onStart: () => _startNewChat(context))
+          else
+            for (var index = 0; index < threads.length; index++) ...<Widget>[
+              _ConversationTile(
+                thread: threads[index],
+                onTap: () {
+                  controller.openConversation(threads[index].summary.id);
+                  onOpenThread(threads[index]);
                 },
               ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => _startNewChat(context),
-          tooltip: 'Nuova chat',
-          elevation: 0,
-          icon: const Icon(Icons.chat_outlined),
-          label: const Text('Nuova chat'),
-        ),
+              if (index != threads.length - 1)
+                const Divider(height: 24, indent: 82),
+            ],
+        ],
       ),
     );
   }
@@ -153,45 +160,38 @@ class _EmptyChats extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Image.asset(
-                'assets/images/travel/rail_coast.jpg',
-                width: 240,
-                height: 150,
-                fit: BoxFit.cover,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Nessuna conversazione ancora',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Parla con Iter di una destinazione: qui ritrovi i piani '
-              'in corso e i promemoria.',
-              textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: onStart,
-              icon: const Icon(Icons.chat_outlined),
-              label: const Text('Inizia una nuova chat'),
-            ),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Image.asset(
+            'assets/images/travel/rail_coast.jpg',
+            width: double.infinity,
+            height: 170,
+            fit: BoxFit.cover,
+          ),
         ),
-      ),
+        const SizedBox(height: 20),
+        Text(
+          'Nessuna conversazione ancora',
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Racconta a Iter una destinazione o un momento: da qui nasce '
+          'il prossimo viaggio.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
+        ),
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          onPressed: onStart,
+          icon: const Icon(Icons.chat_outlined),
+          label: const Text('Inizia una nuova chat'),
+        ),
+      ],
     );
   }
 }

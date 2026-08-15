@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'adaptive_home_model.dart';
@@ -7,6 +9,7 @@ import 'chat_first_home_screen.dart';
 import 'chat_first_list_screen.dart';
 import 'chat_first_profile_screen.dart';
 import 'chat_first_thread_screen.dart';
+import 'iter_ui_primitives.dart';
 import 'trip_snapshot_screen.dart';
 
 /// Bottom navigation with WhatsApp-style chat grammar and Iter's identity.
@@ -113,48 +116,66 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
       builder: (context, _) {
         final controller = widget.controller;
         return Scaffold(
-          body: IndexedStack(
-            index: _tabIndex,
+          body: Stack(
+            fit: StackFit.expand,
             children: <Widget>[
-              ChatFirstHomeScreen(
-                model: resolveAdaptiveHome(controller.threads),
-                onSubmitIntent: (intent) =>
-                    _startFreeTalkWithText(context, intent),
-                onVoiceIntent: () => _startFreeTalkWithVoice(context),
-                onPhotoIntent: (asset) =>
-                    _startFreeTalkWithPhoto(context, asset),
-                onOpenThread: (thread) => _openThread(context, thread),
-                onOpenTrips: () => setState(() => _tabIndex = 1),
-                onStartAnotherJourney: () => _startAnotherFreeTalk(context),
-                unread: controller.unread,
+              Positioned.fill(
+                child: IterPageFrame(
+                  padding: EdgeInsets.zero,
+                  expandHeight: true,
+                  child: IndexedStack(
+                    index: _tabIndex,
+                    children: <Widget>[
+                      ChatFirstHomeScreen(
+                        model: resolveAdaptiveHome(controller.threads),
+                        onSubmitIntent: (intent) =>
+                            _startFreeTalkWithText(context, intent),
+                        onVoiceIntent: () => _startFreeTalkWithVoice(context),
+                        onPhotoIntent: (asset) =>
+                            _startFreeTalkWithPhoto(context, asset),
+                        onOpenThread: (thread) => _openThread(context, thread),
+                        onOpenTrips: () => setState(() => _tabIndex = 1),
+                        onStartAnotherJourney: () =>
+                            _startAnotherFreeTalk(context),
+                        unread: controller.unread,
+                      ),
+                      ChatFirstListScreen(
+                        controller: controller,
+                        onOpenThread: (thread) => _openThread(context, thread),
+                      ),
+                      ChatFirstProfileScreen(
+                        themeMode: widget.themeMode,
+                        onThemeChanged: widget.onThemeChanged,
+                        memoryTags: widget.controller.memoryTags,
+                        availability: widget.controller.availability,
+                        stats: widget.controller.travelStats,
+                        onAddAvailability: (entry) {
+                          widget.controller.addAvailability(
+                            date: entry.date,
+                            kind: entry.kind,
+                            timeRange: entry.timeRange,
+                            note: entry.note,
+                          );
+                        },
+                        onRemoveAvailability:
+                            widget.controller.removeAvailability,
+                        onOpenChats: () => setState(() => _tabIndex = 1),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              ChatFirstListScreen(
-                controller: controller,
-                onOpenThread: (thread) => _openThread(context, thread),
-              ),
-              ChatFirstProfileScreen(
-                themeMode: widget.themeMode,
-                onThemeChanged: widget.onThemeChanged,
-                memoryTags: widget.controller.memoryTags,
-                availability: widget.controller.availability,
-                stats: widget.controller.travelStats,
-                onAddAvailability: (entry) {
-                  widget.controller.addAvailability(
-                    date: entry.date,
-                    kind: entry.kind,
-                    timeRange: entry.timeRange,
-                    note: entry.note,
-                  );
-                },
-                onRemoveAvailability: widget.controller.removeAvailability,
-                onOpenChats: () => setState(() => _tabIndex = 1),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _ChatBottomNavigation(
+                  currentIndex: _tabIndex,
+                  unread: widget.controller.unread,
+                  onChanged: (index) => setState(() => _tabIndex = index),
+                ),
               ),
             ],
-          ),
-          bottomNavigationBar: _ChatBottomNavigation(
-            currentIndex: _tabIndex,
-            unread: widget.controller.unread,
-            onChanged: (index) => setState(() => _tabIndex = index),
           ),
         );
       },
@@ -224,65 +245,76 @@ class _ChatBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return SafeArea(
       top: false,
-      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Semantics(
-        label: 'Navigazione principale',
-        container: true,
-        explicitChildNodes: true,
-        child: Container(
-          height: 68,
-          decoration: BoxDecoration(
-            color: colors.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: colors.outlineVariant),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: _FloatingDestination(
-                  tooltip: 'Oggi',
-                  semantics: 'Oggi',
-                  selected: currentIndex == 0,
-                  icon: const Icon(Icons.home_outlined),
-                  selectedIcon: const Icon(Icons.home),
-                  onTap: () => onChanged(0),
-                ),
-              ),
-              Expanded(
-                child: _FloatingDestination(
-                  tooltip: 'Viaggi',
-                  semantics: unread > 0
-                      ? 'Viaggi, $unread messaggi non letti'
-                      : 'Viaggi',
-                  selected: currentIndex == 1,
-                  icon: _UnreadIcon(
-                    unread: unread,
-                    icon: Icons.chat_bubble_outline,
+      minimum: const EdgeInsets.only(bottom: 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = math
+              .min(360.0, math.max(0.0, constraints.maxWidth - 32))
+              .toDouble();
+          return Center(
+            child: SizedBox(
+              width: width,
+              child: Semantics(
+                label: 'Navigazione principale',
+                container: true,
+                explicitChildNodes: true,
+                child: IterMaterialSurface(
+                  key: const Key('shell-floating-dock'),
+                  padding: const EdgeInsets.all(6),
+                  borderRadius: BorderRadius.circular(32),
+                  translucent: true,
+                  child: SizedBox(
+                    height: 52,
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: _FloatingDestination(
+                            tooltip: 'Oggi',
+                            semantics: 'Oggi',
+                            selected: currentIndex == 0,
+                            icon: const Icon(Icons.home_outlined),
+                            selectedIcon: const Icon(Icons.home),
+                            onTap: () => onChanged(0),
+                          ),
+                        ),
+                        Expanded(
+                          child: _FloatingDestination(
+                            tooltip: 'Viaggi',
+                            semantics: unread > 0
+                                ? 'Viaggi, $unread messaggi non letti'
+                                : 'Viaggi',
+                            selected: currentIndex == 1,
+                            icon: _UnreadIcon(
+                              unread: unread,
+                              icon: Icons.chat_bubble_outline,
+                            ),
+                            selectedIcon: _UnreadIcon(
+                              unread: unread,
+                              icon: Icons.chat_bubble,
+                            ),
+                            onTap: () => onChanged(1),
+                          ),
+                        ),
+                        Expanded(
+                          child: _FloatingDestination(
+                            tooltip: 'Tu',
+                            semantics: 'Tu',
+                            selected: currentIndex == 2,
+                            icon: const Icon(Icons.person_outline),
+                            selectedIcon: const Icon(Icons.person),
+                            onTap: () => onChanged(2),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  selectedIcon: _UnreadIcon(
-                    unread: unread,
-                    icon: Icons.chat_bubble,
-                  ),
-                  onTap: () => onChanged(1),
                 ),
               ),
-              Expanded(
-                child: _FloatingDestination(
-                  tooltip: 'Tu',
-                  semantics: 'Tu',
-                  selected: currentIndex == 2,
-                  icon: const Icon(Icons.person_outline),
-                  selectedIcon: const Icon(Icons.person),
-                  onTap: () => onChanged(2),
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -308,6 +340,7 @@ class _FloatingDestination extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
     return Semantics(
       label: semantics,
       selected: selected,
@@ -321,10 +354,12 @@ class _FloatingDestination extends StatelessWidget {
             children: <Widget>[
               if (selected)
                 AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
+                  duration: reducedMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
-                    vertical: 5,
+                    vertical: 4,
                   ),
                   decoration: BoxDecoration(
                     color: colors.primaryContainer,
@@ -336,11 +371,11 @@ class _FloatingDestination extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
-                    vertical: 5,
+                    vertical: 4,
                   ),
                   child: icon,
                 ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Text(
                 tooltip,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
