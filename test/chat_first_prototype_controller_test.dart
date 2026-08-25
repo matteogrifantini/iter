@@ -1932,6 +1932,9 @@ void main() {
       expect(flightsBack.options, hasLength(flights.options.length));
       expect(flightsBack.recommendedId, flights.recommendedId);
       expect(flightsBack.quotedAt, flights.quotedAt);
+      expect(flightsBack.travelDateLabel, flights.travelDateLabel);
+      expect(flightsBack.travelDateReason, flights.travelDateReason);
+      expect(flightsBack.recommendationReason, flights.recommendationReason);
       expect(flightsBack.recommended.id, flights.recommended.id);
       final flight = flightsBack.options[2];
       expect(flight.departureAirport, 'FCO');
@@ -1946,6 +1949,8 @@ void main() {
       final staysBack = StayCompare.fromJson(stays.toJson());
       expect(staysBack.options, hasLength(stays.options.length));
       expect(staysBack.recommendedId, stays.recommendedId);
+      expect(staysBack.stayDatesLabel, stays.stayDatesLabel);
+      expect(staysBack.recommendationReason, stays.recommendationReason);
       expect(staysBack.recommended.name, 'Torel Avantgarde');
       final hotel = staysBack.options[1];
       expect(hotel.zone, 'Sé');
@@ -2056,7 +2061,25 @@ void main() {
       },
     );
 
-    test('free talk converges every meta choice on the Porto proposal', () {
+    test('free talk carries the selected destination into the proposal', () {
+      final controller = ChatFirstPrototypeController();
+      final thread = controller.startFreeTalk();
+      controller.openConversation(thread.summary.id);
+
+      controller.sendText('Vorrei quattro giorni a Lisbona.');
+      _tapChoice(controller, thread.summary.id, 'Lisbona');
+      expect(thread.summary.title, 'Lisbona');
+      expect(thread.summary.lastPreview, contains('Lisbona scelta'));
+      _answerIntake(controller, thread.summary.id);
+
+      final proposal = controller
+          .threadOf(thread.summary.id)
+          .messages
+          .lastWhere((message) => message.kind == ChatMessageKind.planProposal);
+      expect(proposal.proposal?.snapshot.destinationTitle, 'Lisbona');
+    });
+
+    test('free talk follows the selected meta on the proposal', () {
       final controller = ChatFirstPrototypeController();
       final thread = controller.startFreeTalk();
       controller.openConversation(thread.summary.id);
@@ -2068,12 +2091,10 @@ void main() {
           .threadOf(thread.summary.id)
           .messages
           .lastWhere((message) => message.kind == ChatMessageKind.planProposal);
-      expect(proposal.proposal?.snapshot.destinationTitle, 'Porto');
-      expect(proposal.text, contains('Porto'));
-      // F1: the free talk honestly discloses the demo convergence on Porto.
-      expect(proposal.text, contains('Per la demo convergo su Porto'));
-      expect(proposal.text, contains('volo, hotel e mete sono dati demo'));
-      expect(controller.threadOf(thread.summary.id).summary.title, 'Porto');
+      expect(proposal.proposal?.snapshot.destinationTitle, 'Lisbona');
+      expect(proposal.text, contains('Lisbona'));
+      expect(proposal.text, isNot(contains('Per la demo convergo su Porto')));
+      expect(controller.threadOf(thread.summary.id).summary.title, 'Lisbona');
     });
 
     test('free talk "Consigliami tu" also converges on the Porto route', () {
@@ -2138,7 +2159,7 @@ void main() {
       final freeTalk = controller.threadOf(thread.summary.id) as FreeTalkThread;
 
       controller.sendText('Vorrei quattro giorni lenti, con buon cibo.');
-      _tapChoice(controller, thread.summary.id, 'Roma');
+      _tapChoice(controller, thread.summary.id, 'Porto');
       _answerIntake(controller, thread.summary.id);
 
       // The proposal always assembles the operational Porto snapshot, so the

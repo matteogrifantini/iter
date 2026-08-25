@@ -20,24 +20,22 @@ class AdaptiveHomeModel {
   final ChatThread? thread;
 }
 
-AdaptiveHomeModel resolveAdaptiveHome(List<ChatThread> threads) {
+AdaptiveHomeModel resolveAdaptiveHome(
+  List<ChatThread> threads, {
+  String? focusedThreadId,
+}) {
+  if (focusedThreadId == null) return const AdaptiveHomeModel.empty();
+
+  ChatThread? focused;
   for (final thread in threads) {
-    if (thread.summary.snapshot?.statusLabel == 'In viaggio') {
-      return AdaptiveHomeModel.active(thread: thread);
+    if (thread.summary.id == focusedThreadId) {
+      focused = thread;
+      break;
     }
   }
-
-  ChatThread? newestPlanning;
-  for (final thread in threads) {
-    if (thread.summary.snapshot?.statusLabel != 'In pianificazione') continue;
-    if (newestPlanning == null ||
-        thread.summary.timestamp.isAfter(newestPlanning.summary.timestamp)) {
-      newestPlanning = thread;
-    }
+  if (focused == null) return const AdaptiveHomeModel.empty();
+  if (focused.summary.snapshot?.statusLabel == 'In viaggio') {
+    return AdaptiveHomeModel.active(thread: focused);
   }
-
-  if (newestPlanning != null) {
-    return AdaptiveHomeModel.planning(thread: newestPlanning);
-  }
-  return const AdaptiveHomeModel.empty();
+  return AdaptiveHomeModel.planning(thread: focused);
 }

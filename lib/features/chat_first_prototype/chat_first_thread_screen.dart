@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../widgets/journey_media.dart';
@@ -1107,6 +1109,7 @@ class _FlightCompareContent extends StatelessWidget {
     if (compare == null || compare.options.isEmpty) {
       return const SizedBox.shrink();
     }
+    final cheapestId = _cheapestFlightId(compare.options);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -1120,11 +1123,17 @@ class _FlightCompareContent extends StatelessWidget {
               ).textTheme.bodyLarge?.copyWith(color: colors.onSurface),
             ),
           ),
+        _FlightCompareOverview(
+          compare: compare,
+          selectedOptionId: selectedOptionId,
+          onSelectFlight: onSelectFlight,
+        ),
         for (final option in compare.options)
           _FlightOptionPanel(
             option: option,
             quotedAt: compare.quotedAt,
             isRecommended: option.id == compare.recommendedId,
+            isCheapest: option.id == cheapestId,
             isSelected: option.id == selectedOptionId,
             onSelect: onSelectFlight == null
                 ? null
@@ -1135,11 +1144,279 @@ class _FlightCompareContent extends StatelessWidget {
   }
 }
 
+class _FlightCompareOverview extends StatelessWidget {
+  const _FlightCompareOverview({
+    required this.compare,
+    this.selectedOptionId,
+    this.onSelectFlight,
+  });
+
+  final FlightCompare compare;
+  final String? selectedOptionId;
+  final ValueChanged<String>? onSelectFlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final first = compare.options.first;
+    final minPrice = compare.options
+        .map((option) => option.priceCents)
+        .reduce(math.min);
+    final maxPrice = compare.options
+        .map((option) => option.priceCents)
+        .reduce(math.max);
+    final cheapest = compare.options.reduce(
+      (first, next) => next.priceCents < first.priceCents ? next : first,
+    );
+    final recommended = compare.options.firstWhere(
+      (option) => option.id == compare.recommendedId,
+      orElse: () => first,
+    );
+    final dateLabel = compare.travelDateLabel.isEmpty
+        ? _dateLabel(first.departureAt)
+        : compare.travelDateLabel;
+    final dateReason = compare.travelDateReason.isEmpty
+        ? 'Confronto locale: la disponibilità reale va verificata prima di '
+              'prenotare.'
+        : compare.travelDateReason;
+    final recommendationReason = compare.recommendationReason.isEmpty
+        ? first.tradeoff
+        : compare.recommendationReason;
+
+    return IterMaterialSurface(
+      key: const Key('flight-comparison-overview'),
+      padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+      borderRadius: const BorderRadius.all(Radius.circular(18)),
+      elevation: 0,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(Icons.flight_takeoff, color: colors.primary),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Volo · ${first.departureAirport} → ${first.arrivalAirport}',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${compare.options.length} alternative · '
+                      '${_priceRangeLabel(minPrice, maxPrice)}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Giorno migliore del piano',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: colors.primary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            dateLabel,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            dateReason,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              _ComparisonMetric(
+                icon: Icons.sell_outlined,
+                label: 'Prezzo più basso',
+                value: formatEuroCents(cheapest.priceCents),
+                detail: cheapest.provider,
+              ),
+              _ComparisonMetric(
+                icon: Icons.recommend_outlined,
+                label: 'Scelta consigliata',
+                value: recommended.provider,
+                detail:
+                    '${_stopsLabel(recommended.stops)} · '
+                    '${formatEuroCents(recommended.priceCents)}',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Confronto rapido',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Scorri a destra per confrontare tutti i dettagli.',
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 4),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              key: const Key('flight-comparison-table'),
+              showCheckboxColumn: false,
+              horizontalMargin: 0,
+              columnSpacing: 18,
+              headingRowHeight: 38,
+              dataRowMinHeight: 52,
+              dataRowMaxHeight: 72,
+              columns: const <DataColumn>[
+                DataColumn(label: Text('Volo')),
+                DataColumn(label: Text('Prezzo')),
+                DataColumn(label: Text('Orari')),
+                DataColumn(label: Text('Durata')),
+                DataColumn(label: Text('Scali')),
+              ],
+              rows: <DataRow>[
+                for (final option in compare.options)
+                  DataRow(
+                    selected: option.id == selectedOptionId,
+                    onSelectChanged: onSelectFlight == null
+                        ? null
+                        : (_) => onSelectFlight!(option.id),
+                    cells: <DataCell>[
+                      DataCell(Text(option.provider)),
+                      DataCell(Text(formatEuroCents(option.priceCents))),
+                      DataCell(
+                        Text(
+                          '${_timeLabel(option.departureAt)}–'
+                          '${_timeLabel(option.arrivalAt)}',
+                        ),
+                      ),
+                      DataCell(Text(_durationLabel(option.durationMinutes))),
+                      DataCell(Text(_stopsLabel(option.stops))),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Perché questa scelta',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            recommendationReason,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Dati demo · quotazione ${_dateLabel(compare.quotedAt)} · '
+            'prezzi e disponibilità non sono in tempo reale',
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: colors.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComparisonMetric extends StatelessWidget {
+  const _ComparisonMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.detail,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 136, maxWidth: 240),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(icon, size: 16, color: colors.primary),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    detail,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _FlightOptionPanel extends StatelessWidget {
   const _FlightOptionPanel({
     required this.option,
     required this.quotedAt,
     required this.isRecommended,
+    this.isCheapest = false,
     this.isSelected = false,
     this.onSelect,
   });
@@ -1147,6 +1424,7 @@ class _FlightOptionPanel extends StatelessWidget {
   final FlightOptionInfo option;
   final DateTime quotedAt;
   final bool isRecommended;
+  final bool isCheapest;
   final bool isSelected;
   final VoidCallback? onSelect;
 
@@ -1157,6 +1435,7 @@ class _FlightOptionPanel extends StatelessWidget {
         ? 'Diretto'
         : '${option.stops} ${option.stops == 1 ? 'scalo' : 'scali'}';
     return Container(
+      key: ValueKey<String>('flight-option-${option.id}'),
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -1170,8 +1449,19 @@ class _FlightOptionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          if (isRecommended) ...<Widget>[
-            _RecommendedChip(),
+          if (isRecommended || isCheapest) ...<Widget>[
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: <Widget>[
+                if (isRecommended) const _RecommendedChip(),
+                if (isCheapest)
+                  const _RecommendedChip(
+                    label: 'Prezzo più basso',
+                    icon: Icons.sell_outlined,
+                  ),
+              ],
+            ),
             const SizedBox(height: 8),
           ],
           Row(
@@ -1238,6 +1528,197 @@ class _FlightOptionPanel extends StatelessWidget {
 /// The recommended hotel inventory inside the chat, with a minimal nights
 /// stepper whose changes surface as a confirmable [PlanProposal]. Rendered only
 /// when the message carries a non-empty [StayCompare].
+class _StayCompareOverview extends StatelessWidget {
+  const _StayCompareOverview({
+    required this.compare,
+    this.selectedOptionId,
+    this.onSelectStay,
+  });
+
+  final StayCompare compare;
+  final String? selectedOptionId;
+  final ValueChanged<String>? onSelectStay;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final first = compare.options.first;
+    final minPrice = compare.options
+        .map((option) => option.priceCents)
+        .reduce(math.min);
+    final maxPrice = compare.options
+        .map((option) => option.priceCents)
+        .reduce(math.max);
+    final cheapest = compare.options.reduce(
+      (first, next) => next.priceCents < first.priceCents ? next : first,
+    );
+    final recommended = compare.options.firstWhere(
+      (option) => option.id == compare.recommendedId,
+      orElse: () => first,
+    );
+    final nightsLabel = first.nights == 1 ? '1 notte' : '${first.nights} notti';
+    final datesLabel = compare.stayDatesLabel.isEmpty
+        ? 'Date da confermare'
+        : '${compare.stayDatesLabel} · $nightsLabel';
+    final recommendationReason = compare.recommendationReason.isEmpty
+        ? first.tradeoff
+        : compare.recommendationReason;
+
+    return IterMaterialSurface(
+      key: const Key('stay-comparison-overview'),
+      padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+      borderRadius: const BorderRadius.all(Radius.circular(18)),
+      elevation: 0,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(Icons.hotel_outlined, color: colors.primary),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Hotel per il soggiorno',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${compare.options.length} strutture · '
+                      '${_priceRangeLabel(minPrice, maxPrice)}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Date del soggiorno',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: colors.primary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            datesLabel,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            'La tariffa si riferisce a questa durata; cambiando le notti '
+            'Iter prepara una nuova proposta da confermare.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              _ComparisonMetric(
+                icon: Icons.sell_outlined,
+                label: 'Tariffa più bassa',
+                value: formatEuroCents(cheapest.priceCents),
+                detail: cheapest.name,
+              ),
+              _ComparisonMetric(
+                icon: Icons.recommend_outlined,
+                label: 'Scelta consigliata',
+                value: recommended.name,
+                detail:
+                    '${recommended.zone} · '
+                    '${formatEuroCents(recommended.priceCents)}',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Confronto rapido',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Scorri a destra per confrontare tutti i dettagli.',
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 4),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              key: const Key('stay-comparison-table'),
+              showCheckboxColumn: false,
+              horizontalMargin: 0,
+              columnSpacing: 18,
+              headingRowHeight: 38,
+              dataRowMinHeight: 52,
+              dataRowMaxHeight: 72,
+              columns: const <DataColumn>[
+                DataColumn(label: Text('Struttura')),
+                DataColumn(label: Text('Prezzo')),
+                DataColumn(label: Text('Zona')),
+                DataColumn(label: Text('Notti')),
+                DataColumn(label: Text('Distanza')),
+              ],
+              rows: <DataRow>[
+                for (final option in compare.options)
+                  DataRow(
+                    selected: option.id == selectedOptionId,
+                    onSelectChanged: onSelectStay == null
+                        ? null
+                        : (_) => onSelectStay!(option.id),
+                    cells: <DataCell>[
+                      DataCell(Text(option.name)),
+                      DataCell(Text(formatEuroCents(option.priceCents))),
+                      DataCell(Text(option.zone)),
+                      DataCell(Text('${option.nights}')),
+                      DataCell(Text('${option.averageWalkMinutes} min')),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Perché questa scelta',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            recommendationReason,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Dati demo · prezzi e disponibilità non sono in tempo reale',
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: colors.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StayCompareContent extends StatefulWidget {
   const _StayCompareContent({
     required this.message,
@@ -1295,6 +1776,7 @@ class _StayCompareContentState extends State<_StayCompareContent> {
       return const SizedBox.shrink();
     }
     final source = _nightlySource(compare)!;
+    final cheapestId = _cheapestStayId(compare.options);
     final nightlyCents = stayNightlyPriceCents(
       priceCents: source.priceCents,
       nights: source.nights,
@@ -1313,6 +1795,11 @@ class _StayCompareContentState extends State<_StayCompareContent> {
               ).textTheme.bodyLarge?.copyWith(color: colors.onSurface),
             ),
           ),
+        _StayCompareOverview(
+          compare: compare,
+          selectedOptionId: widget.selectedOptionId,
+          onSelectStay: widget.onSelectStay,
+        ),
         Container(
           width: double.infinity,
           margin: const EdgeInsets.only(bottom: 8),
@@ -1374,6 +1861,7 @@ class _StayCompareContentState extends State<_StayCompareContent> {
           _StayOptionPanel(
             option: option,
             isRecommended: option.id == compare.recommendedId,
+            isCheapest: option.id == cheapestId,
             isSelected: option.id == widget.selectedOptionId,
             onSelect: widget.onSelectStay == null
                 ? null
@@ -1388,12 +1876,14 @@ class _StayOptionPanel extends StatelessWidget {
   const _StayOptionPanel({
     required this.option,
     required this.isRecommended,
+    this.isCheapest = false,
     this.isSelected = false,
     this.onSelect,
   });
 
   final StayOptionInfo option;
   final bool isRecommended;
+  final bool isCheapest;
   final bool isSelected;
   final VoidCallback? onSelect;
 
@@ -1401,6 +1891,7 @@ class _StayOptionPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
+      key: ValueKey<String>('stay-option-${option.id}'),
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -1414,8 +1905,19 @@ class _StayOptionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          if (isRecommended) ...<Widget>[
-            _RecommendedChip(),
+          if (isRecommended || isCheapest) ...<Widget>[
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: <Widget>[
+                if (isRecommended) const _RecommendedChip(),
+                if (isCheapest)
+                  const _RecommendedChip(
+                    label: 'Prezzo più basso',
+                    icon: Icons.sell_outlined,
+                  ),
+              ],
+            ),
             const SizedBox(height: 8),
           ],
           Row(
@@ -1478,7 +1980,13 @@ class _StayOptionPanel extends StatelessWidget {
 
 /// The reusable in-chat "Consigliato" chip used by the rich modules.
 class _RecommendedChip extends StatelessWidget {
-  const _RecommendedChip();
+  const _RecommendedChip({
+    this.label = 'Consigliato',
+    this.icon = Icons.recommend,
+  });
+
+  final String label;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -1495,10 +2003,10 @@ class _RecommendedChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(Icons.recommend, size: 13, color: colors.primary),
+            Icon(icon, size: 13, color: colors.primary),
             const SizedBox(width: 4),
             Text(
-              'Consigliato',
+              label,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: colors.primary,
                 fontWeight: FontWeight.w700,
@@ -1540,6 +2048,32 @@ class _DetailRow extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _cheapestFlightId(List<FlightOptionInfo> options) {
+  if (options.isEmpty) return null;
+  return options
+      .reduce(
+        (first, next) => next.priceCents < first.priceCents ? next : first,
+      )
+      .id;
+}
+
+String? _cheapestStayId(List<StayOptionInfo> options) {
+  if (options.isEmpty) return null;
+  return options
+      .reduce(
+        (first, next) => next.priceCents < first.priceCents ? next : first,
+      )
+      .id;
+}
+
+String _stopsLabel(int stops) =>
+    stops == 0 ? 'Diretto' : '$stops ${stops == 1 ? 'scalo' : 'scali'}';
+
+String _priceRangeLabel(int minCents, int maxCents) {
+  if (minCents == maxCents) return formatEuroCents(minCents);
+  return 'da ${formatEuroCents(minCents)} a ${formatEuroCents(maxCents)}';
 }
 
 String _durationLabel(int minutes) {

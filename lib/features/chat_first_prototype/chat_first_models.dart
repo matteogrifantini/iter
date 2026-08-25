@@ -316,11 +316,17 @@ class FlightCompare {
     required this.options,
     required this.recommendedId,
     required this.quotedAt,
+    this.travelDateLabel = '',
+    this.travelDateReason = '',
+    this.recommendationReason = '',
   });
 
   final List<FlightOptionInfo> options;
   final String recommendedId;
   final DateTime quotedAt;
+  final String travelDateLabel;
+  final String travelDateReason;
+  final String recommendationReason;
 
   FlightOptionInfo get recommended =>
       options.firstWhere((option) => option.id == recommendedId);
@@ -329,6 +335,9 @@ class FlightCompare {
     'options': options.map((option) => option.toJson()).toList(growable: false),
     'recommendedId': recommendedId,
     'quotedAt': quotedAt.toIso8601String(),
+    'travelDateLabel': travelDateLabel,
+    'travelDateReason': travelDateReason,
+    'recommendationReason': recommendationReason,
   };
 
   factory FlightCompare.fromJson(Map<String, dynamic> json) => FlightCompare(
@@ -343,6 +352,9 @@ class FlightCompare {
     quotedAt:
         DateTime.tryParse((json['quotedAt'] as String?) ?? '') ??
         DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    travelDateLabel: (json['travelDateLabel'] as String?) ?? '',
+    travelDateReason: (json['travelDateReason'] as String?) ?? '',
+    recommendationReason: (json['recommendationReason'] as String?) ?? '',
   );
 }
 
@@ -410,14 +422,23 @@ class FlightOptionInfo {
 
 @immutable
 class StayCompare {
-  const StayCompare({required this.options, required this.recommendedId});
+  const StayCompare({
+    required this.options,
+    required this.recommendedId,
+    this.stayDatesLabel = '',
+    this.recommendationReason = '',
+  });
   final List<StayOptionInfo> options;
   final String recommendedId;
+  final String stayDatesLabel;
+  final String recommendationReason;
   StayOptionInfo get recommended =>
       options.firstWhere((option) => option.id == recommendedId);
   Map<String, dynamic> toJson() => <String, dynamic>{
     'options': options.map((option) => option.toJson()).toList(growable: false),
     'recommendedId': recommendedId,
+    'stayDatesLabel': stayDatesLabel,
+    'recommendationReason': recommendationReason,
   };
   factory StayCompare.fromJson(Map<String, dynamic> json) => StayCompare(
     options:
@@ -428,6 +449,8 @@ class StayCompare {
             .toList(growable: false) ??
         const <StayOptionInfo>[],
     recommendedId: (json['recommendedId'] as String?) ?? '',
+    stayDatesLabel: (json['stayDatesLabel'] as String?) ?? '',
+    recommendationReason: (json['recommendationReason'] as String?) ?? '',
   );
 }
 

@@ -186,7 +186,52 @@ class AdaptivePlanningSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final snapshot = thread.summary.snapshot;
-    if (snapshot == null) return const SizedBox.shrink();
+    if (snapshot == null) {
+      final colors = Theme.of(context).colorScheme;
+      return Column(
+        key: const Key('planning-new-idea'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'La tua idea prende forma',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'La chat è aperta. Ogni risposta sposta il viaggio verso qualcosa '
+            'che ti somiglia di più.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 24),
+          IterMaterialSurface(
+            key: const Key('planning-chat-next-step'),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Prossimo passo',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  thread.summary.lastPreview,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  onPressed: () => onOpenThread(thread),
+                  icon: const Icon(Icons.chat_bubble_outline_rounded),
+                  label: const Text('Riprendi la chat'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
     final colors = Theme.of(context).colorScheme;
     final signals = <String>[
       snapshot.dates,

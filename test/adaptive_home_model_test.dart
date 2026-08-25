@@ -16,6 +16,19 @@ void main() {
     expect(result.thread, isNull);
   });
 
+  test('does not promote an unfocused active trip onto Oggi', () {
+    final active = _thread(
+      id: 'seeded-active',
+      timestamp: DateTime.utc(2026, 8, 9),
+      snapshot: _snapshot('In viaggio'),
+    );
+
+    final result = resolveAdaptiveHome(<ChatThread>[active]);
+
+    expect(result.kind, AdaptiveHomeKind.empty);
+    expect(result.thread, isNull);
+  });
+
   test('prefers an active trip over a planning trip', () {
     final planning = _thread(
       id: 'planning',
@@ -28,7 +41,10 @@ void main() {
       snapshot: _snapshot('In viaggio'),
     );
 
-    final result = resolveAdaptiveHome(<ChatThread>[planning, active]);
+    final result = resolveAdaptiveHome(<ChatThread>[
+      planning,
+      active,
+    ], focusedThreadId: active.summary.id);
 
     expect(result.kind, AdaptiveHomeKind.active);
     expect(result.thread, same(active));
@@ -46,7 +62,10 @@ void main() {
       snapshot: _snapshot('In viaggio'),
     );
 
-    final result = resolveAdaptiveHome(<ChatThread>[firstActive, secondActive]);
+    final result = resolveAdaptiveHome(<ChatThread>[
+      firstActive,
+      secondActive,
+    ], focusedThreadId: firstActive.summary.id);
 
     expect(result.kind, AdaptiveHomeKind.active);
     expect(result.thread, same(firstActive));
@@ -65,7 +84,10 @@ void main() {
     );
     final originalOrder = <ChatThread>[olderPlanning, newerPlanning];
 
-    final result = resolveAdaptiveHome(originalOrder);
+    final result = resolveAdaptiveHome(
+      originalOrder,
+      focusedThreadId: newerPlanning.summary.id,
+    );
 
     expect(result.kind, AdaptiveHomeKind.planning);
     expect(result.thread, same(newerPlanning));

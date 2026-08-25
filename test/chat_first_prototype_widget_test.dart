@@ -613,18 +613,28 @@ void main() {
     expect(transport.flightCompare, isNotNull);
     expect(transport.flightCompare!.options, hasLength(4));
     expect(find.text('Consigliato'), findsOneWidget);
-    expect(find.text('TAP Air Portugal'), findsOneWidget);
-    expect(find.text('189 €'), findsOneWidget);
+    expect(find.text('TAP Air Portugal'), findsNWidgets(3));
+    expect(find.text('189 €'), findsNWidgets(2));
+    expect(find.text('Giorno migliore del piano'), findsOneWidget);
+    expect(find.text('Sabato 17 ottobre 2026'), findsOneWidget);
+    expect(find.text('Confronto rapido'), findsOneWidget);
+    expect(find.text('Orari'), findsOneWidget);
+    expect(find.text('Scali'), findsOneWidget);
+    expect(
+      find.textContaining('4 alternative · da 119 € a 189 €'),
+      findsOneWidget,
+    );
+    expect(find.text('Perché questa scelta'), findsOneWidget);
     expect(find.textContaining('FCO→OPO'), findsNWidgets(4));
-    expect(find.textContaining('07:15'), findsOneWidget);
-    expect(find.textContaining('3h 05m'), findsNWidgets(2));
-    expect(find.textContaining('Diretto'), findsNWidgets(3));
+    expect(find.textContaining('07:15'), findsNWidgets(2));
+    expect(find.textContaining('3h 05m'), findsNWidgets(4));
+    expect(find.textContaining('Diretto'), findsNWidgets(7));
     expect(find.text('Bagaglio a mano 10 kg'), findsNWidgets(3));
     expect(
       find.text('Diretto e comodo, ma non il più economico.'),
       findsOneWidget,
     );
-    expect(find.textContaining('scalo'), findsNWidgets(3));
+    expect(find.textContaining('scalo'), findsNWidgets(5));
     expect(find.textContaining('quotazione 11/08/2026'), findsWidgets);
 
     await tester.tap(find.text('Scegli').first);
@@ -641,8 +651,18 @@ void main() {
         .lastWhere((message) => message.kind == ChatMessageKind.stayZone);
     expect(stay.stayCompare, isNotNull);
     expect(stay.stayCompare!.options, hasLength(4));
-    expect(find.text('Torel Avantgarde'), findsOneWidget);
+    expect(find.text('Torel Avantgarde'), findsNWidgets(3));
     expect(find.text('Cedofeita · 1 notte'), findsOneWidget);
+    expect(find.text('Date del soggiorno'), findsOneWidget);
+    expect(find.text('17–18 ottobre 2026 · 1 notte'), findsOneWidget);
+    expect(find.text('Confronto rapido'), findsNWidgets(2));
+    expect(find.text('Zona'), findsOneWidget);
+    expect(find.text('Distanza'), findsOneWidget);
+    expect(
+      find.textContaining('4 strutture · da 236 € a 482 €'),
+      findsOneWidget,
+    );
+    expect(find.text('Perché questa scelta'), findsNWidgets(2));
 
     final proposalsBefore = controller
         .threadOf(id)
@@ -692,9 +712,9 @@ void main() {
       await tester.pump();
       await tester.tap(find.byTooltip('Invia'));
       await tester.pumpAndSettle();
-      // Destination question offers the trend metas; picking Roma still
-      // converges on the Porto route below.
-      await tapLast(tester, 'Roma');
+      // Destination question offers the trend metas; pick Porto so the rich
+      // flight and hotel fixture is available for this focused test.
+      await tapLast(tester, 'Porto');
 
       const intakeLabels = <String>[
         '4–5 giorni, senza fretta',
@@ -722,7 +742,7 @@ void main() {
           .lastWhere((message) => message.kind == ChatMessageKind.transport);
       expect(transport.flightCompare, isNotNull);
       expect(transport.flightCompare!.options, hasLength(4));
-      expect(find.text('TAP Air Portugal'), findsOneWidget);
+      expect(find.text('TAP Air Portugal'), findsNWidgets(3));
       expect(find.textContaining('FCO→OPO'), findsNWidgets(4));
     },
   );
@@ -784,15 +804,9 @@ void main() {
       expect(find.text('1 notte · 482 €'), findsOneWidget);
 
       final moovButton = find.descendant(
-        of: find
-            .ancestor(
-              of: find.text('Moov Hotel Porto Centro'),
-              matching: find.byWidgetPredicate(
-                (widget) =>
-                    widget is Container && widget.decoration is BoxDecoration,
-              ),
-            )
-            .first,
+        of: find.byKey(
+          const ValueKey<String>('stay-option-porto-hotel-moov-centro'),
+        ),
         matching: find.bySubtype<FilledButton>(),
       );
       expect(moovButton, findsOneWidget);
@@ -1236,6 +1250,35 @@ void main() {
     expect(colors.surfaceContainerLow, isNot(colors.primaryContainer));
   });
 
+  testWidgets('home segue una nuova chat anche prima della prima proposta', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final controller = ChatFirstPrototypeController();
+    addTearDown(controller.dispose);
+    final thread = controller.startFreeTalk();
+
+    await tester.pumpWidget(
+      wrapIter(
+        ChatFirstHomeScreen(
+          model: AdaptiveHomeModel.planning(thread: thread),
+          onSubmitIntent: (_) {},
+          onVoiceIntent: () {},
+          onPhotoIntent: (_) {},
+          onOpenThread: (_) {},
+          onOpenTrips: () {},
+          unread: 0,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('La tua idea prende forma'), findsOneWidget);
+    expect(find.text('Riprendi la chat'), findsOneWidget);
+  });
+
   testWidgets('home attiva apre il thread senza mutare il piano', (
     tester,
   ) async {
@@ -1401,7 +1444,10 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.text('Continua il viaggio'));
+    expect(find.text('Continua il viaggio'), findsNothing);
+    await tester.tap(find.text('Viaggi').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(planning.summary.title));
     await tester.pumpAndSettle();
     expect(planningController.activeThreadId, planning.summary.id);
     await tester.pageBack();
@@ -1423,6 +1469,14 @@ void main() {
         ),
       ),
     );
+    await tester.tap(find.text('Viaggi').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(active.summary.title));
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Oggi').last);
+    await tester.pumpAndSettle();
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -240));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Vedi il piano completo'));

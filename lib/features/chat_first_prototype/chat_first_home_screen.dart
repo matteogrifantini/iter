@@ -171,10 +171,39 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
             ),
           ] else if (widget.model.kind ==
               AdaptiveHomeKind.planning) ...<Widget>[
-            AdaptivePlanningSection(
-              thread: widget.model.thread!,
-              onOpenThread: widget.onOpenThread,
-              onStartAnotherJourney: widget.onStartAnotherJourney,
+            Builder(
+              builder: (context) {
+                final thread = widget.model.thread!;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    AdaptivePlanningSection(
+                      thread: thread,
+                      onOpenThread: widget.onOpenThread,
+                      onStartAnotherJourney: widget.onStartAnotherJourney,
+                    ),
+                    if (thread.summary.snapshot == null) ...<Widget>[
+                      const SizedBox(height: 28),
+                      Text(
+                        'Continua da qui',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      RottaVivaComposer(
+                        key: const Key('home-composer'),
+                        controller: _composer,
+                        onChanged: (_) => setState(() {}),
+                        onSubmit: _submit,
+                        onVoice: widget.onVoiceIntent,
+                        onPhoto: () => showDemoPhotoPicker(
+                          context,
+                          onSelected: widget.onPhotoIntent,
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 32),
             Align(

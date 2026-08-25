@@ -127,7 +127,10 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
                     index: _tabIndex,
                     children: <Widget>[
                       ChatFirstHomeScreen(
-                        model: resolveAdaptiveHome(controller.threads),
+                        model: resolveAdaptiveHome(
+                          controller.threads,
+                          focusedThreadId: controller.activeThreadId,
+                        ),
                         onSubmitIntent: (intent) =>
                             _startFreeTalkWithText(context, intent),
                         onVoiceIntent: () => _startFreeTalkWithVoice(context),

@@ -2064,8 +2064,11 @@ void main() {
             await tester.pumpAndSettle();
 
             // Il pannello volo resta raggiungibile e senza overflow.
+            final tapFlight = find.byKey(
+              const ValueKey<String>('flight-option-porto-flight-tap-direct'),
+            );
             await tester.scrollUntilVisible(
-              find.text('TAP Air Portugal'),
+              tapFlight,
               240,
               scrollable: find.byType(Scrollable).first,
               maxScrolls: 300,
@@ -2073,13 +2076,18 @@ void main() {
             expect(tester.takeException(), isNull);
             expect(find.text('Consigliato'), findsWidgets);
 
+            final torel = find.byKey(
+              const ValueKey<String>(
+                'stay-option-porto-hotel-torel-avantgarde',
+              ),
+            );
             await tester.scrollUntilVisible(
-              find.text('Torel Avantgarde'),
+              torel,
               240,
               scrollable: find.byType(Scrollable).first,
               maxScrolls: 300,
             );
-            expect(find.text('Torel Avantgarde'), findsOneWidget);
+            expect(torel, findsOneWidget);
             expect(find.byTooltip('Aggiungi notti'), findsOneWidget);
             expect(find.byTooltip('Riduci notti'), findsOneWidget);
 

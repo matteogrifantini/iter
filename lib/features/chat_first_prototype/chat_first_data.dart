@@ -19,8 +19,8 @@ const String kFreeTalkConversationId = 'c-free-talk';
 /// time from the traveler's captured wish.
 const String kFreeTalkAckId = 'free-talk-ack';
 
-/// Stable id of the free-talk destination question. Its answer never pins the
-/// journey: the thread converges every meta choice on the Porto route.
+/// Stable id of the free-talk destination question. Its answer pins the
+/// selected journey so the rest of the mock can follow the traveler's choice.
 const String kFreeTalkDestinationId = 'free-talk-destination';
 
 /// Typed, deterministic content for the operational plan prototype. It stays
@@ -635,8 +635,7 @@ int stayNightlyPriceCents({
 
 /// A conversation started from the traveler's own words before a destination is
 /// named. It first reflects the clues, asks which trend meta calls the
-/// traveler, then converges the whole intake on the Porto route: every answer
-/// to the meta question lands on the same deterministic proposal and F5 tail.
+/// traveler, then rebuilds the remaining intake for the selected route.
 class FreeTalkThread extends IntakeThread {
   FreeTalkThread({
     required this.viewDestinations,
@@ -653,11 +652,71 @@ class FreeTalkThread extends IntakeThread {
   /// The traveler's free-form wish, captured from the first reply.
   String? _wish;
 
+  /// Whether the traveler has settled the destination question. The fallback
+  /// route exists only for the explicit "Consigliami tu" path; it must not
+  /// make a brand-new conversation look like Porto before the traveler acts.
+  var _destinationPinned = false;
+
   @override
   ChatMessage travelerMessage(String text) {
     final message = super.travelerMessage(text);
+    final question = messages.length >= 2
+        ? messages[messages.length - 2]
+        : null;
+    if (question?.id == kFreeTalkDestinationId) {
+      final selected = _journeyForLabel(text);
+      if (selected != null) {
+        _destinationPinned = true;
+        journey = selected;
+        _replacePendingIntake(selected);
+        final city = journeyCity(selected);
+        summary = summary.copyWith(
+          title: city,
+          lastPreview: '$city scelta · scegliamo durata e ritmo.',
+        );
+      } else if (text.trim() == 'Consigliami tu') {
+        _destinationPinned = true;
+        summary = summary.copyWith(
+          lastPreview:
+              'Scelgo io la direzione · preparo ${journeyCity(journey!)}.',
+        );
+      } else {
+        summary = summary.copyWith(lastPreview: _compactPreview(text));
+      }
+    } else if (text.trim().isNotEmpty) {
+      final context = _destinationPinned && journey != null
+          ? '${journeyCity(journey!)} · '
+          : '';
+      summary = summary.copyWith(
+        lastPreview: '$context${_compactPreview(text)}',
+      );
+    }
     _wish ??= text.trim();
     return message;
+  }
+
+  String _compactPreview(String value) {
+    final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.length <= 64) return normalized;
+    return '${normalized.substring(0, 61)}…';
+  }
+
+  JourneyRoute? _journeyForLabel(String label) {
+    final normalized = label.trim().toLowerCase();
+    for (final candidate in viewDestinations) {
+      if (journeyCity(candidate).trim().toLowerCase() == normalized) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  void _replacePendingIntake(JourneyRoute selected) {
+    if (scriptIndex >= script.length) return;
+    final durationQuestion = script[scriptIndex];
+    script.removeRange(scriptIndex, script.length);
+    script.add(durationQuestion);
+    script.addAll(ChatFirstDemoData.restIntakeScript(selected));
   }
 
   @override
@@ -848,12 +907,26 @@ abstract final class ChatFirstDemoData {
             )
             .toList(growable: false) ??
         const <FlightOptionInfo>[];
+    final recommended = options.isEmpty ? null : options.first;
+    final cheapest = _cheapestFlight(options);
+    final dateLabel = options.isEmpty
+        ? ''
+        : _italianLongDate(options.first.departureAt);
     return FlightCompare(
       options: options,
-      recommendedId: options.isEmpty ? '' : options.first.id,
+      recommendedId: recommended?.id ?? '',
       quotedAt:
           fixture?.quotedAt ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      travelDateLabel: dateLabel,
+      travelDateReason: cheapest == null
+          ? ''
+          : 'Tutte le ${options.length} alternative del mock partono in '
+                'questo giorno: il prezzo è confrontato a parità di data, '
+                'non su una previsione live.',
+      recommendationReason: recommended == null || cheapest == null
+          ? ''
+          : _flightRecommendationReason(recommended, cheapest),
     );
   }
 
@@ -878,10 +951,88 @@ abstract final class ChatFirstDemoData {
             )
             .toList(growable: false) ??
         const <StayOptionInfo>[];
+    final recommended = options.isEmpty ? null : options.first;
+    final cheapest = _cheapestStay(options);
     return StayCompare(
       options: options,
-      recommendedId: options.isEmpty ? '' : options.first.id,
+      recommendedId: recommended?.id ?? '',
+      stayDatesLabel: snapshot.dates.isEmpty
+          ? fixture?.snapshot.dates ?? ''
+          : snapshot.dates,
+      recommendationReason: recommended == null || cheapest == null
+          ? ''
+          : _stayRecommendationReason(recommended, cheapest),
     );
+  }
+
+  static FlightOptionInfo? _cheapestFlight(List<FlightOptionInfo> options) {
+    if (options.isEmpty) return null;
+    return options.reduce(
+      (first, next) => next.priceCents < first.priceCents ? next : first,
+    );
+  }
+
+  static StayOptionInfo? _cheapestStay(List<StayOptionInfo> options) {
+    if (options.isEmpty) return null;
+    return options.reduce(
+      (first, next) => next.priceCents < first.priceCents ? next : first,
+    );
+  }
+
+  static String _flightRecommendationReason(
+    FlightOptionInfo recommended,
+    FlightOptionInfo cheapest,
+  ) {
+    if (recommended.id == cheapest.id) {
+      return 'È anche il prezzo più basso del confronto: '
+          '${formatEuroCents(recommended.priceCents)} con ${recommended.stops == 0 ? 'volo diretto' : 'uno scalo'}.';
+    }
+    final difference = recommended.priceCents - cheapest.priceCents;
+    return '${recommended.tradeoff} Costa ${formatEuroCents(difference)} in più '
+        'del prezzo minimo: la scelta privilegia comodità e orario, non solo '
+        'il costo.';
+  }
+
+  static String _stayRecommendationReason(
+    StayOptionInfo recommended,
+    StayOptionInfo cheapest,
+  ) {
+    if (recommended.id == cheapest.id) {
+      return 'È anche la tariffa più bassa del confronto: '
+          '${formatEuroCents(recommended.priceCents)} per ${recommended.nights == 1 ? '1 notte' : '${recommended.nights} notti'}.';
+    }
+    final difference = recommended.priceCents - cheapest.priceCents;
+    return '${recommended.tradeoff} Costa ${formatEuroCents(difference)} in più '
+        'del prezzo minimo: la scelta privilegia atmosfera e condizioni, non '
+        'solo il costo.';
+  }
+
+  static String _italianLongDate(DateTime date) {
+    const weekdays = <String>[
+      'Lunedì',
+      'Martedì',
+      'Mercoledì',
+      'Giovedì',
+      'Venerdì',
+      'Sabato',
+      'Domenica',
+    ];
+    const months = <String>[
+      'gennaio',
+      'febbraio',
+      'marzo',
+      'aprile',
+      'maggio',
+      'giugno',
+      'luglio',
+      'agosto',
+      'settembre',
+      'ottobre',
+      'novembre',
+      'dicembre',
+    ];
+    return '${weekdays[date.weekday - 1]} ${date.day} '
+        '${months[date.month - 1]} ${date.year}';
   }
 
   static OperationalTripFixture _portoOperationalFixture() {
@@ -1341,7 +1492,7 @@ abstract final class ChatFirstDemoData {
     );
   }
 
-  /// Picks the journey the free talk converges on, with an explicit guard:
+  /// Picks the fallback journey for free talk, with an explicit guard:
   /// the dedicated `porto-slow` route wins, then any porto-leading journey,
   /// then the first catalog entry. An empty catalog falls back to the demo
   /// `porto-slow` route instead of throwing.
@@ -1361,18 +1512,15 @@ abstract final class ChatFirstDemoData {
 
   /// Opens a free-talk conversation: the traveler starts with their own words
   /// (no destination pinned) and is offered the trend metas as an explicit
-  /// choice. Whatever they pick (including "Consigliami tu"), the thread
-  /// converges on the Porto route and the classic guided intake via
-  /// [FreeTalkThread], so the final proposal always builds the operational
-  /// Porto snapshot.
+  /// choice. A selected city drives the guided intake and final proposal;
+  /// "Consigliami tu" keeps the deterministic fallback route for the mock.
   static FreeTalkThread freeTalkThread(
     List<JourneyRoute> journeys, {
     String conversationId = kFreeTalkConversationId,
   }) {
-    // The free talk always converges on Porto: its operational fixture drives
-    // the rich FlightCompare/StayCompare modules during the F5 tail. Porto must
-    // be the leading destination — atlantic-rail also touches Porto, but its
-    // home base is Lisbon, so the operational snapshot would miss the fixture.
+    // Keep a deterministic fallback for the no-preference path. Explicit
+    // destination choices are applied by FreeTalkThread as soon as the user
+    // taps one of the offered cities.
     final convergence = _convergenceJourney(journeys);
     final posters = DemoMedia.postersForDestination(
       convergence.destinationIds.first,
@@ -1412,10 +1560,9 @@ abstract final class ChatFirstDemoData {
           sentAt: DateTime(2026, 10, 16, 10, 0),
         ),
       ],
-      // The destination choice never pins the journey: whatever the traveler
-      // answers, the thread keeps converging on the Porto route below, which
-      // contains the standard guided questions (duration, pace, base,
-      // transport, budget) and the final proposal.
+      // The destination choice is applied by FreeTalkThread, which then
+      // replaces the remaining beats with the selected route's guided
+      // questions (duration, pace, base, transport, budget) and proposal.
       script: <ScriptedBeat>[
         ScriptedBeat(
           ChatMessage(
@@ -1467,10 +1614,9 @@ abstract final class ChatFirstDemoData {
   /// The guided script that follows the duration question: pace, base,
   /// transport, budget, the final intake proposal and the operational tail.
   /// Shared verbatim by [intakeThreadFor] and the [FreeTalkThread] tail, so the
-  /// two flows converge on the same deterministic proposal after the
-  /// destination is pinned. [proposalDisclosure] is an optional honest note
-  /// appended to the proposal text; only the free talk passes it, to tell the
-  /// traveler that the demo converges on the Porto route.
+  /// both flows share the same deterministic proposal after the destination is
+  /// pinned. [proposalDisclosure] is an optional honest note appended to the
+  /// proposal text for fallback/demo behavior.
   static List<ScriptedBeat> restIntakeScript(
     JourneyRoute journey, {
     String? proposalDisclosure,
