@@ -9,7 +9,7 @@ class IterGlassBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final glass = Theme.of(context).extension<IterGlassRoles>()!;
+    final glass = Theme.of(context).extension<IterGlassRoles>() ?? const IterGlassRoles();
     return IterMaterialSurface(
       key: const Key('iter-glass-bar'),
       padding: padding,
@@ -26,7 +26,7 @@ class IterGlassSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final glass = Theme.of(context).extension<IterGlassRoles>()!;
+    final glass = Theme.of(context).extension<IterGlassRoles>() ?? const IterGlassRoles();
     return IterMaterialSurface(
       key: const Key('iter-glass-sheet'),
       padding: const EdgeInsets.all(20),
@@ -43,7 +43,7 @@ class IterHeroScrim extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final glass = Theme.of(context).extension<IterGlassRoles>()!;
+    final glass = Theme.of(context).extension<IterGlassRoles>() ?? const IterGlassRoles();
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(

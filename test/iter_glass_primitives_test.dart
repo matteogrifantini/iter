@@ -38,4 +38,20 @@ void main() {
     expect(find.text('vetro'), findsOneWidget);
     expect(find.byType(BackdropFilter), findsNothing);
   });
+
+  testWidgets('IterHeroScrim mostra child con scrim', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: IterTheme.light(),
+        home: const Scaffold(body: IterHeroScrim(child: Text('hero'))),
+      ),
+    );
+    expect(find.text('hero'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is Container || w is DecoratedBox,
+      ),
+      findsWidgets,
+    );
+  });
 }
