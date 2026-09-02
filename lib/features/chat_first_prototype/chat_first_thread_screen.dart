@@ -7,6 +7,7 @@ import 'chat_first_controller.dart';
 import 'chat_first_data.dart';
 import 'chat_first_models.dart';
 import 'inspiration_import_sheet.dart';
+import 'iter_glass_primitives.dart';
 import 'iter_ui_primitives.dart';
 
 class ChatFirstThreadScreen extends StatefulWidget {
@@ -439,12 +440,7 @@ class _Bubble extends StatelessWidget {
     final background = isIncoming
         ? colors.surfaceContainerHighest
         : colors.secondaryContainer;
-    final radius = BorderRadius.only(
-      topLeft: const Radius.circular(20),
-      topRight: const Radius.circular(20),
-      bottomLeft: Radius.circular(isIncoming ? 6 : 20),
-      bottomRight: Radius.circular(isIncoming ? 20 : 6),
-    );
+    const radius = BorderRadius.all(Radius.circular(20));
     final content = _MessageContent(
       message: message,
       isIncoming: isIncoming,
@@ -718,7 +714,7 @@ class _SummaryCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: colors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(color: colors.outlineVariant),
           ),
           child: Column(
@@ -808,7 +804,7 @@ class _PlaceCardContent extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: colors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(color: colors.outlineVariant),
           ),
           child: Column(
@@ -903,7 +899,7 @@ class _TransportContent extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: colors.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: colors.outlineVariant),
               ),
               child: Column(
@@ -1019,7 +1015,7 @@ class _StayZoneContent extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: colors.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(24),
               border: Border.all(color: colors.outlineVariant),
             ),
             child: Column(
@@ -1186,7 +1182,7 @@ class _FlightCompareOverview extends StatelessWidget {
     return IterMaterialSurface(
       key: const Key('flight-comparison-overview'),
       padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
-      borderRadius: const BorderRadius.all(Radius.circular(18)),
+      borderRadius: const BorderRadius.all(Radius.circular(24)),
       elevation: 0,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1441,7 +1437,7 @@ class _FlightOptionPanel extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: isRecommended ? colors.primary : colors.outlineVariant,
         ),
@@ -1567,7 +1563,7 @@ class _StayCompareOverview extends StatelessWidget {
     return IterMaterialSurface(
       key: const Key('stay-comparison-overview'),
       padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
-      borderRadius: const BorderRadius.all(Radius.circular(18)),
+      borderRadius: const BorderRadius.all(Radius.circular(24)),
       elevation: 0,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1806,7 +1802,7 @@ class _StayCompareContentState extends State<_StayCompareContent> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: colors.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(color: colors.outlineVariant),
           ),
           child: Row(
@@ -1897,7 +1893,7 @@ class _StayOptionPanel extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: isRecommended ? colors.primary : colors.outlineVariant,
         ),
@@ -2333,10 +2329,8 @@ class _Composer extends StatelessWidget {
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 760),
-              child: IterMaterialSurface(
+              child: IterGlassBar(
                 padding: const EdgeInsets.all(6),
-                borderRadius: BorderRadius.circular(30),
-                translucent: true,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: <Widget>[
