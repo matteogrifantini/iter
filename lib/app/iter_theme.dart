@@ -111,7 +111,10 @@ class IterGlassRoles extends ThemeExtension<IterGlassRoles> {
   final double pillRadius;
 
   static bool useBlur(BuildContext context) {
-    return !MediaQuery.of(context).disableAnimations;
+    final mq = MediaQuery.of(context);
+    if (mq.disableAnimations) return false;
+    if (MediaQuery.highContrastOf(context)) return false;
+    return true;
   }
 
   @override
