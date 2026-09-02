@@ -2,6 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../organization/adapters/mock_travel_search_provider.dart';
+import '../organization/adapters/unavailable_stay_search_provider.dart';
+import '../organization/engine/session_registry.dart';
+import '../organization/providers/organization_ai_gateway.dart';
 import '../chat/trip_chat_screen.dart';
 import '../home/home_screen.dart';
 import '../profile/profile_screen.dart';
@@ -18,11 +22,13 @@ class ChatFirstShell extends StatefulWidget {
     required this.controller,
     required this.themeMode,
     required this.onThemeChanged,
+    this.sessionRegistry,
   });
 
   final ChatFirstPrototypeController controller;
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeChanged;
+  final SessionRegistry? sessionRegistry;
 
   @override
   State<ChatFirstShell> createState() => _ChatFirstShellState();
@@ -30,10 +36,23 @@ class ChatFirstShell extends StatefulWidget {
 
 class _ChatFirstShellState extends State<ChatFirstShell> {
   var _tabIndex = 0;
+  var _isScrolled = false;
+  late final SessionRegistry _sessionRegistry;
+  var _ownsSessionRegistry = false;
 
   @override
   void initState() {
     super.initState();
+    if (widget.sessionRegistry != null) {
+      _sessionRegistry = widget.sessionRegistry!;
+    } else {
+      _sessionRegistry = SessionRegistry(
+        aiGateway: const _FallbackAiGateway(),
+        travelProvider: MockTravelSearchProvider(),
+        stayProvider: const UnavailableStaySearchProvider(),
+      );
+      _ownsSessionRegistry = true;
+    }
     widget.controller.addListener(_maybeShowPurchaseReturnPrompt);
     // Cold start: a persisted `purchaseOpened` never triggers a prompt, the
     // launch flag is session state; this initial check is a no-op by design.
@@ -43,6 +62,9 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
   @override
   void dispose() {
     widget.controller.removeListener(_maybeShowPurchaseReturnPrompt);
+    if (_ownsSessionRegistry) {
+      _sessionRegistry.disposeAll();
+    }
     super.dispose();
   }
 
@@ -114,9 +136,19 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
       listenable: widget.controller,
       builder: (context, _) {
         return Scaffold(
-          body: Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
+
+          body: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification.depth != 0) return false;
+              final scrolled = notification.metrics.pixels > 80;
+              if (scrolled != _isScrolled) {
+                setState(() => _isScrolled = scrolled);
+              }
+              return false;
+            },
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
               Positioned.fill(
                 child: IterPageFrame(
                   padding: EdgeInsets.zero,
@@ -144,6 +176,7 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
                       const ProfileScreen(),
                     ],
                   ),
+
                 ),
               ),
               Positioned(
@@ -153,10 +186,12 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
                 child: _ChatBottomNavigation(
                   currentIndex: _tabIndex,
                   unread: widget.controller.unread,
+                  isScrolled: _isScrolled,
                   onChanged: (index) => setState(() => _tabIndex = index),
                 ),
               ),
             ],
+          ),
           ),
         );
       },
@@ -195,14 +230,17 @@ class _ChatBottomNavigation extends StatelessWidget {
     required this.currentIndex,
     required this.unread,
     required this.onChanged,
+    this.isScrolled = false,
   });
 
   final int currentIndex;
   final int unread;
   final ValueChanged<int> onChanged;
+  final bool isScrolled;
 
   @override
   Widget build(BuildContext context) {
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.only(bottom: 12),
@@ -223,8 +261,12 @@ class _ChatBottomNavigation extends StatelessWidget {
                   padding: const EdgeInsets.all(6),
                   borderRadius: BorderRadius.circular(32),
                   translucent: true,
-                  child: SizedBox(
-                    height: 52,
+                  child: AnimatedContainer(
+                    duration: reducedMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    height: isScrolled ? 44.0 : 52.0,
                     child: Row(
                       children: <Widget>[
                         Expanded(
@@ -235,6 +277,7 @@ class _ChatBottomNavigation extends StatelessWidget {
                             icon: const Icon(Icons.home_outlined),
                             selectedIcon: const Icon(Icons.home),
                             onTap: () => onChanged(0),
+                            compact: isScrolled,
                           ),
                         ),
                         Expanded(
@@ -253,6 +296,7 @@ class _ChatBottomNavigation extends StatelessWidget {
                               icon: Icons.chat_bubble,
                             ),
                             onTap: () => onChanged(1),
+                            compact: isScrolled,
                           ),
                         ),
                         Expanded(
@@ -263,6 +307,7 @@ class _ChatBottomNavigation extends StatelessWidget {
                             icon: const Icon(Icons.person_outline),
                             selectedIcon: const Icon(Icons.person),
                             onTap: () => onChanged(2),
+                            compact: isScrolled,
                           ),
                         ),
                       ],
@@ -286,6 +331,7 @@ class _FloatingDestination extends StatelessWidget {
     required this.icon,
     required this.selectedIcon,
     required this.onTap,
+    this.compact = false,
   });
 
   final String tooltip;
@@ -294,11 +340,29 @@ class _FloatingDestination extends StatelessWidget {
   final Widget icon;
   final Widget selectedIcon;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    // Label collassabile: con reduced motion il cambio è istantaneo senza
+    // AnimatedSize (Duration.zero si auto-muterebbe in layout).
+    final Widget label = compact
+        ? const SizedBox.shrink()
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const SizedBox(height: 2),
+              Text(
+                tooltip,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: selected ? colors.primary : colors.onSurfaceVariant,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          );
     return Semantics(
       label: semantics,
       selected: selected,
@@ -333,14 +397,17 @@ class _FloatingDestination extends StatelessWidget {
                   ),
                   child: icon,
                 ),
-              const SizedBox(height: 2),
-              Text(
-                tooltip,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: selected ? colors.primary : colors.onSurfaceVariant,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              // Sincronizzata con lo shrink del dock (180ms ease-out): la
+              // label collassa insieme all'altezza così nessun frame intermedio
+              // va in overflow. Semantics, icone e badge restano invariati.
+              if (reducedMotion)
+                label
+              else
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  child: label,
                 ),
-              ),
             ],
           ),
         ),
@@ -370,6 +437,19 @@ class _UnreadIcon extends StatelessWidget {
     return Semantics(
       label: unread > 0 ? 'Viaggi, $unread messaggi non letti' : 'Viaggi',
       child: child,
+    );
+  }
+}
+
+class _FallbackAiGateway implements OrganizationAiGateway {
+  const _FallbackAiGateway();
+
+  @override
+  Future<AiOrganizationResponse> decideNextStep(
+    OrganizationAiContext context,
+  ) async {
+    return AiOrganizationResponse(
+      explanation: 'Organizzazione assistita attiva.',
     );
   }
 }
