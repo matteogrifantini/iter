@@ -107,28 +107,45 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
     final side = width <= 320 ? 16.0 : 24.0;
     final colors = Theme.of(context).colorScheme;
     final isActive = widget.model.kind == AdaptiveHomeKind.active;
+    // NOTE (task-4 fix): true top bleed — no SafeArea-top so the active hero
+    // image extends behind the status bar. Insets re-applied manually: the
+    // topbar is overlaid on the hero at topInset (hero text stays
+    // bottom-anchored over IterHeroScrim); non-active kinds keep
+    // topInset + 16 list padding.
+    final topInset = MediaQuery.paddingOf(context).top;
 
-    return SafeArea(
-      bottom: false,
-      child: ListView(
+    return ListView(
         padding: EdgeInsets.fromLTRB(
           isActive ? 0 : side,
-          16,
+          isActive ? 0 : topInset + 16,
           isActive ? 0 : side,
           112,
         ),
         children: <Widget>[
           if (isActive)
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: side),
-              child: const _HomeTopBar(),
+            Stack(
+              children: <Widget>[
+                ActiveDestinationStage(
+                  thread: widget.model.thread!,
+                  onOpenThread: widget.onOpenThread,
+                ),
+                Positioned(
+                  top: topInset + 8,
+                  left: side,
+                  right: side,
+                  child: const _HomeTopBar(),
+                ),
+              ],
             )
-          else
+          else ...<Widget>[
             const _HomeTopBar(),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
+          ],
 
           if (widget.model.kind == AdaptiveHomeKind.empty) ...<Widget>[
             // 1. HERO TITLE & CONVERSATIONAL COMPOSER
+            // NOTE: empty-state copy predates Task 4 (was 'Che viaggio ti
+            // farebbe bene adesso?' @9007e49) — pre-existing drift, kept.
             Text(
               'Dove vorresti andare?',
               style: Theme.of(context).textTheme.displaySmall,
@@ -229,10 +246,6 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
               ),
             ),
           ] else ...<Widget>[
-            ActiveDestinationStage(
-              thread: widget.model.thread!,
-              onOpenThread: widget.onOpenThread,
-            ),
             Padding(
               padding: EdgeInsets.fromLTRB(side, 28, side, 0),
               child: ActiveTimelineSection(
@@ -270,8 +283,7 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
             ),
           ],
         ],
-      ),
-    );
+      );
   }
 }
 

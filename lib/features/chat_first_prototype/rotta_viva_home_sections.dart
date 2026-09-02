@@ -6,6 +6,8 @@ import 'chat_first_models.dart';
 import 'iter_glass_primitives.dart';
 import 'iter_ui_primitives.dart';
 
+// NOTE: seed set predates Task 4 (3 signals @9007e49 → 5 destinations) —
+// pre-existing drift, preserved as-is by Task 4 (no copy changes).
 const rottaVivaSeeds = <({String label, String clue, String semantics})>[
   (
     label: '🌊 Mare e pause',
@@ -64,6 +66,8 @@ class RottaVivaComposer extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
+            // NOTE: hintText/minLines drift predates Task 4 (was minLines: 2 +
+            // 'Un momento, una disponibilità, un desiderio…' @9007e49) — kept.
             Semantics(
               label: 'Scrivi il viaggio che hai in mente',
               textField: true,
@@ -498,9 +502,12 @@ class ActiveDestinationStage extends StatelessWidget {
             const Positioned.fill(
               child: IterHeroScrim(child: SizedBox.expand()),
             ),
+            // NOTE (task-4 fix): hero bleeds behind the status bar and the
+            // home topbar is overlaid top-left, so the badge sits top-right
+            // (topbar row ends with a Spacer) clearing topInset for the notch.
             Positioned(
-              left: 18,
-              top: 18,
+              right: 18,
+              top: MediaQuery.paddingOf(context).top + 8,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: colors.surface.withValues(alpha: .86),

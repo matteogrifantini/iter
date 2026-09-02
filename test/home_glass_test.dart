@@ -48,6 +48,13 @@ void main() {
     expect(find.bySemanticsLabel(RegExp('hero')), findsWidgets);
     expect(find.byType(IterHeroScrim), findsOneWidget);
     expect(find.byKey(const Key('home-destination-stage')), findsOneWidget);
+    // Task 4 fix round 1: true top bleed — hero starts at y=0 (behind the
+    // status bar), topbar overlaid on the hero instead of pushing it down.
+    expect(
+      tester.getTopLeft(find.byKey(const Key('home-destination-stage'))).dy,
+      0,
+    );
+    expect(find.byKey(const Key('home-top-bar')), findsOneWidget);
 
     // Composer oggetto principale in vetro.
     await tester.scrollUntilVisible(
@@ -57,6 +64,23 @@ void main() {
     );
     expect(find.byKey(const Key('home-composer')), findsOneWidget);
     expect(find.byKey(const Key('iter-glass-bar')), findsWidgets);
+
+    // Task 4 fix round 1: composer a11y gates — TextField + send button
+    // presenti e trovabili. Send button M3 = 40dp: full 48dp/contrast suite
+    // differita a Task 8 (vedi report), qui si fissa il baseline misurato.
+    expect(
+      find.bySemanticsLabel('Scrivi il viaggio che hai in mente'),
+      findsWidgets,
+    );
+    final sendButton = find.byTooltip('Invia il desiderio');
+    await tester.scrollUntilVisible(
+      sendButton,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(sendButton, findsOneWidget);
+    expect(tester.getSize(sendButton).width, greaterThanOrEqualTo(40));
+    expect(tester.getSize(sendButton).height, greaterThanOrEqualTo(40));
 
     // Riga operativa breve + 'Vedi il piano completo' una sola volta.
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -400));
