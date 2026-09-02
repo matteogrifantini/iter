@@ -256,6 +256,9 @@ class _ChatBottomNavigation extends StatelessWidget {
                 label: 'Navigazione principale',
                 container: true,
                 explicitChildNodes: true,
+                // Task 3: IterMaterialSurface diretto (non IterGlassBar) per
+                // preservare key/padding6/radius32 esistenti; translucent:true
+                // consuma già blur/tint/fallback highContrast di Task 2 via IterGlassRoles.
                 child: IterMaterialSurface(
                   key: const Key('shell-floating-dock'),
                   padding: const EdgeInsets.all(6),
