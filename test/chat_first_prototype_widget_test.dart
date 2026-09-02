@@ -66,19 +66,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Che viaggio ti farebbe bene adesso?'), findsOneWidget);
     final semantics = tester.ensureSemantics();
+    await tester.scrollUntilVisible(
+      find.bySemanticsLabel('Composer per raccontare il viaggio'),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(
       find.bySemanticsLabel('Composer per raccontare il viaggio'),
       findsOneWidget,
     );
+    expect(find.text('Dove vorresti andare?'), findsOneWidget);
     semantics.dispose();
-    expect(find.text('🌊 Mare e pause'), findsOneWidget);
-    expect(find.text('Roma'), findsNothing);
-    expect(find.text('Porto'), findsNothing);
-    expect(find.text('Ispirazioni per te'), findsNothing);
     expect(find.byType(ListView), findsOneWidget);
 
+    await tester.scrollUntilVisible(
+      find.text('🌊 Mare e pause'),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('🌊 Mare e pause'));
     await tester.pump();
     expect(submitted, isEmpty);
@@ -86,10 +92,21 @@ void main() {
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       'Mare e pause',
     );
+
+    await tester.scrollUntilVisible(
+      find.byTooltip('Invia il desiderio'),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.byTooltip('Invia il desiderio'));
     await tester.pump();
     expect(submitted, <String>['Mare e pause']);
 
+    await tester.scrollUntilVisible(
+      find.byTooltip('Aggiungi una foto'),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.byTooltip('Aggiungi una foto'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Finestrino sul mare'));
@@ -134,7 +151,17 @@ void main() {
         ),
       ),
     );
+    await tester.scrollUntilVisible(
+      find.byType(TextField),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.enterText(find.byType(TextField), 'Vorrei rallentare');
+    await tester.scrollUntilVisible(
+      find.byTooltip('Invia il desiderio'),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.byTooltip('Invia il desiderio'));
     await tester.pump();
 
@@ -164,8 +191,18 @@ void main() {
         ),
       ),
     );
+    await tester.scrollUntilVisible(
+      find.text('🌊 Mare e pause'),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('🌊 Mare e pause'));
     await tester.pump();
+    await tester.scrollUntilVisible(
+      find.byTooltip('Invia il desiderio'),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.byTooltip('Invia il desiderio'));
     await tester.pumpAndSettle();
 
@@ -177,6 +214,11 @@ void main() {
     expect(
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       'Mare e pause',
+    );
+    await tester.scrollUntilVisible(
+      find.text('Riprova'),
+      100,
+      scrollable: find.byType(Scrollable).first,
     );
     await tester.tap(find.text('Riprova'));
     await tester.pumpAndSettle();
@@ -1381,7 +1423,7 @@ void main() {
     );
   });
 
-  testWidgets('shell usa Oggi Viaggi Tu e apre il FreeTalk dopo invio', (
+  testWidgets('shell usa Oggi Viaggi Tu con dock flottante e Home pulita senza chat box', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1200, 800);
@@ -1408,149 +1450,66 @@ void main() {
       tester.getSize(find.byKey(const Key('shell-floating-dock'))).width,
       lessThanOrEqualTo(360),
     );
-    await tester.scrollUntilVisible(
-      find.byType(TextField),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.enterText(
-      find.byType(TextField),
-      'Quattro giorni senza fretta',
-    );
-    await tester.pump();
-    await tester.tap(find.byTooltip('Invia il desiderio'));
+
+    // Home pulita: zero TextField chat sulla home
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Organizza un nuovo viaggio'), findsOneWidget);
+
+    // Tap su Organizza un nuovo viaggio -> apre chat dedicata a tutto schermo
+    await tester.tap(find.text('Organizza un nuovo viaggio'));
     await tester.pumpAndSettle();
-    expect(controller.activeThread?.summary.id, kFreeTalkConversationId);
-    expect(controller.activeThread?.messages.last.role, ChatRole.assistant);
+
+    expect(find.text('Organizzazione viaggio'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
   });
 
-  testWidgets('shell lega planning e active al thread aperto dalla Home', (
+  testWidgets('shell naviga su Viaggi e mostra lista con pulsante Nuovo viaggio', (
     tester,
   ) async {
-    final seeded = ChatFirstPrototypeController();
-    final planning = seeded.threads.firstWhere(
-      (thread) => thread.summary.snapshot?.statusLabel == 'In pianificazione',
-    );
-    final planningController = ChatFirstPrototypeController(
-      seed: <ChatThread>[planning],
-    );
+    final controller = ChatFirstPrototypeController();
     await tester.pumpWidget(
       MaterialApp(
         theme: IterTheme.light(),
         home: ChatFirstShell(
-          controller: planningController,
+          controller: controller,
           themeMode: ThemeMode.light,
           onThemeChanged: (_) {},
         ),
       ),
     );
-    expect(find.text('Continua il viaggio'), findsNothing);
-    await tester.tap(find.text('Viaggi').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(planning.summary.title));
-    await tester.pumpAndSettle();
-    expect(planningController.activeThreadId, planning.summary.id);
-    await tester.pageBack();
     await tester.pumpAndSettle();
 
-    final active = seeded.threads.firstWhere(
-      (thread) => thread.summary.snapshot?.statusLabel == 'In viaggio',
-    );
-    final activeController = ChatFirstPrototypeController(
-      seed: <ChatThread>[active],
-    );
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: IterTheme.light(),
-        home: ChatFirstShell(
-          controller: activeController,
-          themeMode: ThemeMode.light,
-          onThemeChanged: (_) {},
-        ),
-      ),
-    );
     await tester.tap(find.text('Viaggi').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text(active.summary.title));
-    await tester.pumpAndSettle();
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Oggi').last);
-    await tester.pumpAndSettle();
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, -240));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Vedi il piano completo'));
-    await tester.pumpAndSettle();
-    expect(activeController.activeThreadId, active.summary.id);
+
+    expect(find.text('I tuoi viaggi'), findsOneWidget);
+    expect(find.text('Nuovo viaggio'), findsOneWidget);
   });
 
-  testWidgets(
-    'shell invia text voce e foto nel FreeTalk, non nel thread active',
-    (tester) async {
-      final controller = ChatFirstPrototypeController();
-      final active = controller.threads.firstWhere(
-        (thread) => thread.summary.snapshot?.statusLabel == 'In viaggio',
-      );
-      controller.openConversation(active.summary.id);
-      final activeMessages = active.messages.length;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: IterTheme.light(),
-          home: ChatFirstShell(
-            controller: controller,
-            themeMode: ThemeMode.light,
-            onThemeChanged: (_) {},
-          ),
+  testWidgets('shell naviga su Tu e mostra profilo', (
+    tester,
+  ) async {
+    final controller = ChatFirstPrototypeController();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: IterTheme.light(),
+        home: ChatFirstShell(
+          controller: controller,
+          themeMode: ThemeMode.light,
+          onThemeChanged: (_) {},
         ),
-      );
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      Future<void> returnToHome() async {
-        await tester.pageBack();
-        await tester.pumpAndSettle();
-        await tester.scrollUntilVisible(
-          find.byType(TextField),
-          200,
-          scrollable: find.byType(Scrollable).first,
-        );
-      }
+    await tester.tap(find.text('Tu').last);
+    await tester.pumpAndSettle();
 
-      await tester.scrollUntilVisible(
-        find.byType(TextField),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.enterText(
-        find.byType(TextField),
-        'Vorrei fermarmi vicino al mare',
-      );
-      await tester.pump();
-      await tester.tap(find.byTooltip('Invia il desiderio'));
-      await tester.pumpAndSettle();
-      await returnToHome();
+    expect(find.text('Il tuo profilo'), findsOneWidget);
+    expect(find.text('Preferenze di Viaggio'), findsOneWidget);
+    expect(find.text('Configurazione IA (Fase Demo)'), findsOneWidget);
+  });
 
-      await tester.tap(find.byTooltip('Invia un messaggio vocale'));
-      await tester.pumpAndSettle();
-      await returnToHome();
-
-      await tester.tap(find.byTooltip('Aggiungi una foto'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Finestrino sul mare'));
-      await tester.pumpAndSettle();
-
-      final freeTalk = controller.threadOf(kFreeTalkConversationId);
-      expect(
-        freeTalk.messages
-            .where((message) => message.role == ChatRole.traveler)
-            .map((message) => message.kind),
-        containsAll(<ChatMessageKind>[
-          ChatMessageKind.text,
-          ChatMessageKind.audio,
-          ChatMessageKind.media,
-        ]),
-      );
-      expect(active.messages.length, activeMessages);
-    },
-  );
 
   testWidgets('home active evita overflow a 320 con testo 1.5', (tester) async {
     tester.view.physicalSize = const Size(320, 640);
@@ -1615,13 +1574,13 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('composer usa una superficie neutra in chiaro e scuro', (
+  testWidgets('composer usa vetro con pill radius in chiaro e scuro', (
     tester,
   ) async {
     for (final theme in <ThemeData>[IterTheme.light(), IterTheme.dark()]) {
       final colors = theme.colorScheme;
-      final background = colors.surfaceContainerHigh;
       final foreground = colors.onSurface;
+      final glass = theme.extension<IterGlassRoles>()!;
       await tester.pumpWidget(
         MaterialApp(
           theme: theme,
@@ -1640,22 +1599,22 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.scrollUntilVisible(
+        find.byType(TextField),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+
       final decorator = tester.widget<InputDecorator>(
         find.byType(InputDecorator),
       );
       final field = tester.widget<TextField>(find.byType(TextField));
-      final composer = tester.widget<DecoratedBox>(
-        find
-            .ancestor(
-              of: find.byType(TextField),
-              matching: find.byType(DecoratedBox),
-            )
-            .first,
+      final composer = tester.widget<IterMaterialSurface>(
+        find.byKey(const Key('iter-glass-bar')),
       );
-      final decoration = composer.decoration as BoxDecoration;
 
-      expect(decoration.color, background);
-      expect(decoration.border, Border.all(color: colors.outlineVariant));
+      expect(composer.borderRadius, BorderRadius.circular(glass.pillRadius));
+      expect(composer.translucent, isTrue);
       expect(decorator.decoration.filled, isFalse);
       expect(field.style?.color, foreground);
       expect(field.decoration?.labelStyle?.color, foreground);

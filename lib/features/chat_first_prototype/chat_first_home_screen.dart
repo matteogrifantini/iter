@@ -6,10 +6,11 @@ import '../../app/iter_theme.dart';
 import 'adaptive_home_model.dart';
 import 'chat_first_data.dart';
 import 'rotta_viva_home_sections.dart';
+
 import 'rotta_viva_mark.dart';
 
-/// Rotta viva is one adaptive, vertical Home: it starts with a human wish,
-/// resumes one unresolved plan, or grounds the traveller in today's route.
+/// Rotta viva is the dynamic, adaptive Home: it welcomes the traveler with inspiration,
+/// a prominent trip planning system, and adaptive sections for active itineraries.
 class ChatFirstHomeScreen extends StatefulWidget {
   const ChatFirstHomeScreen({
     super.key,
@@ -105,26 +106,41 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
     final width = MediaQuery.sizeOf(context).width;
     final side = width <= 320 ? 16.0 : 24.0;
     final colors = Theme.of(context).colorScheme;
+    final isActive = widget.model.kind == AdaptiveHomeKind.active;
+
     return SafeArea(
       bottom: false,
       child: ListView(
-        padding: EdgeInsets.fromLTRB(side, 20, side, 112),
+        padding: EdgeInsets.fromLTRB(
+          isActive ? 0 : side,
+          16,
+          isActive ? 0 : side,
+          112,
+        ),
         children: <Widget>[
-          const _HomeTopBar(),
-          const SizedBox(height: 28),
+          if (isActive)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: side),
+              child: const _HomeTopBar(),
+            )
+          else
+            const _HomeTopBar(),
+          const SizedBox(height: 16),
+
           if (widget.model.kind == AdaptiveHomeKind.empty) ...<Widget>[
+            // 1. HERO TITLE & CONVERSATIONAL COMPOSER
             Text(
-              'Che viaggio ti farebbe bene adesso?',
+              'Dove vorresti andare?',
               style: Theme.of(context).textTheme.displaySmall,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
-              'Raccontami il momento. Alla destinazione penso io.',
+              'Scrivi una città, un’idea o descrivi il tipo di esperienza che cerchi.',
               style: Theme.of(
                 context,
               ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 14),
             RottaVivaComposer(
               key: const Key('home-composer'),
               controller: _composer,
@@ -152,12 +168,12 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
                 child: const Text('Riprova'),
               ),
             ],
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
             Text(
               'Puoi partire da qui',
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             RottaVivaSeedRow(
               selectedClues: _selectedClues,
               onToggle: _toggleSeed,
@@ -217,26 +233,32 @@ class _ChatFirstHomeScreenState extends State<ChatFirstHomeScreen> {
               thread: widget.model.thread!,
               onOpenThread: widget.onOpenThread,
             ),
-            const SizedBox(height: 28),
-            ActiveTimelineSection(
-              thread: widget.model.thread!,
-              onOpenThread: widget.onOpenThread,
+            Padding(
+              padding: EdgeInsets.fromLTRB(side, 28, side, 0),
+              child: ActiveTimelineSection(
+                thread: widget.model.thread!,
+                onOpenThread: widget.onOpenThread,
+              ),
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Hai un cambio?',
-              style: Theme.of(context).textTheme.titleMedium,
+            Padding(
+              padding: EdgeInsets.fromLTRB(side, 24, side, 0),
+              child: Text(
+                'Hai un cambio?',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ),
-            const SizedBox(height: 12),
-            RottaVivaComposer(
-              key: const Key('home-composer'),
-              controller: _composer,
-              onChanged: (_) => setState(() {}),
-              onSubmit: _submit,
-              onVoice: widget.onVoiceIntent,
-              onPhoto: () => showDemoPhotoPicker(
-                context,
-                onSelected: widget.onPhotoIntent,
+            Padding(
+              padding: EdgeInsets.fromLTRB(side, 12, side, 0),
+              child: RottaVivaComposer(
+                key: const Key('home-composer'),
+                controller: _composer,
+                onChanged: (_) => setState(() {}),
+                onSubmit: _submit,
+                onVoice: widget.onVoiceIntent,
+                onPhoto: () => showDemoPhotoPicker(
+                  context,
+                  onSelected: widget.onPhotoIntent,
+                ),
               ),
             ),
             const SizedBox(height: 32),

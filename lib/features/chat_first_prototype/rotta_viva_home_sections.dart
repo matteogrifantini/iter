@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../app/iter_theme.dart';
 import 'chat_first_data.dart';
 import 'chat_first_models.dart';
+import 'iter_glass_primitives.dart';
 import 'iter_ui_primitives.dart';
 
 const rottaVivaSeeds = <({String label, String clue, String semantics})>[
@@ -11,14 +13,24 @@ const rottaVivaSeeds = <({String label, String clue, String semantics})>[
     semantics: 'Segnale: mare e pause',
   ),
   (
-    label: '🚆 Partire in treno',
-    clue: 'Partire in treno',
-    semantics: 'Segnale: partire in treno',
+    label: '🇵🇹 Lisbona a novembre',
+    clue: 'Lisbona a novembre',
+    semantics: 'Destinazione: Lisbona a novembre',
   ),
   (
-    label: '🍝 Mangiare bene',
-    clue: 'Mangiare bene',
-    semantics: 'Segnale: mangiare bene',
+    label: '🍷 Weekend a Porto',
+    clue: 'Weekend a Porto',
+    semantics: 'Destinazione: Weekend a Porto',
+  ),
+  (
+    label: '🌸 Giappone in primavera',
+    clue: 'Giappone in primavera',
+    semantics: 'Destinazione: Giappone in primavera',
+  ),
+  (
+    label: '🍝 Città d’arte e buon cibo',
+    clue: 'Città d’arte e buon cibo',
+    semantics: 'Segnale: città d’arte e buon cibo',
   ),
 ];
 
@@ -41,82 +53,74 @@ class RottaVivaComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final composerBackground = colors.surfaceContainerHigh;
     final composerForeground = colors.onSurface;
     final enabled = controller.text.trim().isNotEmpty;
     return Semantics(
       container: true,
       explicitChildNodes: true,
       label: 'Composer per raccontare il viaggio',
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: composerBackground,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colors.outlineVariant),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Semantics(
-                label: 'Scrivi il viaggio che hai in mente',
-                textField: true,
-                child: TextField(
-                  controller: controller,
-                  onChanged: onChanged,
-                  minLines: 2,
-                  maxLines: 5,
-                  keyboardType: TextInputType.multiline,
-                  textInputAction: TextInputAction.newline,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.copyWith(color: composerForeground),
-                  decoration: InputDecoration(
-                    labelText: 'Scrivi il viaggio che hai in mente',
-                    labelStyle: TextStyle(color: composerForeground),
-                    hintText: 'Un momento, una disponibilità, un desiderio…',
-                    hintStyle: TextStyle(
-                      color: composerForeground.withValues(alpha: .72),
-                    ),
-                    filled: false,
-                    border: InputBorder.none,
+      child: IterGlassBar(
+        padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Semantics(
+              label: 'Scrivi il viaggio che hai in mente',
+              textField: true,
+              child: TextField(
+                controller: controller,
+                onChanged: onChanged,
+                minLines: 1,
+                maxLines: 4,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: composerForeground),
+                decoration: InputDecoration(
+                  labelText: 'Scrivi il viaggio che hai in mente',
+                  labelStyle: TextStyle(color: composerForeground),
+                  hintText: 'Es. 4 giorni di buon cibo a Lisbona…',
+                  hintStyle: TextStyle(
+                    color: composerForeground.withValues(alpha: .72),
                   ),
+                  filled: false,
+                  border: InputBorder.none,
                 ),
               ),
-              const SizedBox(height: 4),
-              Row(
-                children: <Widget>[
-                  Semantics(
-                    label: 'Aggiungi una foto',
-                    button: true,
-                    child: IconButton(
-                      tooltip: 'Aggiungi una foto',
-                      onPressed: onPhoto,
-                      icon: const Icon(Icons.add_photo_alternate_outlined),
-                      color: composerForeground,
-                    ),
+            ),
+            const SizedBox(height: 2),
+            Row(
+              children: <Widget>[
+                Semantics(
+                  label: 'Aggiungi una foto',
+                  button: true,
+                  child: IconButton(
+                    tooltip: 'Aggiungi una foto',
+                    onPressed: onPhoto,
+                    icon: const Icon(Icons.add_photo_alternate_outlined),
+                    color: composerForeground,
                   ),
-                  Semantics(
-                    label: 'Invia un messaggio vocale',
-                    button: true,
-                    child: IconButton(
-                      tooltip: 'Invia un messaggio vocale',
-                      onPressed: onVoice,
-                      icon: const Icon(Icons.mic_none_rounded),
-                      color: composerForeground,
-                    ),
+                ),
+                Semantics(
+                  label: 'Invia un messaggio vocale',
+                  button: true,
+                  child: IconButton(
+                    tooltip: 'Invia un messaggio vocale',
+                    onPressed: onVoice,
+                    icon: const Icon(Icons.mic_none_rounded),
+                    color: composerForeground,
                   ),
-                  const Spacer(),
-                  IconButton.filled(
-                    tooltip: 'Invia il desiderio',
-                    onPressed: enabled ? onSubmit : null,
-                    icon: const Icon(Icons.arrow_upward_rounded),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                ),
+                const Spacer(),
+                IconButton.filled(
+                  tooltip: 'Invia il desiderio',
+                  onPressed: enabled ? onSubmit : null,
+                  icon: const Icon(Icons.arrow_upward_rounded),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -135,6 +139,8 @@ class RottaVivaSeedRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pillRadius =
+        Theme.of(context).extension<IterGlassRoles>()?.pillRadius ?? 20.0;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -161,6 +167,9 @@ class RottaVivaSeedRow extends StatelessWidget {
                       : Theme.of(context).colorScheme.surfaceContainer,
                   side: BorderSide(
                     color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(pillRadius),
                   ),
                 ),
               ),
@@ -399,47 +408,39 @@ class ActiveTimelineSection extends StatelessWidget {
         ),
         if (update != null) ...<Widget>[
           const SizedBox(height: 4),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: colors.secondaryContainer,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    const Icon(Icons.notifications_active_outlined, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Nuovo nel piano',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  const Icon(Icons.notifications_active_outlined, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Nuovo nel piano',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  update,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colors.onSecondaryContainer,
                   ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                update,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
                 ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton.tonal(
-                    onPressed: () => onOpenThread(thread),
-                    child: const Text('Vedi il piano completo'),
-                  ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.tonal(
+                  onPressed: () => onOpenThread(thread),
+                  child: const Text('Vedi il piano completo'),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ] else ...<Widget>[
           const SizedBox(height: 4),
@@ -477,97 +478,85 @@ class ActiveDestinationStage extends StatelessWidget {
         : snapshot.days.first.items.length;
     return Semantics(
       container: true,
-      label: 'Scena della destinazione ${snapshot.destinationTitle}',
-      child: ClipRRect(
+      explicitChildNodes: true,
+      label: 'hero: Scena della destinazione ${snapshot.destinationTitle}',
+      child: SizedBox(
         key: const Key('home-destination-stage'),
-        borderRadius: BorderRadius.circular(28),
-        child: SizedBox(
-          height: 250,
-          child: Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
-              Image.asset(
-                image,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => ColoredBox(
-                  color: colors.inverseSurface,
-                  child: const SizedBox.expand(),
+        height: 250,
+        width: double.infinity,
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            Image.asset(
+              image,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => ColoredBox(
+                color: colors.inverseSurface,
+                child: const SizedBox.expand(),
+              ),
+            ),
+            const Positioned.fill(
+              child: IterHeroScrim(child: SizedBox.expand()),
+            ),
+            Positioned(
+              left: 18,
+              top: 18,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colors.surface.withValues(alpha: .86),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    'In viaggio',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelLarge?.copyWith(color: colors.onSurface),
+                  ),
                 ),
               ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: <Color>[
-                        Colors.transparent,
-                        colors.inverseSurface.withValues(alpha: .84),
+            ),
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 18,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          snapshot.destinationTitle,
+                          style: Theme.of(context).textTheme.displaySmall
+                              ?.copyWith(color: colors.onInverseSurface),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Oggi · $stopCount ${stopCount == 1 ? 'tappa' : 'tappe'} · ${snapshot.days.firstOrNull?.theme ?? snapshot.stay}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: colors.onInverseSurface),
+                        ),
                       ],
                     ),
                   ),
-                ),
-              ),
-              Positioned(
-                left: 18,
-                top: 18,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colors.surface.withValues(alpha: .86),
-                    borderRadius: BorderRadius.circular(99),
+                  const SizedBox(width: 12),
+                  IconButton.filledTonal(
+                    tooltip: 'Apri la chat del viaggio',
+                    onPressed: () => onOpenThread(thread),
+                    icon: const Icon(Icons.chat_bubble_outline_rounded),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      'In viaggio',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.labelLarge?.copyWith(color: colors.onSurface),
-                    ),
-                  ),
-                ),
+                ],
               ),
-              Positioned(
-                left: 20,
-                right: 20,
-                bottom: 18,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            snapshot.destinationTitle,
-                            style: Theme.of(context).textTheme.displaySmall
-                                ?.copyWith(color: colors.onInverseSurface),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Oggi · $stopCount ${stopCount == 1 ? 'tappa' : 'tappe'} · ${snapshot.days.firstOrNull?.theme ?? snapshot.stay}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: colors.onInverseSurface),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    IconButton.filledTonal(
-                      tooltip: 'Apri la chat del viaggio',
-                      onPressed: () => onOpenThread(thread),
-                      icon: const Icon(Icons.chat_bubble_outline_rounded),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
