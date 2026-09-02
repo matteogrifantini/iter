@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:iter/app/iter_theme.dart';
 
 /// The shared geometry for Iter's replacement visual world.
 class IterPageFrame extends StatelessWidget {
@@ -74,24 +75,32 @@ class IterMaterialSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final glass =
+        Theme.of(context).extension<IterGlassRoles>() ?? const IterGlassRoles();
+    final blur = translucent && IterGlassRoles.useBlur(context);
     final material = Material(
-      color: translucent
-          ? colors.surface.withValues(alpha: .84)
+      color: blur
+          ? colors.surface.withValues(alpha: glass.tintAlpha)
           : colors.surfaceContainerLow,
       elevation: elevation,
       shadowColor: colors.shadow.withValues(alpha: .12),
       shape: RoundedRectangleBorder(
         borderRadius: borderRadius,
-        side: BorderSide(color: colors.outlineVariant.withValues(alpha: .72)),
+        side: BorderSide(
+          color: colors.outlineVariant.withValues(alpha: glass.borderAlpha),
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       child: Padding(padding: padding, child: child),
     );
-    final content = translucent
+    final content = blur
         ? ClipRRect(
             borderRadius: borderRadius,
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              filter: ImageFilter.blur(
+                sigmaX: glass.blurSigma,
+                sigmaY: glass.blurSigma,
+              ),
               child: material,
             ),
           )
