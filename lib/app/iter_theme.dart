@@ -87,6 +87,67 @@ class IterColorRoles extends ThemeExtension<IterColorRoles> {
 
 extension IterThemeContext on BuildContext {
   IterColorRoles get iterColors => Theme.of(this).extension<IterColorRoles>()!;
+  IterGlassRoles get iterGlass => Theme.of(this).extension<IterGlassRoles>()!;
+}
+
+@immutable
+class IterGlassRoles extends ThemeExtension<IterGlassRoles> {
+  const IterGlassRoles({
+    this.blurSigma = 18.0,
+    this.tintAlpha = 0.84,
+    this.borderAlpha = 0.72,
+    this.scrimAlpha = 0.32,
+    this.sheetRadius = 28.0,
+    this.cardRadius = 24.0,
+    this.pillRadius = 20.0,
+  });
+
+  final double blurSigma;
+  final double tintAlpha;
+  final double borderAlpha;
+  final double scrimAlpha;
+  final double sheetRadius;
+  final double cardRadius;
+  final double pillRadius;
+
+  static bool useBlur(BuildContext context) {
+    return !MediaQuery.of(context).disableAnimations;
+  }
+
+  @override
+  IterGlassRoles copyWith({
+    double? blurSigma,
+    double? tintAlpha,
+    double? borderAlpha,
+    double? scrimAlpha,
+    double? sheetRadius,
+    double? cardRadius,
+    double? pillRadius,
+  }) {
+    return IterGlassRoles(
+      blurSigma: blurSigma ?? this.blurSigma,
+      tintAlpha: tintAlpha ?? this.tintAlpha,
+      borderAlpha: borderAlpha ?? this.borderAlpha,
+      scrimAlpha: scrimAlpha ?? this.scrimAlpha,
+      sheetRadius: sheetRadius ?? this.sheetRadius,
+      cardRadius: cardRadius ?? this.cardRadius,
+      pillRadius: pillRadius ?? this.pillRadius,
+    );
+  }
+
+  @override
+  IterGlassRoles lerp(ThemeExtension<IterGlassRoles>? other, double t) {
+    if (other is! IterGlassRoles) return this;
+    return IterGlassRoles(
+      blurSigma: blurSigma + (other.blurSigma - blurSigma) * t,
+      tintAlpha: tintAlpha + (other.tintAlpha - tintAlpha) * t,
+      borderAlpha: borderAlpha + (other.borderAlpha - borderAlpha) * t,
+      scrimAlpha: scrimAlpha + (other.scrimAlpha - scrimAlpha) * t,
+      sheetRadius: sheetRadius + (other.sheetRadius - sheetRadius) * t,
+      cardRadius: cardRadius + (other.cardRadius - cardRadius) * t,
+      pillRadius: pillRadius + (other.pillRadius - pillRadius) * t,
+    );
+  }
 }
 
 abstract final class IterTheme {
@@ -178,6 +239,7 @@ abstract final class IterTheme {
           possibility: IterPalette.possibility,
           videoScrim: const Color(0x52000000),
         ),
+        const IterGlassRoles(),
       ],
     );
 
