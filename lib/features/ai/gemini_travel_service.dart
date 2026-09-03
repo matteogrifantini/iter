@@ -72,25 +72,33 @@ Rispondi SOLO con questo JSON valido:
       case TripPlanningStage.transport:
         return '''
 $commonPersona
-STATO: DEFINIZIONE TRASPORTI & COME ARRIVARE.
-1. Se il viaggiatore menziona solo una meta (es. "Milano ad Halloween", "Budapest", "Lisbona"):
-   - NON aprire i voli! "shouldSearchFlights": false.
-   - Da Roma per tratte italiane (Milano, Firenze, Bologna, Napoli): raccomanda seccamente il treno AV (Frecciarossa/Italo 3h centro-centro, zero stress di aeroporto).
-   - Per l'estero: chiedi se preferisce voli diretti, con quante persone andrà e conferma le date.
-   - Fornisci chip per facilitare la risposta (es. ["In treno AV", "Mostrami i voli", "In coppia", "31 ott - 2 nov"]).
-2. Apri i voli ("shouldSearchFlights": true) SOLO se l'utente lo chiede esplicitamente ("Cerca i voli", "Mostrami i voli", o chip volo).
+STATO: DEFINIZIONE TRASPORTI & COME ARRIVARE (STEP 1-2).
+REGOLA FONDAMENTALE DI PROGRESSIONE A STEP:
+- NON generare MAI l'itinerario giorno per giorno ("days") o monumenti ("attractions") in questo step!
+- Se il viaggiatore menziona una meta e durata (es. "Voglio staccare un po' e andare 3 giorni a Palermo", "Barcellona", "Budapest"):
+   - Accogli la scelta con calore ed entusiasmo da insider (es. "Palermo in 3 giorni è perfetta per staccare tra mercati storici e mare!").
+   - Fai SOLO 2 domande rapide di inquadramento:
+     1) Con quante persone viaggi (in coppia, da solo, amici, famiglia)?
+     2) Che periodo o date hai in mente (es. prossimo weekend)?
+   - Mezzo consigliato:
+     * Per Palermo o mete estere da Roma: segnala il volo diretto (~55 min per Palermo) e chiedi se preferisci voli diretti.
+     * Per Milano/Firenze/Bologna/Napoli da Roma: raccomanda seccamente il treno AV (Frecciarossa/Italo 3h centro-centro).
+   - Fornisci chip sintetici per rispondere in 1 tap: ["Voli diretti da Roma", "In coppia", "Prossimo weekend", "Da solo"].
+   - "shouldSearchFlights": true SOLO se l'utente chiede esplicitamente di cercare i voli ("Cerca i voli", "Mostrami i voli", o clicca un chip volo). Altrimenti false.
+   - NON inserire MAI "days" o "attractions" in questo JSON!
 
 Rispondi SOLO con questo JSON valido:
 {
-  "message": "Consiglio secco sul mezzo migliore e 2 domande rapide su compagni e date",
+  "message": "Accoglienza meta, consiglio sintetico sul mezzo migliore e 2 sole domande rapide (con chi viaggi e quando/date)",
   "destination": "Nome città",
   "durationDays": 3,
   "shouldSearchFlights": false,
   "departureDate": "YYYY-MM-DD",
   "returnDate": "YYYY-MM-DD",
-  "suggestedReplies": ["Opzione 1", "Opzione 2", "Opzione 3"]
+  "suggestedReplies": ["Voli diretti", "In coppia", "Prossimo weekend", "Da solo"]
 }
 ''';
+
 
       case TripPlanningStage.attractions:
         return '''
@@ -520,7 +528,9 @@ Rispondi SOLO con questo JSON valido:
   ) async {
     final lower = userPrompt.toLowerCase();
     String dest = 'Barcellona';
-    if (lower.contains('lisbona')) {
+    if (lower.contains('palermo')) {
+      dest = 'Palermo';
+    } else if (lower.contains('lisbona')) {
       dest = 'Lisbona';
     } else if (lower.contains('budapest')) {
       dest = 'Budapest';
@@ -534,59 +544,112 @@ Rispondi SOLO con questo JSON valido:
       dest = 'Roma';
     }
 
+    int duration = 3;
+    final matchDays = RegExp(r'(\d+)\s*giorn').firstMatch(lower);
+    if (matchDays != null) {
+      duration = int.tryParse(matchDays.group(1)!) ?? 3;
+    }
+
     final visual = await VisualMediaService().getVisualData(dest);
 
     if (stage == TripPlanningStage.attractions) {
-      final attractions = dest.toLowerCase().contains('barcellona')
-          ? const [
-              AttractionItem(
-                id: 'bcn_1',
-                name: 'Sagrada Família',
-                category: 'Architettura Modernista',
-                why: 'La basilica capolavoro di Antoni Gaudí con fasci di luce magica dalle vetrate colorate.',
-                imageUrl: 'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=800&q=80',
-                estimatedTimeMinutes: 120,
-              ),
-              AttractionItem(
-                id: 'bcn_2',
-                name: 'Park Güell',
-                category: 'Panorami & Arte',
-                why: 'Terrazza con mosaici ondulati e vista spettacolare su Barcellona e sul mare.',
-                imageUrl: 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?w=800&q=80',
-                estimatedTimeMinutes: 90,
-              ),
-              AttractionItem(
-                id: 'bcn_3',
-                name: 'Casa Batlló',
-                category: 'Design & Magia',
-                why: 'Facciata fiabesca e tetto che rievoca le scaglie del drago di San Giorgio.',
-                imageUrl: 'https://images.unsplash.com/photo-1511527661048-7fe73d85e9a4?w=800&q=80',
-                estimatedTimeMinutes: 75,
-              ),
-              AttractionItem(
-                id: 'bcn_4',
-                name: 'Bunkers del Carmel',
-                category: 'Tramonto & Vibe',
-                why: 'Il punto panoramico più alto e autentico per ammirare il tramonto a 360° senza folla.',
-                imageUrl: 'https://images.unsplash.com/photo-1509840841025-9088ba78a826?w=800&q=80',
-                estimatedTimeMinutes: 60,
-              ),
-            ]
-          : const [
-              AttractionItem(
-                id: 'gen_1',
-                name: 'Centro Storico & Quartieri',
-                category: 'Passeggiata',
-                why: 'Scorci pittoreschi e botteghe tipiche da vivere a piedi.',
-                imageUrl: 'https://images.unsplash.com/photo-1509840841025-9088ba78a826?w=800&q=80',
-                estimatedTimeMinutes: 90,
-              ),
-            ];
+      final List<AttractionItem> attractions;
+      if (dest.toLowerCase().contains('palermo')) {
+        attractions = const [
+          AttractionItem(
+            id: 'pal_1',
+            name: 'Cattedrale di Palermo',
+            category: 'Arte Arabo-Normanna',
+            why: 'Maestosa cattedrale patrimonio UNESCO con terrazze panoramiche sui tetti e sulle cupole.',
+            imageUrl: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=800&q=80',
+            estimatedTimeMinutes: 75,
+          ),
+          AttractionItem(
+            id: 'pal_2',
+            name: 'Cappella Palatina & Palazzo Reale',
+            category: 'Mosaici & Storia',
+            why: 'Mosaici dorati bizantini tra i più splendidi al mondo e soffitto arabo in legno intagliato.',
+            imageUrl: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?w=800&q=80',
+            estimatedTimeMinutes: 90,
+          ),
+          AttractionItem(
+            id: 'pal_3',
+            name: 'Mercato Storico di Ballarò',
+            category: 'Street Food & Vita Verace',
+            why: 'Un souk vivente tra profumi di panelle, sfincione caldo e le voci storiche dei venditori.',
+            imageUrl: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80',
+            estimatedTimeMinutes: 60,
+          ),
+          AttractionItem(
+            id: 'pal_4',
+            name: 'Teatro Massimo & Quattro Canti',
+            category: 'Architettura & Passeggiata',
+            why: 'Il teatro lirico monumentale e la piazza ottagonale crocevia scenografico della città barocca.',
+            imageUrl: 'https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=800&q=80',
+            estimatedTimeMinutes: 60,
+          ),
+          AttractionItem(
+            id: 'pal_5',
+            name: 'Spiaggia di Mondello',
+            category: 'Mare & Relax Liberty',
+            why: 'Sabbia chiarissima, mare caraibico e villette d\'epoca a soli 20 minuti di bus dal centro.',
+            imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&q=80',
+            estimatedTimeMinutes: 120,
+          ),
+
+        ];
+      } else if (dest.toLowerCase().contains('barcellona')) {
+        attractions = const [
+          AttractionItem(
+            id: 'bcn_1',
+            name: 'Sagrada Família',
+            category: 'Architettura Modernista',
+            why: 'La basilica capolavoro di Antoni Gaudí con fasci di luce magica dalle vetrate colorate.',
+            imageUrl: 'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=800&q=80',
+            estimatedTimeMinutes: 120,
+          ),
+          AttractionItem(
+            id: 'bcn_2',
+            name: 'Park Güell',
+            category: 'Panorami & Arte',
+            why: 'Terrazza con mosaici ondulati e vista spettacolare su Barcellona e sul mare.',
+            imageUrl: 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?w=800&q=80',
+            estimatedTimeMinutes: 90,
+          ),
+          AttractionItem(
+            id: 'bcn_3',
+            name: 'Casa Batlló',
+            category: 'Design & Magia',
+            why: 'Facciata fiabesca e tetto che rievoca le scaglie del drago di San Giorgio.',
+            imageUrl: 'https://images.unsplash.com/photo-1511527661048-7fe73d85e9a4?w=800&q=80',
+            estimatedTimeMinutes: 75,
+          ),
+          AttractionItem(
+            id: 'bcn_4',
+            name: 'Bunkers del Carmel',
+            category: 'Tramonto & Vibe',
+            why: 'Il punto panoramico più alto e autentico per ammirare il tramonto a 360° senza folla.',
+            imageUrl: 'https://images.unsplash.com/photo-1509840841025-9088ba78a826?w=800&q=80',
+            estimatedTimeMinutes: 60,
+          ),
+        ];
+      } else {
+        attractions = const [
+          AttractionItem(
+            id: 'gen_1',
+            name: 'Centro Storico & Quartieri',
+            category: 'Passeggiata',
+            why: 'Scorci pittoreschi e botteghe tipiche da vivere a piedi.',
+            imageUrl: 'https://images.unsplash.com/photo-1509840841025-9088ba78a826?w=800&q=80',
+            estimatedTimeMinutes: 90,
+          ),
+        ];
+      }
 
       return GeminiTripPlanDraft(
         message: 'Ecco i monumenti ed esperienze imperdibili di $dest. Fai swipe per comporre il tuo itinerario ideale!',
         destination: dest,
-        durationDays: 3,
+        durationDays: duration,
         stage: TripPlanningStage.attractions,
         attractions: attractions,
         suggestedReplies: const ['Ho scelto le attrazioni', 'Mostrami dove alloggiare'],
@@ -599,7 +662,7 @@ Rispondi SOLO con questo JSON valido:
       return GeminiTripPlanDraft(
         message: 'Ho calcolato la zona baricentrica perfetta per $dest rispetto alle tue preferenze. Ecco le migliori strutture:',
         destination: dest,
-        durationDays: 3,
+        durationDays: duration,
         stage: TripPlanningStage.stay,
         stayOffers: stays,
         suggestedReplies: const ['Salva alloggio', 'Crea itinerario giorno per giorno'],
@@ -607,14 +670,27 @@ Rispondi SOLO con questo JSON valido:
       );
     }
 
-    // Default stage: transport
+    // Default stage: transport / inquadramento
+    final String transportMsg;
+    if (dest == 'Palermo') {
+      transportMsg = 'Palermo in $duration giorni è un\'ottima idea per staccare la spina tra street food a Ballarò e il barocco dei Quattro Canti! Da $departureCity ci sono voli diretti di circa 55 minuti. In quanti viaggiate e in che date vorresti partire?';
+    } else if (dest == 'Milano' && (departureCity.toLowerCase().contains('roma') || departureCity.toLowerCase().contains('rome'))) {
+      transportMsg = 'Per Milano da $departureCity il Frecciarossa o Italo AV (3h da centro a centro) è imbattibile. In quante persone siete e in quali date?';
+    } else {
+      transportMsg = '$dest-$departureCity, ovviamente si vola! Preferisci voli diretti? E cosa più importante, in quante persone siete e in che date?';
+    }
+
+    final suggested = dest == 'Palermo'
+        ? const ['Voli diretti da Roma', 'In coppia', 'Prossimo weekend', 'Da solo']
+        : const ['Voli diretti', 'In coppia', 'Prossimo weekend', '2 persone'];
+
     return GeminiTripPlanDraft(
-      message: '$dest-$departureCity, ovviamente si vola! Preferisci voli diretti? E cosa più importante, in quante persone siete e in che date?',
+      message: transportMsg,
       destination: dest,
-      durationDays: 3,
+      durationDays: duration,
       stage: TripPlanningStage.transport,
       shouldSearchFlights: false,
-      suggestedReplies: const ['Voli diretti', 'In coppia', 'Prossimo weekend', '2 persone'],
+      suggestedReplies: suggested,
       destinationVisual: visual,
     );
   }

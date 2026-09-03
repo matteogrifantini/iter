@@ -43,7 +43,31 @@ class VisualMediaService {
   final http.Client _client;
 
   static const Map<String, DestinationVisualData> _curatedCatalog = {
+    'palermo': DestinationVisualData(
+      destination: 'Palermo',
+      tagline: 'Mosaici arabo-normanni, street food leggendario nei mercati e luce dorata sul golfo.',
+      images: [
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Palermo_Cathedral_Facade.jpg/1280px-Palermo_Cathedral_Facade.jpg',
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/16._Mai_1897_An_diesem_Tag_wurde_die_Oper_von_Palermo_er%C3%B6ffnet._02.jpg/1280px-16._Mai_1897_An_diesem_Tag_wurde_die_Oper_von_Palermo_er%C3%B6ffnet._02.jpg',
+        'https://thumb.wikimedia.org/wikipedia/commons/thumb/5/52/Il_golfo_di_Mondello.jpg/1280px-Il_golfo_di_Mondello.jpg',
+      ],
+
+
+      climatePill: '22-26°C soleggiato e piacevole',
+      transportPill: 'Centro storico a piedi e bus per Mondello',
+      flightAdvicePill: 'Voli diretti FCO - PMO 55 min da 35€',
+      bestPeriod: 'Aprile - Giugno & Settembre - Novembre (clima caldo spettacolare, evita il caldo record di Luglio-Agosto)',
+      averageDailyCost: '~75€ / giorno (straordinario rapporto qualità/prezzo)',
+      insiderTips: [
+        'Assaggia le panelle e lo sfincione al mercato storico di Ballarò o al Capo.',
+        'Entra nella Cappella Palatina al mattino presto per ammirare i mosaici dorati bizantini senza folla.',
+        'Prendi il bus 806 dal centro per raggiungere la spiaggia di sabbia bianca e acqua cristallina di Mondello.',
+        'La sera fai base tra piazza Marina e il quartiere Kalsa per locali all\'aperto e atmosfera autentica.',
+      ],
+      highlights: ['Cattedrale di Palermo', 'Cappella Palatina & Palazzo Reale', 'Mercato di Ballarò', 'Teatro Massimo', 'Mondello'],
+    ),
     'barcellona': DestinationVisualData(
+
       destination: 'Barcellona',
       tagline: 'Capolavori di Gaudí, brezza del Mediterraneo e tapas bar vibranti tra il Born e il Barrio Gotico.',
       images: [

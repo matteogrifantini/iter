@@ -101,7 +101,44 @@ class StaySearchService {
       ];
     }
 
+    if (key.contains('palermo')) {
+
+      return [
+        StayOffer(
+          id: 'stay-pal-1',
+          name: 'Palazzo Sitano Boutique Hotel',
+          type: StayType.boutiqueHotel,
+          neighborhood: 'Kalsa / Piazza Marina (Baricentro)',
+          ratingScore: 9.3,
+          ratingCount: 1420,
+          ratingLabel: 'Eccellente',
+          pricePerNightEur: 78.0,
+          amenities: const ['Colazione tipica siciliana', 'WiFi fibra', 'Cancellazione gratuita', 'Corte interna'],
+          imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600',
+          bookingUrl: googleHotelsUrl,
+          badgeLabel: 'Baricentro storico perfetto',
+          walkingMinutesToCenter: 3,
+        ),
+        StayOffer(
+          id: 'stay-pal-2',
+          name: 'Quattro Canti Suites & Terrace',
+          type: StayType.apartment,
+          neighborhood: 'Centro Storico (Quattro Canti)',
+          ratingScore: 9.1,
+          ratingCount: 890,
+          ratingLabel: 'Ottimo',
+          pricePerNightEur: 68.0,
+          amenities: const ['Terrazza sui tetti barocchi', 'Aria condizionata', 'Cucina attrezzata', 'Self check-in'],
+          imageUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=600',
+          bookingUrl: googleHotelsUrl,
+          badgeLabel: 'Super centrale',
+          walkingMinutesToCenter: 1,
+        ),
+      ];
+    }
+
     if (key.contains('lisbona') || key.contains('lisbon')) {
+
       return [
         StayOffer(
           id: 'stay-lis-1',

@@ -178,18 +178,24 @@ class _TripChatScreenState extends State<TripChatScreen> {
     if (explicitStage == null) {
       if (lower.contains('non so dove') || lower.contains('ispirami') || lower.contains('idee per') || lower.contains('dove potrei')) {
         stage = TripPlanningStage.inspiration;
-      } else if (lower.contains('monument') || lower.contains('attrazion') || lower.contains('cosa vedere') || lower.contains('vedere') || lower.contains('visitare')) {
+      } else if (lower.contains('cosa vedere') || lower.contains('monumenti') || lower.contains('attrazioni') || lower.contains('esperienze imperdibili')) {
         stage = TripPlanningStage.attractions;
-      } else if (lower.contains('dormire') || lower.contains('hotel') || lower.contains('allogg') || lower.contains('quartier')) {
+      } else if (lower.contains('dove alloggiare') || lower.contains('consigliami un hotel') || lower.contains('dove dormire') || lower.contains('quale quartiere')) {
         stage = TripPlanningStage.stay;
-      } else if (lower.contains('itinerario') || lower.contains('cosa fare') || lower.contains('programma') || lower.contains('tappe') || lower.contains('giorn')) {
+      } else if (lower.contains('crea itinerario') || lower.contains('mostrami l\'itinerario') || lower.contains('itinerario giorno per giorno') || lower.contains('programma completo')) {
         stage = TripPlanningStage.itinerary;
+      } else if (lower.contains('cerca voli') || lower.contains('mostrami i voli') || lower.contains('voli diretti') || lower.contains('trova volo')) {
+        stage = TripPlanningStage.flight;
+      } else if (_latestDraft?.flight == null && !lower.contains('salva') && !lower.contains('conferma')) {
+        // Se non abbiamo ancora gestito il volo/trasporto, rimaniamo su transport/inquadramento
+        stage = TripPlanningStage.transport;
       }
     }
 
     setState(() {
       _currentStage = stage;
     });
+
 
     // Determine departure city: from user text > preferences > default Roma
     final departureCity = _detectedOriginCity
@@ -253,10 +259,11 @@ class _TripChatScreenState extends State<TripChatScreen> {
           _messages.add(
             ChatMessage(
               role: 'assistant',
-              text: 'Si è verificato un problema con l\'IA: $e\n\nPuoi verificare la tua chiave Gemini gratuita nella tab Profilo.',
+              text: 'Si è verificato un problema di connessione: $e\n\nPuoi verificare le impostazioni di connessione nella tab Profilo.',
               timestamp: DateTime.now(),
             ),
           );
+
           _isThinking = false;
         });
         _scrollToBottom();
@@ -431,9 +438,10 @@ class _TripChatScreenState extends State<TripChatScreen> {
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      'Gemini sta elaborando il passo...',
+                      'Iter sta preparando il tuo viaggio...',
                       style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.primary),
                     ),
+
                   ],
                 ),
               ),
@@ -548,12 +556,14 @@ class _MessageBubble extends StatelessWidget {
                 onExploreAttractions: () => onSelectSuggestion?.call('Cosa vedere a ${message.planDraft!.destination}?'),
               ),
 
-            // Profilazione rapida se siamo in fase esplorativa
-            if (message.planDraft!.stage == TripPlanningStage.inspiration)
+            // Profilazione rapida se siamo in fase esplorativa o inquadramento trasporti
+            if (message.planDraft!.stage == TripPlanningStage.inspiration ||
+                (message.planDraft!.stage == TripPlanningStage.transport && message.planDraft!.flight == null))
               TripProfilingCard(
                 destination: message.planDraft!.destination.isNotEmpty ? message.planDraft!.destination : 'la tua meta ideale',
                 onProfileConfirmed: (prompt) => onSelectSuggestion?.call(prompt),
               ),
+
 
             // Volo: FlightSelectorCard con scelta andata/ritorno
             if (message.planDraft!.flight != null)

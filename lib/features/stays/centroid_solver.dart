@@ -29,7 +29,29 @@ class CentroidSolver {
     final destLower = destination.trim().toLowerCase();
     final names = chosenAttractions.map((a) => a.name.toLowerCase()).join(' ');
 
+    if (destLower.contains('palermo')) {
+
+      return const CentroidRecommendation(
+        optimalNeighborhood: 'Centro Storico / Kalsa (tra Ballarò e il mare)',
+        explanation: 'Baricentro perfetto tra i mercati storici di Ballarò, i Quattro Canti e piazza Marina con i suoi locali serali all\'aperto.',
+        walkingScore: 94,
+        averageMinutesToSpots: 8,
+        metroLineAdvice: 'Tutto a piedi nel centro e bus 806 per Mondello',
+      );
+    }
+
+    if (destLower.contains('barcellona') || destLower.contains('barcelona')) {
+      return const CentroidRecommendation(
+        optimalNeighborhood: 'Eixample Dreta & El Born',
+        explanation: 'Baricentro ideale: a metà strada tra la Sagrada Família a nord e le tapas di El Born e la spiaggia a sud.',
+        walkingScore: 95,
+        averageMinutesToSpots: 9,
+        metroLineAdvice: 'Metro L4 (Gialla) e L1 (Rossa) dirette',
+      );
+    }
+
     if (destLower.contains('lisbona') || destLower.contains('lisbon')) {
+
       if (names.contains('belém') || names.contains('jeronimos')) {
         return const CentroidRecommendation(
           optimalNeighborhood: 'Baixa / Chiado & Cais do Sodré',
