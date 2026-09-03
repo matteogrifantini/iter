@@ -2,10 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../organization/adapters/mock_travel_search_provider.dart';
-import '../organization/adapters/unavailable_stay_search_provider.dart';
-import '../organization/engine/session_registry.dart';
-import '../organization/providers/organization_ai_gateway.dart';
 import '../chat/trip_chat_screen.dart';
 import '../home/home_screen.dart';
 import '../profile/profile_screen.dart';
@@ -22,13 +18,11 @@ class ChatFirstShell extends StatefulWidget {
     required this.controller,
     required this.themeMode,
     required this.onThemeChanged,
-    this.sessionRegistry,
   });
 
   final ChatFirstPrototypeController controller;
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeChanged;
-  final SessionRegistry? sessionRegistry;
 
   @override
   State<ChatFirstShell> createState() => _ChatFirstShellState();
@@ -37,22 +31,10 @@ class ChatFirstShell extends StatefulWidget {
 class _ChatFirstShellState extends State<ChatFirstShell> {
   var _tabIndex = 0;
   var _isScrolled = false;
-  late final SessionRegistry _sessionRegistry;
-  var _ownsSessionRegistry = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.sessionRegistry != null) {
-      _sessionRegistry = widget.sessionRegistry!;
-    } else {
-      _sessionRegistry = SessionRegistry(
-        aiGateway: const _FallbackAiGateway(),
-        travelProvider: MockTravelSearchProvider(),
-        stayProvider: const UnavailableStaySearchProvider(),
-      );
-      _ownsSessionRegistry = true;
-    }
     widget.controller.addListener(_maybeShowPurchaseReturnPrompt);
     // Cold start: a persisted `purchaseOpened` never triggers a prompt, the
     // launch flag is session state; this initial check is a no-op by design.
@@ -62,9 +44,6 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
   @override
   void dispose() {
     widget.controller.removeListener(_maybeShowPurchaseReturnPrompt);
-    if (_ownsSessionRegistry) {
-      _sessionRegistry.disposeAll();
-    }
     super.dispose();
   }
 
@@ -444,15 +423,3 @@ class _UnreadIcon extends StatelessWidget {
   }
 }
 
-class _FallbackAiGateway implements OrganizationAiGateway {
-  const _FallbackAiGateway();
-
-  @override
-  Future<AiOrganizationResponse> decideNextStep(
-    OrganizationAiContext context,
-  ) async {
-    return AiOrganizationResponse(
-      explanation: 'Organizzazione assistita attiva.',
-    );
-  }
-}
