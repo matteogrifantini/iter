@@ -354,7 +354,9 @@ class _TripChatScreenState extends State<TripChatScreen> {
                     isUser: isUser,
                     onOpenSnapshot: _handleOpenSnapshot,
                     onOptionSaved: _onFlightOptionSaved,
+                    onSelectSuggestion: (s) => _sendMessage(s),
                   );
+
 
                 },
               ),
@@ -426,6 +428,7 @@ class _MessageBubble extends StatelessWidget {
     required this.isUser,
     required this.onOpenSnapshot,
     this.onOptionSaved,
+    this.onSelectSuggestion,
   });
 
   final ChatMessage message;
@@ -438,9 +441,11 @@ class _MessageBubble extends StatelessWidget {
     required int totalPrice,
     required String bookingUrl,
   })? onOptionSaved;
+  final ValueChanged<String>? onSelectSuggestion;
 
   @override
   Widget build(BuildContext context) {
+
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -507,6 +512,33 @@ class _MessageBubble extends StatelessWidget {
                 ),
               ),
             ],
+          ],
+
+          // Suggerimenti rapidi di dialogo
+          if (!isUser &&
+              message.planDraft?.suggestedReplies != null &&
+              message.planDraft!.suggestedReplies.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: message.planDraft!.suggestedReplies.map((reply) {
+                return ActionChip(
+                  label: Text(
+                    reply,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  backgroundColor: colorScheme.primaryContainer.withValues(alpha: 0.35),
+                  side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.25)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  onPressed: () => onSelectSuggestion?.call(reply),
+                );
+              }).toList(),
+            ),
           ],
         ],
       ),

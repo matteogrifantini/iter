@@ -73,6 +73,43 @@ void main() {
     expect(result.days.first.diningRecommendation, contains('Casa Lucio'));
   });
 
+  test('GeminiTravelService rispetta shouldSearchFlights = false quando si esplora una meta', () async {
+    final mockClient = MockClient((request) async {
+      final fakeResponse = {
+        'candidates': [
+          {
+            'content': {
+              'parts': [
+                {
+                  'text': jsonEncode({
+                    'message': 'Budapest è pura magia tra terme e caffè storici. Che tipo di esperienza cerchi?',
+                    'destination': 'Budapest',
+                    'durationDays': 3,
+                    'shouldSearchFlights': false,
+                    'suggestedReplies': ['Cerchiamo i voli', 'Consigliami il periodo migliore']
+                  })
+                }
+              ]
+            }
+          }
+        ]
+      };
+      return http.Response.bytes(
+        utf8.encode(jsonEncode(fakeResponse)),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    });
+
+    final service = GeminiTravelService(apiKey: 'test-api-key', client: mockClient);
+    final result = await service.generateTripAdvice('Vorrei andare a Budapest');
+
+    expect(result.destination, 'Budapest');
+    expect(result.shouldSearchFlights, isFalse);
+    expect(result.flight, isNull);
+    expect(result.suggestedReplies, contains('Cerchiamo i voli'));
+  });
+
   test('GeminiTravelService gestisce errore HTTP in modo trasparente', () async {
     final mockClient = MockClient((request) async {
       return http.Response(jsonEncode({

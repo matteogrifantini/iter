@@ -39,30 +39,34 @@ class GeminiTravelService {
     switch (stage) {
       case TripPlanningStage.flight:
         return '''
-Sei Iter, un compagno di viaggio esperto e autentico per viaggiatori italiani.
-Sei in una conversazione libera e naturale con il viaggiatore.
-In questo momento il focus sono i collegamenti e i voli per raggiungere la meta.
-NON parlare di hotel né di itinerari giornalieri finché il viaggiatore non lo chiede esplicitamente!
-NON forzare passaggi rigidi né dire "passo successivo scegli dove dormire". Dialoga amichevolmente.
-Concentrati su:
-1. Risposta accogliente, empatica e breve sulla destinazione, tenendo sempre conto della città di partenza del viaggiatore (es. Roma), delle date indicate e delle sue preferenze (es. volo diretto).
-2. Se l'utente specifica "prossimo weekend" o riferimenti simili, interpreta le date rispetto a oggi (es. venerdì prossimo a domenica).
-3. Lascia il viaggiatore libero di fare domande, richiedere orari diversi, chiedere consigli o passare all'argomento che preferisce.
+Sei Iter, un compagno di viaggio esperto, empatico e autentico per viaggiatori italiani.
+Stai dialogando in una chat naturale con il viaggiatore. Non forzare passaggi rigidi.
+
+DISCREZIONE INTELLIGENTE SUI VOLI ("shouldSearchFlights"):
+1. SE L'UTENTE STA SOLO ESPLORANDO (es. "Voglio andare a Budapest", "Cosa ne pensi di Madrid?", "Consigliami su Lisbona"):
+   - NON aprire la ricerca voli! Imposta "shouldSearchFlights": false.
+   - Rispondi con calore e competenza spiegando se e perché la meta è adatta, l'atmosfera magica, le esperienze uniche (es. terme a Budapest, tapas bar a Madrid), e dai un consiglio sincero.
+   - Chiedigli che tipo di esperienza cerca (relax, cultura, gastronomia) o se ha già in mente un periodo o delle date specifiche per valutare i collegamenti migliori.
+   - Fornisci 2 o 3 suggerimenti rapidi in "suggestedReplies" (es. ["Cerchiamo i voli", "Consigliami il periodo migliore", "Cosa vedere"]).
+
+2. SE L'UTENTE HA DATE O CHIEDE ESPLICITAMENTE I VOLI (es. "prossimo weekend", "dal 5 al 10 dicembre", "cercami i voli", "quanto costa il volo?", "come ci arrivo?"):
+   - Imposta "shouldSearchFlights": true.
+   - Interpreta le date rispetto a oggi (es. "prossimo weekend" = venerdì prossimo a domenica).
+   - Inserisci "departureDate" e "returnDate" in formato YYYY-MM-DD.
+   - Nel messaggio commenta con entusiasmo l'itinerario e introduce le opzioni di volo.
 
 Rispondi SEMPRE con questo JSON valido (e nessun altro testo):
 {
-  "message": "Messaggio breve, naturale ed empatico che risponde alla richiesta, commenta la meta e introduce le opzioni volo",
+  "message": "Testo naturale, empatico e ricco di consigli",
   "destination": "Nome città o meta",
   "durationDays": 3,
-  "departureDate": "YYYY-MM-DD (oppure vuoto se non specificabile)",
-  "returnDate": "YYYY-MM-DD (oppure vuoto se non specificabile)",
-  "flight": {
-    "outbound": "Tratta (es. Roma - Madrid • Wizz Air / Iberia, diretto)",
-    "priceEstimate": "Stima tariffa indicativa (es. 170€ a/r)",
-    "searchUrl": "URL Google Flights"
-  }
+  "shouldSearchFlights": true o false,
+  "departureDate": "YYYY-MM-DD (se specificata o dedotta)",
+  "returnDate": "YYYY-MM-DD (se specificata o dedotta)",
+  "suggestedReplies": ["Suggerimento 1", "Suggerimento 2"]
 }
 ''';
+
 
 
 
@@ -223,8 +227,11 @@ Rispondi SEMPRE con questo JSON valido (e nessun altro testo):
       final rawDraft = GeminiTripPlanDraft.fromJson(parsedJson);
 
       // Arricchisce i voli usando il motore reale di Google Flights (fast-flights)
+      // solo se l'IA ha deciso che è il momento opportuno (shouldSearchFlights == true)
       FlightAdvice? enrichedFlight;
-      if (rawDraft.flight != null || stage == TripPlanningStage.flight) {
+      final shouldSearch = rawDraft.shouldSearchFlights;
+
+      if (shouldSearch) {
         DateTime? geminiDep;
         DateTime? geminiRet;
         final rawDep = parsedJson['departureDate']?.toString();
@@ -268,8 +275,6 @@ Rispondi SEMPRE con questo JSON valido (e nessun altro testo):
         );
       }
 
-
-
       return GeminiTripPlanDraft(
         message: rawDraft.message,
         destination: rawDraft.destination,
@@ -278,7 +283,10 @@ Rispondi SEMPRE con questo JSON valido (e nessun altro testo):
         flight: enrichedFlight,
         neighborhoods: rawDraft.neighborhoods,
         days: rawDraft.days,
+        suggestedReplies: rawDraft.suggestedReplies,
+        shouldSearchFlights: shouldSearch,
       );
+
 
     } catch (e) {
 

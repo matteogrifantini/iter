@@ -257,6 +257,8 @@ class GeminiTripPlanDraft {
     this.flight,
     this.neighborhoods = const [],
     this.days = const [],
+    this.suggestedReplies = const [],
+    this.shouldSearchFlights = false,
   });
 
   final String message;
@@ -266,11 +268,14 @@ class GeminiTripPlanDraft {
   final FlightAdvice? flight;
   final List<NeighborhoodAdvice> neighborhoods;
   final List<DailyPlanDraft> days;
+  final List<String> suggestedReplies;
+  final bool shouldSearchFlights;
 
   factory GeminiTripPlanDraft.fromJson(Map<String, dynamic> json, {TripPlanningStage? stage}) {
     final flightJson = json['flight'];
     final rawNeighborhoods = json['neighborhoods'];
     final rawDays = json['days'];
+    final rawSuggestions = json['suggestedReplies'];
 
     final parsedStage = stage ??
         (rawDays is List && rawDays.isNotEmpty
@@ -278,6 +283,13 @@ class GeminiTripPlanDraft {
             : (rawNeighborhoods is List && rawNeighborhoods.isNotEmpty
                 ? TripPlanningStage.stay
                 : TripPlanningStage.flight));
+
+    final parsedSuggestions = rawSuggestions is List
+        ? rawSuggestions.map((e) => e.toString()).toList()
+        : const <String>[];
+
+    final shouldSearch = json['shouldSearchFlights'] == true ||
+        (flightJson is Map<String, dynamic> && flightJson.isNotEmpty);
 
     return GeminiTripPlanDraft(
       message: json['message']?.toString() ?? '',
@@ -297,6 +309,8 @@ class GeminiTripPlanDraft {
               .map(DailyPlanDraft.fromJson)
               .toList()
           : const [],
+      suggestedReplies: parsedSuggestions,
+      shouldSearchFlights: shouldSearch,
     );
   }
 
@@ -308,6 +322,8 @@ class GeminiTripPlanDraft {
     FlightAdvice? flight,
     List<NeighborhoodAdvice>? neighborhoods,
     List<DailyPlanDraft>? days,
+    List<String>? suggestedReplies,
+    bool? shouldSearchFlights,
   }) {
     return GeminiTripPlanDraft(
       message: message ?? this.message,
@@ -317,6 +333,8 @@ class GeminiTripPlanDraft {
       flight: flight ?? this.flight,
       neighborhoods: neighborhoods ?? this.neighborhoods,
       days: days ?? this.days,
+      suggestedReplies: suggestedReplies ?? this.suggestedReplies,
+      shouldSearchFlights: shouldSearchFlights ?? this.shouldSearchFlights,
     );
   }
 
@@ -325,9 +343,10 @@ class GeminiTripPlanDraft {
     'destination': destination,
     'durationDays': durationDays,
     'stage': stage.name,
-    'flight': flight?.toJson(),
+    if (flight != null) 'flight': flight!.toJson(),
     'neighborhoods': neighborhoods.map((n) => n.toJson()).toList(),
     'days': days.map((d) => d.toJson()).toList(),
+    'suggestedReplies': suggestedReplies,
+    'shouldSearchFlights': shouldSearchFlights,
   };
 }
-

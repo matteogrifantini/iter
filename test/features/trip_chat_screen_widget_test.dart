@@ -7,6 +7,9 @@ import 'package:iter/features/chat/trip_chat_screen.dart';
 import 'package:iter/features/trips/trip_details_screen.dart';
 import 'package:iter/features/trips/trip_entity.dart';
 import 'package:iter/features/trips/trip_repository.dart';
+import 'package:iter/features/chat/widgets/flight_selector_card.dart';
+
+
 
 
 import 'package:http/http.dart' as http;
@@ -257,6 +260,52 @@ void main() {
     expect(find.text('Ponte delle Catene'), findsOneWidget);
     expect(find.text('Giorno 2'), findsOneWidget);
     expect(find.text('Parlamento e Terme Széchenyi'), findsOneWidget);
+  });
+
+  testWidgets('TripChatScreen gestisce fase esplorativa: nessun volo forzato e mostra chips di suggerimento', (tester) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final fakeAi = FakeGeminiTravelService(
+      responseDraft: const GeminiTripPlanDraft(
+        message: 'Budapest è pura magia! Terme storiche e atmosfera unica.',
+        destination: 'Budapest',
+        durationDays: 3,
+        flight: null,
+        suggestedReplies: ['Cerchiamo i voli', 'Consigliami il periodo migliore'],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TripChatScreen(
+          initialPrompt: 'Vorrei andare a Budapest',
+          aiService: fakeAi,
+          onOpenSnapshot: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 1. Messaggio discorsivo visibile
+    expect(find.textContaining('Budapest è pura magia'), findsOneWidget);
+
+    // 2. NESSUNA FlightSelectorCard mostrata (nessuna forzatura)
+    expect(find.byType(FlightSelectorCard), findsNothing);
+
+    // 3. Chip di suggerimento visibili
+    expect(find.text('Cerchiamo i voli'), findsOneWidget);
+    expect(find.text('Consigliami il periodo migliore'), findsOneWidget);
+
+    // 4. Tap sul chip invia il messaggio di ricerca voli
+    await tester.tap(find.text('Cerchiamo i voli'));
+    await tester.pumpAndSettle();
+
+    expect(fakeAi.lastPrompt, 'Cerchiamo i voli');
   });
 }
 
