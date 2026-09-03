@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:iter/app/iter_theme.dart';
 
 import 'chat_first_models.dart';
 import 'plan_patch_sheet.dart';
@@ -86,11 +87,13 @@ class PlanDragDestinations extends StatelessWidget {
       movingItemId: itemId,
     );
     final colors = Theme.of(context).colorScheme;
+    final glass =
+        Theme.of(context).extension<IterGlassRoles>() ?? const IterGlassRoles();
     return Material(
       key: const Key('plan-drag-destinations'),
       elevation: 6,
       color: colors.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(glass.sheetRadius),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: 288),
@@ -158,10 +161,12 @@ class PlanUnplacedItems extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final glass =
+        Theme.of(context).extension<IterGlassRoles>() ?? const IterGlassRoles();
     return Material(
       key: const Key('plan-unplaced-section'),
       color: colors.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(glass.cardRadius),
       clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 14, 8, 8),
@@ -216,13 +221,15 @@ class _TimelineEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final glass =
+        Theme.of(context).extension<IterGlassRoles>() ?? const IterGlassRoles();
     return Container(
       width: double.infinity,
       constraints: const BoxConstraints(minHeight: 96),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(glass.cardRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
