@@ -2,15 +2,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'adaptive_home_model.dart';
+import '../chat/trip_chat_screen.dart';
+import '../home/home_screen.dart';
+import '../profile/profile_screen.dart';
+import '../trips/trip_details_screen.dart';
+import '../trips/trip_entity.dart';
+import '../trips/trips_list_screen.dart';
 import 'chat_first_controller.dart';
-import 'chat_first_data.dart';
-import 'chat_first_home_screen.dart';
-import 'chat_first_list_screen.dart';
-import 'chat_first_profile_screen.dart';
-import 'chat_first_thread_screen.dart';
 import 'iter_ui_primitives.dart';
-import 'trip_snapshot_screen.dart';
 
 /// Bottom navigation with WhatsApp-style chat grammar and Iter's identity.
 class ChatFirstShell extends StatefulWidget {
@@ -114,7 +113,6 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
     return ListenableBuilder(
       listenable: widget.controller,
       builder: (context, _) {
-        final controller = widget.controller;
         return Scaffold(
           body: Stack(
             fit: StackFit.expand,
@@ -126,44 +124,24 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
                   child: IndexedStack(
                     index: _tabIndex,
                     children: <Widget>[
-                      ChatFirstHomeScreen(
-                        model: resolveAdaptiveHome(
-                          controller.threads,
-                          focusedThreadId: controller.activeThreadId,
+                      HomeScreen(
+                        onOpenNewTripChat: ({destination}) =>
+                            _openTripChat(context, destination: destination),
+                        onOpenTripDetails: (trip) =>
+                            _openSnapshotFromTrip(context, trip),
+                        onOpenProfile: () => setState(() => _tabIndex = 2),
+                      ),
+                      TripsListScreen(
+                        onOpenTripChat: (trip) => _openTripChat(
+                          context,
+                          tripId: trip.id,
+                          destination: trip.destination,
                         ),
-                        onSubmitIntent: (intent) =>
-                            _startFreeTalkWithText(context, intent),
-                        onVoiceIntent: () => _startFreeTalkWithVoice(context),
-                        onPhotoIntent: (asset) =>
-                            _startFreeTalkWithPhoto(context, asset),
-                        onOpenThread: (thread) => _openThread(context, thread),
-                        onOpenTrips: () => setState(() => _tabIndex = 1),
-                        onStartAnotherJourney: () =>
-                            _startAnotherFreeTalk(context),
-                        unread: controller.unread,
+                        onOpenTripSnapshot: (trip) =>
+                            _openSnapshotFromTrip(context, trip),
+                        onStartNewTrip: () => _openTripChat(context),
                       ),
-                      ChatFirstListScreen(
-                        controller: controller,
-                        onOpenThread: (thread) => _openThread(context, thread),
-                      ),
-                      ChatFirstProfileScreen(
-                        themeMode: widget.themeMode,
-                        onThemeChanged: widget.onThemeChanged,
-                        memoryTags: widget.controller.memoryTags,
-                        availability: widget.controller.availability,
-                        stats: widget.controller.travelStats,
-                        onAddAvailability: (entry) {
-                          widget.controller.addAvailability(
-                            date: entry.date,
-                            kind: entry.kind,
-                            timeRange: entry.timeRange,
-                            note: entry.note,
-                          );
-                        },
-                        onRemoveAvailability:
-                            widget.controller.removeAvailability,
-                        onOpenChats: () => setState(() => _tabIndex = 1),
-                      ),
+                      const ProfileScreen(),
                     ],
                   ),
                 ),
@@ -185,51 +163,28 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
     );
   }
 
-  Future<void> _startFreeTalkWithText(
-    BuildContext context,
-    String intent,
-  ) async {
-    final thread = await widget.controller.submitHomeIntent(intent);
-    if (context.mounted) _openThread(context, thread);
-  }
-
-  Future<void> _startAnotherFreeTalk(BuildContext context) async {
-    final thread = widget.controller.startFreeTalk();
-    if (context.mounted) _openThread(context, thread);
-  }
-
-  void _startFreeTalkWithVoice(BuildContext context) {
-    final thread = widget.controller.startFreeTalk();
-    _openThread(context, thread);
-    widget.controller.sendAudio();
-  }
-
-  void _startFreeTalkWithPhoto(BuildContext context, String asset) {
-    final thread = widget.controller.startFreeTalk();
-    _openThread(context, thread);
-    widget.controller.sendMedia(asset: asset, isVideo: false);
-  }
-
-  void _openThread(BuildContext context, ChatThread thread) {
-    widget.controller.openConversation(thread.summary.id);
+  void _openTripChat(
+    BuildContext context, {
+    String? destination,
+    String? tripId,
+  }) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ChatFirstThreadScreen(
-          controller: widget.controller,
-          conversationId: thread.summary.id,
-          onOpenSnapshot: (_) => _openSnapshot(context, thread.summary.id),
+        builder: (_) => TripChatScreen(
+          initialPrompt: destination != null
+              ? 'Vorrei organizzare un viaggio a $destination'
+              : null,
+          initialTripId: tripId,
+          onOpenSnapshot: (trip) => _openSnapshotFromTrip(context, trip),
         ),
       ),
     );
   }
 
-  void _openSnapshot(BuildContext context, String conversationId) {
+  void _openSnapshotFromTrip(BuildContext context, TripEntity trip) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => TripSnapshotScreen(
-          controller: widget.controller,
-          conversationId: conversationId,
-        ),
+        builder: (_) => TripDetailsScreen(trip: trip),
       ),
     );
   }
