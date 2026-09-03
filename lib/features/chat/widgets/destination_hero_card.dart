@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../places/visual_media_service.dart';
+import '../../places/destination_detail_sheet.dart';
 
 class DestinationHeroCard extends StatefulWidget {
   const DestinationHeroCard({
@@ -49,14 +50,21 @@ class _DestinationHeroCardState extends State<DestinationHeroCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Visual Carousel
-          SStack(
-            images: images,
-            pageController: _pageController,
-            onPageChanged: (idx) => setState(() => _currentPage = idx),
-            currentPage: _currentPage,
-            destination: widget.visualData.destination,
+          // Visual Carousel (toccabile per aprire la scheda a tutto schermo)
+          InkWell(
+            onTap: () => DestinationDetailSheet.show(
+              context,
+              visualData: widget.visualData,
+            ),
+            child: SStack(
+              images: images,
+              pageController: _pageController,
+              onPageChanged: (idx) => setState(() => _currentPage = idx),
+              currentPage: _currentPage,
+              destination: widget.visualData.destination,
+            ),
           ),
+
 
           // Content & Insights
           Padding(
@@ -100,24 +108,26 @@ class _DestinationHeroCardState extends State<DestinationHeroCard> {
                   ],
                 ),
 
-                if (widget.onExploreAttractions != null) ...[
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.tonalIcon(
-                      onPressed: widget.onExploreAttractions,
-                      style: FilledButton.styleFrom(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      icon: const Icon(Icons.account_balance_rounded, size: 18),
-                      label: Text(
-                        'Scegli cosa vedere a ${widget.visualData.destination}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => DestinationDetailSheet.show(
+                      context,
+                      visualData: widget.visualData,
+                    ),
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.info_outline_rounded, size: 18),
+                    label: Text(
+                      'Scopri ${widget.visualData.destination} · Info, periodo & costi',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ),
-                ],
+                ),
+
               ],
             ),
           ),

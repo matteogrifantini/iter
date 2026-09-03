@@ -14,9 +14,12 @@ coverage/
 
 # Legacy web artifacts from the pre-Flutter prototype
 node_modules/
+package*.json
+test_results/
 .next/
 out/
 *.tsbuildinfo
+
 
 # Android local files and generated build state
 android/.gradle/

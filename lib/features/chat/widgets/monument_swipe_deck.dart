@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../ai/gemini_models.dart';
+import '../../places/attraction_detail_sheet.dart';
+
 
 class MonumentSwipeDeck extends StatefulWidget {
   const MonumentSwipeDeck({
@@ -315,9 +317,25 @@ class _MonumentSwipeDeckState extends State<MonumentSwipeDeck> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          currentItem.name,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                currentItem.name,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.info_outline_rounded, size: 20),
+                              tooltip: 'Scheda approfondita',
+                              onPressed: () => AttractionDetailSheet.show(
+                                context,
+                                attraction: currentItem,
+                                onLike: () => _swipe(true),
+                                onSkip: () => _swipe(false),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -330,6 +348,7 @@ class _MonumentSwipeDeckState extends State<MonumentSwipeDeck> {
                       ],
                     ),
                   ),
+
 
                   // Bottoni interattivi Salta / Mi piace
                   Padding(

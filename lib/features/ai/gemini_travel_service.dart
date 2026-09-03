@@ -179,8 +179,9 @@ Rispondi SOLO con questo JSON valido:
     List<ChatMessage> conversationHistory = const [],
   }) async {
     if (apiKey.trim().isEmpty) {
-      throw const GeminiServiceException('Chiave API Gemini non configurata.');
+      return _generateSmartFallback(userPrompt, departureCity, stage);
     }
+
 
     final today = DateTime.now();
     final todayIso = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
@@ -510,5 +511,111 @@ Rispondi SOLO con questo JSON valido:
         lower.contains('dormire') ||
         lower.contains('quartier') ||
         lower.contains('struttur');
+  }
+
+  Future<GeminiTripPlanDraft> _generateSmartFallback(
+    String userPrompt,
+    String departureCity,
+    TripPlanningStage stage,
+  ) async {
+    final lower = userPrompt.toLowerCase();
+    String dest = 'Barcellona';
+    if (lower.contains('lisbona')) {
+      dest = 'Lisbona';
+    } else if (lower.contains('budapest')) {
+      dest = 'Budapest';
+    } else if (lower.contains('milano')) {
+      dest = 'Milano';
+    } else if (lower.contains('madrid')) {
+      dest = 'Madrid';
+    } else if (lower.contains('parigi')) {
+      dest = 'Parigi';
+    } else if (lower.contains('roma')) {
+      dest = 'Roma';
+    }
+
+    final visual = await VisualMediaService().getVisualData(dest);
+
+    if (stage == TripPlanningStage.attractions) {
+      final attractions = dest.toLowerCase().contains('barcellona')
+          ? const [
+              AttractionItem(
+                id: 'bcn_1',
+                name: 'Sagrada Família',
+                category: 'Architettura Modernista',
+                why: 'La basilica capolavoro di Antoni Gaudí con fasci di luce magica dalle vetrate colorate.',
+                imageUrl: 'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=800&q=80',
+                estimatedTimeMinutes: 120,
+              ),
+              AttractionItem(
+                id: 'bcn_2',
+                name: 'Park Güell',
+                category: 'Panorami & Arte',
+                why: 'Terrazza con mosaici ondulati e vista spettacolare su Barcellona e sul mare.',
+                imageUrl: 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?w=800&q=80',
+                estimatedTimeMinutes: 90,
+              ),
+              AttractionItem(
+                id: 'bcn_3',
+                name: 'Casa Batlló',
+                category: 'Design & Magia',
+                why: 'Facciata fiabesca e tetto che rievoca le scaglie del drago di San Giorgio.',
+                imageUrl: 'https://images.unsplash.com/photo-1511527661048-7fe73d85e9a4?w=800&q=80',
+                estimatedTimeMinutes: 75,
+              ),
+              AttractionItem(
+                id: 'bcn_4',
+                name: 'Bunkers del Carmel',
+                category: 'Tramonto & Vibe',
+                why: 'Il punto panoramico più alto e autentico per ammirare il tramonto a 360° senza folla.',
+                imageUrl: 'https://images.unsplash.com/photo-1509840841025-9088ba78a826?w=800&q=80',
+                estimatedTimeMinutes: 60,
+              ),
+            ]
+          : const [
+              AttractionItem(
+                id: 'gen_1',
+                name: 'Centro Storico & Quartieri',
+                category: 'Passeggiata',
+                why: 'Scorci pittoreschi e botteghe tipiche da vivere a piedi.',
+                imageUrl: 'https://images.unsplash.com/photo-1509840841025-9088ba78a826?w=800&q=80',
+                estimatedTimeMinutes: 90,
+              ),
+            ];
+
+      return GeminiTripPlanDraft(
+        message: 'Ecco i monumenti ed esperienze imperdibili di $dest. Fai swipe per comporre il tuo itinerario ideale!',
+        destination: dest,
+        durationDays: 3,
+        stage: TripPlanningStage.attractions,
+        attractions: attractions,
+        suggestedReplies: const ['Ho scelto le attrazioni', 'Mostrami dove alloggiare'],
+        destinationVisual: visual,
+      );
+    }
+
+    if (stage == TripPlanningStage.stay) {
+      final stays = await StaySearchService().searchStays(destination: dest);
+      return GeminiTripPlanDraft(
+        message: 'Ho calcolato la zona baricentrica perfetta per $dest rispetto alle tue preferenze. Ecco le migliori strutture:',
+        destination: dest,
+        durationDays: 3,
+        stage: TripPlanningStage.stay,
+        stayOffers: stays,
+        suggestedReplies: const ['Salva alloggio', 'Crea itinerario giorno per giorno'],
+        destinationVisual: visual,
+      );
+    }
+
+    // Default stage: transport
+    return GeminiTripPlanDraft(
+      message: '$dest-$departureCity, ovviamente si vola! Preferisci voli diretti? E cosa più importante, in quante persone siete e in che date?',
+      destination: dest,
+      durationDays: 3,
+      stage: TripPlanningStage.transport,
+      shouldSearchFlights: false,
+      suggestedReplies: const ['Voli diretti', 'In coppia', 'Prossimo weekend', '2 persone'],
+      destinationVisual: visual,
+    );
   }
 }

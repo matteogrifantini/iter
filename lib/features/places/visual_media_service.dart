@@ -13,6 +13,14 @@ class DestinationVisualData {
     required this.transportPill,
     required this.flightAdvicePill,
     this.videoUrl,
+    this.bestPeriod = 'Maggio - Giugno & Settembre - Ottobre',
+    this.averageDailyCost = '~110€ / giorno (alloggio, pasti, visite)',
+    this.insiderTips = const [
+      'Prenota online i monumenti iconici per evitare ore di coda',
+      'Esplora a piedi i vicoli dei quartieri storici per scovare locali autentici',
+      'Assaggia la cucina tipica nei mercati rionali',
+    ],
+    this.highlights = const [],
   });
 
   final String destination;
@@ -22,6 +30,10 @@ class DestinationVisualData {
   final String transportPill;
   final String flightAdvicePill;
   final String? videoUrl;
+  final String bestPeriod;
+  final String averageDailyCost;
+  final List<String> insiderTips;
+  final List<String> highlights;
 }
 
 class VisualMediaService {
@@ -31,6 +43,27 @@ class VisualMediaService {
   final http.Client _client;
 
   static const Map<String, DestinationVisualData> _curatedCatalog = {
+    'barcellona': DestinationVisualData(
+      destination: 'Barcellona',
+      tagline: 'Capolavori di Gaudí, brezza del Mediterraneo e tapas bar vibranti tra il Born e il Barrio Gotico.',
+      images: [
+        'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=800&q=80',
+        'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?w=800&q=80',
+        'https://images.unsplash.com/photo-1511527661048-7fe73d85e9a4?w=800&q=80',
+      ],
+      climatePill: '21-25°C soleggiato e ventilato',
+      transportPill: 'Metro capillare e lungomare a piedi',
+      flightAdvicePill: 'Voli diretti da Roma FCO ~45-65€',
+      bestPeriod: 'Maggio - Giugno & Settembre - Ottobre (clima caldo perfetto, evita l\'afa e la folla di Agosto)',
+      averageDailyCost: '~115€ / giorno (hotel centrale, tapas e monumenti)',
+      insiderTips: [
+        'Prenota la Sagrada Família con almeno 2-3 settimane di anticipo: i biglietti sul posto sono quasi sempre esauriti!',
+        'Evita i ristoranti turistici sulla Rambla: per tapas autentiche vai a El Born o nel quartiere Gràcia.',
+        'Sali al tramonto ai Bunkers del Carmel per la vista a 360° più spettacolare e gratuita della città.',
+        'Attento ai borseggiatori nelle stazioni metro della Rambla e a Plaça Catalunya.',
+      ],
+      highlights: ['Sagrada Família', 'Park Güell', 'Casa Batlló', 'Barrio Gotico & El Born', 'Barceloneta'],
+    ),
     'lisbona': DestinationVisualData(
       destination: 'Lisbona',
       tagline: 'Luce dorata sull\'Atlantico, miradouros e tram storici tra i vicoli di Alfama.',
@@ -42,6 +75,14 @@ class VisualMediaService {
       climatePill: '18-23°C in Autunno · Clima ideale',
       transportPill: 'Tram 28 e metro ovunque',
       flightAdvicePill: 'Voli diretti da Roma FCO ~70€',
+      bestPeriod: 'Aprile - Giugno & Settembre - Novembre (temperature miti e luce spettacolare)',
+      averageDailyCost: '~95€ / giorno (ottimo rapporto qualità/prezzo)',
+      insiderTips: [
+        'Prendi il tram 28 al mattino presto (prima delle 08:30) per evitare la fila di turisti.',
+        'I Pastéis de Belém originali si mangiano caldi con cannella nell\'antica pasticceria vicino al monastero.',
+        'Goditi il tramonto a Miradouro de Santa Luzia con musica fado dal vivo.',
+      ],
+      highlights: ['Torre de Belém', 'Mosteiro dos Jerónimos', 'Alfama & Miradouros', 'Tram 28', 'Praça do Comércio'],
     ),
     'budapest': DestinationVisualData(
       destination: 'Budapest',
@@ -54,6 +95,14 @@ class VisualMediaService {
       climatePill: '14-19°C · Perfetta per le terme',
       transportPill: 'Tram 2 panoramico sul fiume',
       flightAdvicePill: 'Voli diretti low-cost da 50€',
+      bestPeriod: 'Ottobre per il foliage dorato o Dicembre per mercatini e terme con il vapore nell\'aria fredda',
+      averageDailyCost: '~80€ / giorno (una delle capitali europee più convenienti)',
+      insiderTips: [
+        'Porta costume, ciabatte e cuffia alle Terme Széchenyi per evitare di noleggiarli a caro prezzo.',
+        'La vista più iconica del Parlamento illuminato si gode di notte dal Bastione dei Pescatori o dal battello.',
+        'Visita Szimpla Kert, il primo e più famoso ruin bar, anche di giorno la domenica mattina per il mercatino locale.',
+      ],
+      highlights: ['Parlamento di Budapest', 'Bastione dei Pescatori', 'Terme Széchenyi', 'Ponte delle Catene', 'Ruin Bar'],
     ),
     'milano': DestinationVisualData(
       destination: 'Milano',
@@ -66,6 +115,14 @@ class VisualMediaService {
       climatePill: 'Autunno fresco & mostre d\'arte',
       transportPill: 'Frecciarossa 2h59m da Roma Termini',
       flightAdvicePill: 'In treno AV centro-centro',
+      bestPeriod: 'Settembre - Novembre & Marzo - Maggio per design, mostre ed eventi',
+      averageDailyCost: '~140€ / giorno',
+      insiderTips: [
+        'Da Roma prendi assolutamente il Frecciarossa AV (3 ore centro-centro, zero stress da aeroporto).',
+        'Sali sulle terrazze del Duomo a piedi al tramonto per vedere le Alpi e le guglie illuminate.',
+        'Il Cenacolo Vinciano richiede prenotazione obbligatoria con mesi di anticipo.',
+      ],
+      highlights: ['Duomo & Terrazze', 'Castello Sforzesco', 'Pinacoteca di Brera', 'Navigli & Darsena', 'Galleria'],
     ),
     'madrid': DestinationVisualData(
       destination: 'Madrid',
@@ -78,18 +135,14 @@ class VisualMediaService {
       climatePill: '20-24°C soleggiato e piacevole',
       transportPill: 'Città perfetta a piedi e metro',
       flightAdvicePill: 'Voli frequenti da 60€',
-    ),
-    'parigi': DestinationVisualData(
-      destination: 'Parigi',
-      tagline: 'Bistrot d\'autore, lungosenna alberato e scorci iconici da Montmartre a Le Marais.',
-      images: [
-        'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&q=80',
-        'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=800&q=80',
-        'https://images.unsplash.com/photo-1431274172761-fca41d930114?w=800&q=80',
+      bestPeriod: 'Maggio - Giugno & Ottobre (in estate il caldo supera spesso i 38°C)',
+      averageDailyCost: '~105€ / giorno',
+      insiderTips: [
+        'Il Museo del Prado è gratuito dal lunedì al sabato dalle 18:00 alle 20:00.',
+        'Assaggia il bocadillo de calamares in Plaza Mayor nel bar storico La Campana.',
+        'Noleggia una barchetta al laghetto del Parco del Retiro prima di visitare il Palacio de Cristal.',
       ],
-      climatePill: 'Autunno romantico & foliage',
-      transportPill: 'Metro capillare linea per linea',
-      flightAdvicePill: 'Voli diretti FCO/BGY da 65€',
+      highlights: ['Museo del Prado', 'Palacio Real', 'Parco del Retiro', 'Plaza Mayor', 'Gran Vía'],
     ),
   };
 
@@ -116,6 +169,12 @@ class VisualMediaService {
         climatePill: 'Consigliata da Iter',
         transportPill: 'Collegamenti verificati',
         flightAdvicePill: 'Pianificazione attiva',
+        bestPeriod: 'Primavera e primo Autunno (clima ideale per esplorare)',
+        averageDailyCost: '~100-120€ / giorno complessivo',
+        insiderTips: const [
+          'Pianifica le attrazioni principali al mattino per evitare folla',
+          'Scegli un alloggio in posizione baricentrica per muoverti a piedi',
+        ],
       );
     } catch (_) {
       return DestinationVisualData(
@@ -125,6 +184,12 @@ class VisualMediaService {
         climatePill: 'Stagione favorevole',
         transportPill: 'A misura di viaggiatore',
         flightAdvicePill: 'Opzioni disponibili',
+        bestPeriod: 'Primavera e Autunno',
+        averageDailyCost: '~100€ / giorno',
+        insiderTips: const [
+          'Pianifica le visite con anticipo',
+          'Muoviti a piedi nel centro storico',
+        ],
       );
     }
   }

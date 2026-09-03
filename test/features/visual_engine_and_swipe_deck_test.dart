@@ -28,33 +28,31 @@ void main() {
       flightAdvicePill: 'Voli diretti da 65€',
     );
 
-    bool explored = false;
-
     await tester.pumpWidget(
-      MaterialApp(
+      const MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
             child: DestinationHeroCard(
               visualData: visualData,
-              onExploreAttractions: () {
-                explored = true;
-              },
             ),
           ),
         ),
       ),
     );
 
+
     expect(find.text('Lisbona'), findsOneWidget);
     expect(find.text('Luce dorata sull\'Atlantico'), findsOneWidget);
     expect(find.text('20°C Ideale'), findsOneWidget);
     expect(find.text('Tram 28'), findsOneWidget);
 
-    final btn = find.text('Scegli cosa vedere a Lisbona');
+    final btn = find.text('Scopri Lisbona · Info, periodo & costi');
     expect(btn, findsOneWidget);
     await tester.tap(btn);
-    expect(explored, isTrue);
+    await tester.pumpAndSettle();
+    expect(find.text('Quando andare'), findsOneWidget);
   });
+
 
   testWidgets('MonumentSwipeDeck permette swipe/like e visualizza stima ore', (tester) async {
     final attractions = [

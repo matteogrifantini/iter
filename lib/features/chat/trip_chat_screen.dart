@@ -304,7 +304,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
 
     final assistantMsg = ChatMessage(
       role: 'assistant',
-      text: "Perfetto! Ho salvato l'opzione volo ($flightSummary per $totalPrice€ a/r) nel tuo piano di viaggio. Ora proseguiamo: hai preferenze su dove alloggiare o vuoi che ti consigli i quartieri migliori di $_destination?",
+      text: "Perfetto! Ho salvato l'opzione volo ($flightSummary per $totalPrice€ a/r) nel tuo piano di viaggio. Ora scegliamo cosa vedere a $_destination: swipa a destra per aggiungere all'itinerario o a sinistra per saltare!",
       timestamp: DateTime.now(),
     );
 
@@ -313,7 +313,14 @@ class _TripChatScreenState extends State<TripChatScreen> {
     });
     _saveCurrentTrip(status: TripStatus.planning);
     _scrollToBottom();
+
+    // Transizione fluida alla selezione dei monumenti DOPO i voli
+    _queryAi(
+      'Cosa vedere a $_destination? Mostrami i monumenti ed esperienze imperdibili.',
+      explicitStage: TripPlanningStage.attractions,
+    );
   }
+
 
   void _onAttractionsConfirmed(List<AttractionItem> selected) {
     final names = selected.map((a) => a.name).join(', ');
@@ -555,9 +562,11 @@ class _MessageBubble extends StatelessWidget {
                 onOptionSaved: onOptionSaved,
               ),
 
-            // Attrazioni / Monumenti a Swipe stile Tinder con Pace Calculator
-            if (message.planDraft!.attractions.isNotEmpty)
+            // Attrazioni / Monumenti a Swipe stile Tinder con Pace Calculator (solo dopo i trasporti)
+            if (message.planDraft!.stage == TripPlanningStage.attractions &&
+                message.planDraft!.attractions.isNotEmpty)
               MonumentSwipeDeck(
+
                 destination: message.planDraft!.destination,
                 attractions: message.planDraft!.attractions,
                 durationDays: message.planDraft!.durationDays,
