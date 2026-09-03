@@ -5,6 +5,7 @@ import '../flights/google_flights_url_builder.dart';
 import '../trips/trip_entity.dart';
 import 'gemini_models.dart';
 import '../places/real_place_service.dart';
+import '../places/visual_media_service.dart';
 import '../stays/stay_models.dart';
 import '../stays/stay_search_service.dart';
 
@@ -370,6 +371,16 @@ Rispondi SOLO con questo JSON valido:
         enrichedAttractions = list;
       }
 
+      // Arricchimento visual media della destinazione (Zero token Gemini)
+      DestinationVisualData? visualData;
+      if (rawDraft.destination.isNotEmpty) {
+        try {
+          final visualService = VisualMediaService(client: _client);
+          visualData = await visualService.getVisualData(rawDraft.destination)
+              .timeout(const Duration(milliseconds: 1500));
+        } catch (_) {}
+      }
+
       return GeminiTripPlanDraft(
         message: rawDraft.message,
         destination: rawDraft.destination,
@@ -383,7 +394,9 @@ Rispondi SOLO con questo JSON valido:
         attractions: enrichedAttractions,
         stayOffers: enrichedStays,
         selectedStay: rawDraft.selectedStay,
+        destinationVisual: visualData,
       );
+
 
     } catch (e) {
 

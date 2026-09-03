@@ -9,9 +9,13 @@ import '../trips/trip_repository.dart';
 import 'widgets/daily_plan_card.dart';
 import 'widgets/flight_selector_card.dart';
 import 'widgets/stay_neighborhood_card.dart';
-import 'widgets/attraction_curation_card.dart';
+import 'widgets/monument_swipe_deck.dart';
+
+import 'widgets/destination_hero_card.dart';
+import 'widgets/animated_route_map_card.dart';
 import 'widgets/stay_selector_card.dart';
 import '../stays/stay_models.dart';
+
 
 
 class TripChatScreen extends StatefulWidget {
@@ -224,8 +228,10 @@ class _TripChatScreenState extends State<TripChatScreen> {
               attractions: draft.attractions.isNotEmpty ? draft.attractions : _latestDraft!.attractions,
               stayOffers: draft.stayOffers.isNotEmpty ? draft.stayOffers : _latestDraft!.stayOffers,
               selectedStay: draft.selectedStay ?? _latestDraft!.selectedStay,
+              destinationVisual: draft.destinationVisual ?? _latestDraft!.destinationVisual,
             );
           }
+
 
           if (draft.destination.isNotEmpty) {
             _destination = draft.destination;
@@ -525,6 +531,13 @@ class _MessageBubble extends StatelessWidget {
           if (message.planDraft != null) ...[
             const SizedBox(height: 8),
 
+            // Card Visiva della Destinazione (Zero token Gemini)
+            if (message.planDraft!.destinationVisual != null)
+              DestinationHeroCard(
+                visualData: message.planDraft!.destinationVisual!,
+                onExploreAttractions: () => onSelectSuggestion?.call('Cosa vedere a ${message.planDraft!.destination}?'),
+              ),
+
             // Volo: FlightSelectorCard con scelta andata/ritorno
             if (message.planDraft!.flight != null)
               FlightSelectorCard(
@@ -532,11 +545,12 @@ class _MessageBubble extends StatelessWidget {
                 onOptionSaved: onOptionSaved,
               ),
 
-            // Attrazioni / Monumenti curati ("Mi piace / Salta")
+            // Attrazioni / Monumenti a Swipe stile Tinder con Pace Calculator
             if (message.planDraft!.attractions.isNotEmpty)
-              AttractionCurationCard(
+              MonumentSwipeDeck(
                 destination: message.planDraft!.destination,
                 attractions: message.planDraft!.attractions,
+                durationDays: message.planDraft!.durationDays,
                 onConfirmed: (selected) => onAttractionsConfirmed?.call(selected),
               ),
 
@@ -551,10 +565,14 @@ class _MessageBubble extends StatelessWidget {
             else if (message.planDraft!.neighborhoods.isNotEmpty)
               StayNeighborhoodCard(neighborhoods: message.planDraft!.neighborhoods),
 
-            // Itinerario (solo se l'utente ha chiesto l'itinerario)
+            // Itinerario: Mappa Rotta Animata e Programma Giornaliero
             if (message.planDraft!.days.isNotEmpty) ...[
-
+              AnimatedRouteMapCard(
+                destination: message.planDraft!.destination,
+                day: message.planDraft!.days.first,
+              ),
               DailyPlanCard(days: message.planDraft!.days),
+
               const SizedBox(height: 12),
               Center(
                 child: ElevatedButton.icon(

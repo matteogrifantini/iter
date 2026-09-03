@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../stays/stay_models.dart';
+import '../places/visual_media_service.dart';
 
 
 @immutable
@@ -308,6 +309,7 @@ class GeminiTripPlanDraft {
     this.attractions = const [],
     this.stayOffers = const [],
     this.selectedStay,
+    this.destinationVisual,
   });
 
   final String message;
@@ -322,6 +324,8 @@ class GeminiTripPlanDraft {
   final List<AttractionItem> attractions;
   final List<StayOffer> stayOffers;
   final StayOffer? selectedStay;
+  final DestinationVisualData? destinationVisual;
+
 
   factory GeminiTripPlanDraft.fromJson(Map<String, dynamic> json, {TripPlanningStage? stage}) {
     final flightJson = json['flight'];
@@ -400,6 +404,7 @@ class GeminiTripPlanDraft {
     List<AttractionItem>? attractions,
     List<StayOffer>? stayOffers,
     StayOffer? selectedStay,
+    DestinationVisualData? destinationVisual,
   }) {
     return GeminiTripPlanDraft(
       message: message ?? this.message,
@@ -414,8 +419,10 @@ class GeminiTripPlanDraft {
       attractions: attractions ?? this.attractions,
       stayOffers: stayOffers ?? this.stayOffers,
       selectedStay: selectedStay ?? this.selectedStay,
+      destinationVisual: destinationVisual ?? this.destinationVisual,
     );
   }
+
 
   Map<String, dynamic> toJson() => {
     'message': message,
