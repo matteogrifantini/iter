@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'chat_first_controller.dart';
 import 'chat_first_data.dart';
 import 'chat_first_models.dart';
+import 'iter_glass_primitives.dart';
 import 'plan_external_launcher.dart';
 
 /// Deterministic demo estimates for on-site costs (spec §7.1, "Stime non
@@ -351,10 +352,7 @@ class PlanCostSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Material(
-      color: colors.surface,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-      clipBehavior: Clip.antiAlias,
+    return IterGlassSheet(
       child: Column(
         children: <Widget>[
           const SizedBox(height: 8),
@@ -488,6 +486,9 @@ class PlanCostSheet extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(28),
+        ),
         title: const Text('Conferma le scelte del piano?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
