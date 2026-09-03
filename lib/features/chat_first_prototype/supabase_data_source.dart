@@ -14,15 +14,22 @@ import 'chat_first_models.dart'
         ProfileRow,
         TripSnapshot;
 import 'data_source.dart';
+import 'local_preferences_service.dart';
+import 'profile_models.dart' show AvailabilityEntry;
 
 /// Live source backed by the Supabase `iter` project. Only used when the build
 /// was started with `--dart-define=ITER_BACKEND=supabase` plus a URL and key.
 class SupabaseDataSource implements IterDataSource {
-  SupabaseDataSource({required this.config, SupabaseClient? client})
-    : _providedClient = client;
+  SupabaseDataSource({
+    required this.config,
+    SupabaseClient? client,
+    LocalPreferencesService? preferencesService,
+  }) : _providedClient = client,
+       _prefs = preferencesService ?? const LocalPreferencesService();
 
   final AppConfig config;
   final SupabaseClient? _providedClient;
+  final LocalPreferencesService _prefs;
 
   SupabaseClient get _client => _providedClient ?? Supabase.instance.client;
 
@@ -220,6 +227,32 @@ class SupabaseDataSource implements IterDataSource {
   }
 
   @override
+  String? get currentUserEmail {
+    try {
+      return _client.auth.currentUser?.email;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<bool> signInWithEmail(String email) async {
+    try {
+      await _client.auth.signInWithOtp(email: email);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<void> signOut() async {
+    try {
+      await _client.auth.signOut();
+    } catch (_) {}
+  }
+
+  @override
   Future<void> upsertProfile({
     ThemeMode? themeMode,
     List<String>? memoryTags,
@@ -242,6 +275,14 @@ class SupabaseDataSource implements IterDataSource {
       // Best effort: the in-memory profile stays authoritative.
     }
   }
+
+  @override
+  Future<List<AvailabilityEntry>?> fetchAvailability() async =>
+      _prefs.loadAvailability();
+
+  @override
+  Future<void> saveAvailability(List<AvailabilityEntry> entries) async =>
+      _prefs.saveAvailability(entries);
 
   /// Maps a message role onto the `messages.role` check constraint
   /// (`'user' | 'assistant'`); the travel-first [ChatRole] enums collapse onto

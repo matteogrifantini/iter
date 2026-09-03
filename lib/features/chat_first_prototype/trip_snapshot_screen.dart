@@ -25,16 +25,19 @@ class TripSnapshotScreen extends StatefulWidget {
     super.key,
     required this.controller,
     required this.conversationId,
+    this.initialSnapshot,
     this.externalLauncher,
   });
 
   final ChatFirstPrototypeController controller;
   final String conversationId;
+  final TripSnapshot? initialSnapshot;
   final PlanExternalLauncher? externalLauncher;
 
   @override
   State<TripSnapshotScreen> createState() => _TripSnapshotScreenState();
 }
+
 
 class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
   var _selectedDay = 0;

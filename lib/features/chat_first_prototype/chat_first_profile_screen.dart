@@ -19,6 +19,9 @@ class ChatFirstProfileScreen extends StatelessWidget {
     ),
     this.onAddAvailability,
     this.onRemoveAvailability,
+    this.currentUserEmail,
+    this.onSignInWithEmail,
+    this.onSignOut,
   });
 
   final ThemeMode themeMode;
@@ -29,6 +32,9 @@ class ChatFirstProfileScreen extends StatelessWidget {
   final TravelStats stats;
   final ValueChanged<AvailabilityEntry>? onAddAvailability;
   final ValueChanged<String>? onRemoveAvailability;
+  final String? currentUserEmail;
+  final Future<bool> Function(String email)? onSignInWithEmail;
+  final VoidCallback? onSignOut;
 
   @override
   Widget build(BuildContext context) {
@@ -185,7 +191,123 @@ class ChatFirstProfileScreen extends StatelessWidget {
             subtitle: 'Riapri un piano o inizia un viaggio nuovo',
             onTap: onOpenChats,
           ),
+          const SizedBox(height: 18),
+          const IterRouteDivider(active: false),
+          const SizedBox(height: 18),
+          _LinkTile(
+            icon: currentUserEmail == null
+                ? Icons.account_circle_outlined
+                : Icons.verified_user_outlined,
+            title: currentUserEmail ?? 'Accedi o crea un account',
+            subtitle: currentUserEmail == null
+                ? 'Sincronizza i tuoi viaggi e piani su tutti i dispositivi'
+                : 'Account collegato · Tocca per gestire la sessione',
+            onTap: () => _openAccountSheet(context),
+          ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _openAccountSheet(BuildContext context) async {
+    final email = currentUserEmail;
+    final emailController = TextEditingController();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          16,
+          20,
+          28 + MediaQuery.of(sheetContext).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              email == null ? 'Accedi a Iter' : 'Il tuo account',
+              style: Theme.of(
+                sheetContext,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            if (email != null) ...[
+              Text(
+                'Sei autenticato con $email. I tuoi piani e messaggi sono sincronizzati sul cloud.',
+                style: Theme.of(sheetContext).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    child: const Text('Annulla'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.tonal(
+                    onPressed: () {
+                      onSignOut?.call();
+                      Navigator.of(sheetContext).pop();
+                    },
+                    child: const Text('Esci dall\'account'),
+                  ),
+                ],
+              ),
+            ] else ...[
+              Text(
+                'Inserisci la tua email per ricevere un link magico di accesso immediato, senza password.',
+                style: Theme.of(sheetContext).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  hintText: 'es. nome@esempio.it',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    child: const Text('Chiudi'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () async {
+                      final input = emailController.text.trim();
+                      if (input.isNotEmpty && onSignInWithEmail != null) {
+                        final ok = await onSignInWithEmail!(input);
+                        if (sheetContext.mounted) {
+                          Navigator.of(sheetContext).pop();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                ok
+                                    ? 'Link inviato a $input! Controlla la tua posta.'
+                                    : 'Impossibile inviare il link. Riprova più tardi.',
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    child: const Text('Invia Magic Link'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

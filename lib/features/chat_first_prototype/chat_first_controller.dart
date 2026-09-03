@@ -7,6 +7,7 @@ import '../../models/trip_models.dart' show JourneyRoute;
 import 'chat_first_data.dart';
 import 'chat_first_models.dart';
 import 'data_source.dart';
+import 'gemini_ai_service.dart';
 import 'inspiration_models.dart';
 import 'mock_data_source.dart';
 import 'plan_editor.dart';
@@ -90,6 +91,7 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   ChatFirstPrototypeController({
     List<ChatThread>? seed,
     IterDataSource? dataSource,
+    this.aiService,
     DateTime Function()? now,
   }) : _threads = seed ?? ChatFirstDemoData.seedThreads(),
        dataSource = dataSource ?? MockDataSource(),
@@ -102,6 +104,7 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   /// Supabase. [trendJourneys] falls back to the deterministic demo content
   /// until [loadTrendJourneys] replaces it.
   final IterDataSource dataSource;
+  final GeminiAiService? aiService;
   final PlanEditor _planEditor = const PlanEditor();
   final DateTime Function() _now;
 
@@ -177,6 +180,22 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   List<SavedInspiration> get savedInspirations =>
       List<SavedInspiration>.unmodifiable(_savedInspirations);
 
+  /// Current user's email if signed in via Supabase Auth, or null in guest/mock mode.
+  String? get currentUserEmail => dataSource.currentUserEmail;
+
+  /// Signs in using a Magic Link email OTP.
+  Future<bool> signInWithEmail(String email) async {
+    final ok = await dataSource.signInWithEmail(email);
+    notifyListeners();
+    return ok;
+  }
+
+  /// Signs out of the current session.
+  Future<void> signOut() async {
+    await dataSource.signOut();
+    notifyListeners();
+  }
+
   List<SavedInspiration> savedInspirationsFor(String conversationId) =>
       List<SavedInspiration>.unmodifiable(
         _savedInspirations.where(
@@ -225,6 +244,7 @@ class ChatFirstPrototypeController extends ChangeNotifier {
       ),
     );
     notifyListeners();
+    unawaited(dataSource.saveAvailability(_availability));
     return id;
   }
 
@@ -232,7 +252,10 @@ class ChatFirstPrototypeController extends ChangeNotifier {
     final before = _availability.length;
     _availability.removeWhere((entry) => entry.id == id);
     final removed = _availability.length != before;
-    if (removed) notifyListeners();
+    if (removed) {
+      notifyListeners();
+      unawaited(dataSource.saveAvailability(_availability));
+    }
     return removed;
   }
 
@@ -372,14 +395,22 @@ class ChatFirstPrototypeController extends ChangeNotifier {
       snapshot.destinationTitle.trim().toLowerCase();
 
   /// Loads the persisted profile (theme and learned memory) from the resolved
-  /// [dataSource]. On the mock path the row is always absent, so the light
-  /// theme and the demo tags keep applying.
+  /// [dataSource]. On the mock path this restores locally saved preferences
+  /// or falls back to demo defaults.
   Future<void> loadProfile() async {
     final profile = await dataSource.fetchProfile();
-    if (profile == null) return;
-    _themeMode = profile.themeMode;
-    _memoryTags = List<String>.from(profile.memoryTags);
-    notifyListeners();
+    if (profile != null) {
+      _themeMode = profile.themeMode;
+      _memoryTags = List<String>.from(profile.memoryTags);
+      notifyListeners();
+    }
+    final savedAvailability = await dataSource.fetchAvailability();
+    if (savedAvailability != null && savedAvailability.isNotEmpty) {
+      _availability
+        ..clear()
+        ..addAll(savedAvailability);
+      notifyListeners();
+    }
   }
 
   /// Applies [mode] to the session and persists it best effort on the resolved
@@ -1385,11 +1416,71 @@ class ChatFirstPrototypeController extends ChangeNotifier {
   void _advance(ChatThread thread, String traveledText) {
     _activeThreadId = thread.summary.id;
     thread.travelerMessage(traveledText);
-    if (!thread.advance()) {
-      thread.messages.add(ChatFirstDemoData.closingReply());
-    }
-    _persistNewMessages(thread);
     notifyListeners();
+
+    if (aiService != null && aiService!.config.usesSupabase) {
+      aiService!
+          .generatePlan(
+            operation: 'suggest_destination',
+            message: traveledText,
+            destination: thread.summary.title,
+          )
+          .then((aiResult) {
+            if (aiResult.isSuccess && aiResult.destinationName != null) {
+              final destName = aiResult.destinationName!;
+              final destCountry = aiResult.destinationCountry ?? '';
+              final destWhy =
+                  (aiResult.destinationWhy != null &&
+                      aiResult.destinationWhy!.isNotEmpty)
+                  ? aiResult.destinationWhy!
+                  : 'Ho selezionato i luoghi ideali per i tuoi ritmi.';
+              final dynamicSnapshot = TripSnapshot(
+                destinationTitle: destName,
+                country: destCountry,
+                durationLabel: '3-5 giorni',
+                statusLabel: 'In pianificazione',
+                dates: 'giorni da definire',
+                transport: 'da definire',
+                stay: 'da definire',
+                placeLabels: aiResult.places.map((p) => p.title).toList(),
+                days: aiResult.days,
+              );
+              thread.summary = thread.summary.copyWith(
+                title: destName,
+                snapshot: dynamicSnapshot,
+              );
+              thread.messages.add(
+                ChatMessage(
+                  id: '${thread.summary.id}-m${thread.messages.length + 1}',
+                  role: ChatRole.assistant,
+                  kind: ChatMessageKind.text,
+                  text:
+                      '$destWhy\n\nHo impostato una prima rotta per $destName. Apri il piano per esplorarla!',
+                  sentAt: _now().toUtc(),
+                ),
+              );
+            } else {
+              if (!thread.advance()) {
+                thread.messages.add(ChatFirstDemoData.closingReply());
+              }
+            }
+            _persistNewMessages(thread);
+            notifyListeners();
+          })
+          .catchError((_) {
+            if (!thread.advance()) {
+              thread.messages.add(ChatFirstDemoData.closingReply());
+            }
+            _persistNewMessages(thread);
+            notifyListeners();
+          });
+    } else {
+      if (!thread.advance()) {
+        thread.messages.add(ChatFirstDemoData.closingReply());
+      }
+      _persistNewMessages(thread);
+      notifyListeners();
+    }
   }
 
   /// Opens (or creates) a guided-intake thread for a home destination trend.
@@ -1493,8 +1584,58 @@ class ChatFirstPrototypeController extends ChangeNotifier {
       }
       _activeThreadId = thread.summary.id;
       thread.travelerMessage(intent);
-      if (!thread.advance()) {
-        thread.messages.add(ChatFirstDemoData.closingReply());
+      if (aiService != null && aiService!.config.usesSupabase) {
+        try {
+          final aiResult = await aiService!.generatePlan(
+            operation: 'suggest_destination',
+            message: intent,
+          );
+          if (aiResult.isSuccess && aiResult.destinationName != null) {
+            final destName = aiResult.destinationName!;
+            final destCountry = aiResult.destinationCountry ?? '';
+            final destWhy =
+                aiResult.destinationWhy ?? 'Una meta adatta ai tuoi desideri.';
+            final dynamicSnapshot = TripSnapshot(
+              destinationTitle: destName,
+              country: destCountry,
+              durationLabel: '3 giorni',
+              statusLabel: 'In pianificazione',
+              dates: 'giorni da definire',
+              transport: 'da definire',
+              stay: 'da definire',
+              placeLabels: const <String>[],
+              days: aiResult.days.isEmpty
+                  ? const <TripDaySnapshot>[]
+                  : aiResult.days,
+            );
+            thread.summary = thread.summary.copyWith(
+              title: destName,
+              snapshot: dynamicSnapshot,
+            );
+            thread.messages.add(
+              ChatMessage(
+                id: '${thread.summary.id}-m${thread.messages.length + 1}',
+                role: ChatRole.assistant,
+                kind: ChatMessageKind.text,
+                text:
+                    '$destWhy\n\nHo impostato una prima rotta per $destName. Apri il piano per esplorarla!',
+                sentAt: _now().toUtc(),
+              ),
+            );
+          } else {
+            if (!thread.advance()) {
+              thread.messages.add(ChatFirstDemoData.closingReply());
+            }
+          }
+        } catch (_) {
+          if (!thread.advance()) {
+            thread.messages.add(ChatFirstDemoData.closingReply());
+          }
+        }
+      } else {
+        if (!thread.advance()) {
+          thread.messages.add(ChatFirstDemoData.closingReply());
+        }
       }
       _pendingHomeThread = thread;
       _pendingHomeIntent = intent;

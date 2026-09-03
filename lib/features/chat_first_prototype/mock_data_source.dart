@@ -13,6 +13,8 @@ import 'chat_first_models.dart'
         TripSnapshot;
 import 'data_source.dart';
 
+import 'profile_models.dart' show AvailabilityEntry;
+
 /// Deterministic in-memory source backing the prototype in debug and tests.
 /// Behavior is identical to the pre-F0 demo data. Persistence methods are
 /// no-ops: conversations and messages live only in the controller memory, so
@@ -68,10 +70,25 @@ class MockDataSource implements IterDataSource {
   Future<ProfileRow?> fetchProfile() async => null;
 
   @override
+  String? get currentUserEmail => null;
+
+  @override
+  Future<bool> signInWithEmail(String email) async => true;
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
   Future<void> upsertProfile({
     ThemeMode? themeMode,
     List<String>? memoryTags,
   }) async {}
+
+  @override
+  Future<List<AvailabilityEntry>?> fetchAvailability() async => null;
+
+  @override
+  Future<void> saveAvailability(List<AvailabilityEntry> entries) async {}
 
   /// Maps a mock [Place] to the light [DestinationPoint] shape the preview
   /// sheet needs. The emoji is derived from the category so the demo stays

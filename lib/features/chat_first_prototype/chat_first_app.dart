@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import '../../app/app_config.dart';
 import '../../app/iter_theme.dart';
 import 'chat_first_controller.dart';
 import 'chat_first_shell.dart';
 import 'data_source.dart';
+import 'gemini_ai_service.dart';
 
 /// Top-level app for the chat-first prototype. It reuses Iter's visual theme
 /// while keeping its own isolated controller; the theme now lives on the
@@ -36,8 +38,12 @@ class _ChatFirstPrototypeAppState extends State<ChatFirstPrototypeApp>
     if (injected != null) {
       _controller = injected;
     } else {
+      final config = AppConfig.fromEnvironment();
+      final dataSource = resolveDataSource();
+      final aiService = GeminiAiService(config: config);
       _controller = ChatFirstPrototypeController(
-        dataSource: resolveDataSource(),
+        dataSource: dataSource,
+        aiService: aiService,
       );
       _ownsController = true;
     }

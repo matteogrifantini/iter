@@ -12,6 +12,7 @@ import 'chat_first_models.dart'
         ProfileRow,
         TripSnapshot;
 import 'mock_data_source.dart';
+import 'profile_models.dart' show AvailabilityEntry;
 import 'supabase_data_source.dart';
 
 /// Observable outcome of an accepted-plan persistence attempt.
@@ -29,7 +30,6 @@ class PlanSaveResult {
 /// interface and never to a database directly. [MockDataSource] is the default
 /// in debug and tests; [SupabaseDataSource] takes over only when the build was
 /// started with an explicit Supabase backend (see [AppConfig.usesSupabase]).
-@immutable
 abstract class IterDataSource {
   /// Connects and signs in anonymously (Supabase) or no-ops (mock).
   Future<void> init();
@@ -77,10 +77,25 @@ abstract class IterDataSource {
   /// applying.
   Future<ProfileRow?> fetchProfile();
 
+  /// The current user's email if authenticated, or null for guests / mock.
+  String? get currentUserEmail;
+
+  /// Sends a Magic Link OTP email for authentication. Returns true if request sent.
+  Future<bool> signInWithEmail(String email);
+
+  /// Signs out the current session.
+  Future<void> signOut();
+
   /// Persists the owner's theme and/or memory tags on the `profiles` row keyed
   /// by `auth.uid()`. Best effort: failures never crash and the in-memory
   /// state stays authoritative.
   Future<void> upsertProfile({ThemeMode? themeMode, List<String>? memoryTags});
+
+  /// Fetches saved availability entries, or null if none saved.
+  Future<List<AvailabilityEntry>?> fetchAvailability() async => null;
+
+  /// Persists availability entries locally or remotely.
+  Future<void> saveAvailability(List<AvailabilityEntry> entries) async {}
 }
 
 /// Picks the live source when the app was started with Supabase configured,

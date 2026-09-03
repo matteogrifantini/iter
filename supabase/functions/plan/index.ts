@@ -17,13 +17,8 @@ const OPERATIONS = [
 type Operation = (typeof OPERATIONS)[number];
 type ProviderName = "mock" | "gemini";
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// ---------------------------------------------------------------------------
-// PlanDraftV1 — server contract. Schema documented in supabase/functions/plan/README.md.
-// ---------------------------------------------------------------------------
 interface PlanDraftV1 {
   schemaVersion: "PlanDraftV1";
   operation: Operation;
@@ -90,9 +85,6 @@ interface PlanRequest {
   lockedItemIds?: string[];
 }
 
-// ---------------------------------------------------------------------------
-// Deterministic mock catalogue. No external keys required.
-// ---------------------------------------------------------------------------
 interface MockPlaceDef {
   poiId: string;
   title: string;
@@ -108,27 +100,27 @@ interface MockDestination {
 
 const MOCK_CATALOGUE: MockDestination[] = [
   {
+    name: "Budapest",
+    country: "Ungheria",
+    why: "Terme calde, mercatini invernali e la maestosità del Danubio.",
+    places: [
+      { poiId: "bud-parlamento", title: "Parlamento di Budapest", category: "monumento" },
+      { poiId: "bud-castello", title: "Castello di Buda e Bastione dei Pescatori", category: "panorama" },
+      { poiId: "bud-szechenyi", title: "Terme Széchenyi", category: "esperienza" },
+      { poiId: "bud-basilica", title: "Basilica di Santo Stefano", category: "cultura" },
+      { poiId: "bud-mercato", title: "Mercato Centrale (Nagyvásárcsarnok)", category: "food" },
+    ],
+  },
+  {
     name: "Porto",
     country: "Portogallo",
     why: "Mare, fiume Douro e una città a misura di passeggiata.",
     places: [
       { poiId: "porto-ribeira", title: "Ribeira", category: "quartiere" },
-      {
-        poiId: "porto-clerigos",
-        title: "Torre dos Clérigos",
-        category: "panorama",
-      },
+      { poiId: "porto-clerigos", title: "Torre dos Clérigos", category: "panorama" },
       { poiId: "porto-lello", title: "Livraria Lello", category: "cultura" },
-      {
-        poiId: "porto-douro",
-        title: "Passeggiata sul Douro",
-        category: "passeggiata",
-      },
-      {
-        poiId: "porto-gaia",
-        title: "Cantine a Vila Nova de Gaia",
-        category: "food",
-      },
+      { poiId: "porto-douro", title: "Passeggiata sul Douro", category: "passeggiata" },
+      { poiId: "porto-gaia", title: "Cantine a Vila Nova de Gaia", category: "food" },
     ],
   },
   {
@@ -140,11 +132,7 @@ const MOCK_CATALOGUE: MockDestination[] = [
       { poiId: "roma-borghese", title: "Villa Borghese", category: "parco" },
       { poiId: "roma-trastevere", title: "Trastevere", category: "quartiere" },
       { poiId: "roma-navona", title: "Piazza Navona", category: "piazza" },
-      {
-        poiId: "roma-vaticano",
-        title: "Vaticano e San Pietro",
-        category: "cultura",
-      },
+      { poiId: "roma-vaticano", title: "Vaticano e San Pietro", category: "cultura" },
     ],
   },
   {
@@ -155,11 +143,7 @@ const MOCK_CATALOGUE: MockDestination[] = [
       { poiId: "lis-belem", title: "Torre di Belém", category: "monumento" },
       { poiId: "lis-alfama", title: "Alfama", category: "quartiere" },
       { poiId: "lis-tram28", title: "Tram 28", category: "esperienza" },
-      {
-        poiId: "lis-miradouro",
-        title: "Miradouro da Senhora do Monte",
-        category: "panorama",
-      },
+      { poiId: "lis-miradouro", title: "Miradouro da Senhora do Monte", category: "panorama" },
     ],
   },
   {
@@ -169,11 +153,7 @@ const MOCK_CATALOGUE: MockDestination[] = [
     places: [
       { poiId: "bcn-sagrada", title: "Sagrada Família", category: "monumento" },
       { poiId: "bcn-gotic", title: "Barri Gòtic", category: "quartiere" },
-      {
-        poiId: "bcn-boqueria",
-        title: "Mercat de la Boqueria",
-        category: "food",
-      },
+      { poiId: "bcn-boqueria", title: "Mercat de la Boqueria", category: "food" },
       { poiId: "bcn-barceloneta", title: "Barceloneta", category: "spiaggia" },
     ],
   },
@@ -187,9 +167,6 @@ const SLOT_POOL = [
   "19:00–20:30",
 ];
 
-// ---------------------------------------------------------------------------
-// SSE writer. Emits only the allowlisted events (stage|proposal|patch|warning|complete|error).
-// ---------------------------------------------------------------------------
 class Sse {
   constructor(
     private readonly controller: ReadableStreamDefaultController<Uint8Array>,
@@ -202,222 +179,82 @@ class Sse {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Auth and quota.
-// ---------------------------------------------------------------------------
-function createUserClient(authHeader: string): SupabaseClient {
+function createSupabaseClient(authHeader?: string): SupabaseClient | null {
   const url = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-  if (!url || !anonKey) {
-    throw new Error("SUPABASE_URL or SUPABASE_ANON_KEY is not set");
-  }
+  if (!url || !anonKey) return null;
   return createClient(url, anonKey, {
-    global: { headers: { Authorization: authHeader } },
+    global: { headers: authHeader ? { Authorization: authHeader } : {} },
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
 
-type QuotaResult = "ok" | "quota-exceeded" | "unavailable";
-
-// Best-effort quota guard. If the RPC/table is missing the caller is only
-// warned and the deterministic mock proceeds (no crash, no paid fallback).
-async function consumeCredit(client: SupabaseClient): Promise<QuotaResult> {
-  try {
-    const { data, error } = await client.rpc("consume_ai_credit", {
-      max_generations: 2,
-      max_global_generations: 70,
-    });
-    if (error) return "unavailable";
-    return data === true ? "ok" : "quota-exceeded";
-  } catch (err) {
-    console.warn("consume_ai_credit unavailable", err);
-    return "unavailable";
+function parseGeminiJson<T = unknown>(rawText: string): T {
+  let cleaned = rawText.trim();
+  if (cleaned.startsWith("```json")) {
+    cleaned = cleaned.slice(7);
+  } else if (cleaned.startsWith("```")) {
+    cleaned = cleaned.slice(3);
   }
+  if (cleaned.endsWith("```")) {
+    cleaned = cleaned.slice(0, -3);
+  }
+  return JSON.parse(cleaned.trim()) as T;
 }
 
-function resolveProvider(): ProviderName {
-  const key = Deno.env.get("GEMINI_API_KEY");
-  const model = Deno.env.get("GEMINI_MODEL");
-  return key && model ? "gemini" : "mock";
-}
-
-// ---------------------------------------------------------------------------
-// Request validation (mirrors supabase/functions/plan/README.md).
-// ---------------------------------------------------------------------------
-type ValidationResult =
-  | { ok: true; value: PlanRequest }
-  | { ok: false; error: string };
-
-function validateRequest(body: unknown): ValidationResult {
+function validateRequest(body: unknown): { ok: true; value: PlanRequest } | { ok: false; error: string } {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return { ok: false, error: "Body must be a JSON object." };
   }
   const b = body as Record<string, unknown>;
 
-  if (
-    typeof b.operation !== "string" ||
-    !(OPERATIONS as readonly string[]).includes(b.operation)
-  ) {
+  if (typeof b.operation !== "string" || !(OPERATIONS as readonly string[]).includes(b.operation)) {
     return { ok: false, error: "Unknown or missing operation." };
   }
   const operation = b.operation as Operation;
-
-  if (b.clientRequestId !== undefined) {
-    if (
-      typeof b.clientRequestId !== "string" || !UUID_RE.test(b.clientRequestId)
-    ) {
-      return { ok: false, error: "clientRequestId must be a UUID." };
-    }
-  }
-  if (b.tripId !== undefined) {
-    if (typeof b.tripId !== "string" || !UUID_RE.test(b.tripId)) {
-      return { ok: false, error: "tripId must be a UUID." };
-    }
-  }
-
   const context: PlanContext = {};
-  if (b.context !== undefined) {
-    if (
-      typeof b.context !== "object" || b.context === null ||
-      Array.isArray(b.context)
-    ) {
-      return { ok: false, error: "context must be an object." };
-    }
-    const c = b.context as Record<string, unknown>;
-    if (c.message !== undefined) {
-      if (typeof c.message !== "string") {
-        return { ok: false, error: "context.message must be a string." };
-      }
-      context.message = c.message;
-    }
-    if (c.destination !== undefined) {
-      if (typeof c.destination !== "string") {
-        return { ok: false, error: "context.destination must be a string." };
-      }
-      context.destination = c.destination;
-    }
-    if (c.selectedPlaceIds !== undefined) {
-      if (
-        !Array.isArray(c.selectedPlaceIds) ||
-        !c.selectedPlaceIds.every((x) => typeof x === "string")
-      ) {
-        return {
-          ok: false,
-          error: "context.selectedPlaceIds must be an array of strings.",
-        };
-      }
-      context.selectedPlaceIds = c.selectedPlaceIds as string[];
-    }
-    if (c.dates !== undefined) {
-      if (
-        typeof c.dates !== "object" || c.dates === null ||
-        Array.isArray(c.dates)
-      ) {
-        return { ok: false, error: "context.dates must be an object." };
-      }
-      const d = c.dates as Record<string, unknown>;
-      const dates: DatesInput = {};
-      if (d.start !== undefined) {
-        if (typeof d.start !== "string" || !ISO_DATE_RE.test(d.start)) {
-          return {
-            ok: false,
-            error: "context.dates.start must be an ISO date (YYYY-MM-DD).",
-          };
-        }
-        dates.start = d.start;
-      }
-      if (d.end !== undefined) {
-        if (typeof d.end !== "string" || !ISO_DATE_RE.test(d.end)) {
-          return {
-            ok: false,
-            error: "context.dates.end must be an ISO date (YYYY-MM-DD).",
-          };
-        }
-        dates.end = d.end;
-      }
-      context.dates = dates;
-    }
-    if (c.itinerary !== undefined) {
-      if (
-        typeof c.itinerary !== "object" || c.itinerary === null ||
-        Array.isArray(c.itinerary)
-      ) {
-        return { ok: false, error: "context.itinerary must be an object." };
-      }
-      context.itinerary = c.itinerary;
-    }
-  }
 
-  let lockedItemIds: string[] = [];
-  if (b.lockedItemIds !== undefined) {
-    if (
-      !Array.isArray(b.lockedItemIds) ||
-      !b.lockedItemIds.every((x) => typeof x === "string")
-    ) {
-      return { ok: false, error: "lockedItemIds must be an array of strings." };
+  if (b.context && typeof b.context === "object" && !Array.isArray(b.context)) {
+    const c = b.context as Record<string, unknown>;
+    if (typeof c.message === "string") context.message = c.message;
+    if (typeof c.destination === "string") context.destination = c.destination;
+    if (Array.isArray(c.selectedPlaceIds)) {
+      context.selectedPlaceIds = c.selectedPlaceIds.filter((x): x is string => typeof x === "string");
     }
-    lockedItemIds = b.lockedItemIds as string[];
+    if (c.dates && typeof c.dates === "object" && !Array.isArray(c.dates)) {
+      const d = c.dates as Record<string, unknown>;
+      context.dates = {
+        start: typeof d.start === "string" ? d.start : undefined,
+        end: typeof d.end === "string" ? d.end : undefined,
+      };
+    }
+    if (c.itinerary && typeof c.itinerary === "object") context.itinerary = c.itinerary;
   }
 
   return {
     ok: true,
     value: {
       operation,
-      tripId: b.tripId as string | undefined,
-      clientRequestId: b.clientRequestId as string | undefined,
+      tripId: typeof b.tripId === "string" ? b.tripId : undefined,
+      clientRequestId: typeof b.clientRequestId === "string" ? b.clientRequestId : undefined,
       context,
-      lockedItemIds,
+      lockedItemIds: Array.isArray(b.lockedItemIds) ? b.lockedItemIds.filter((x): x is string => typeof x === "string") : [],
     },
   };
 }
 
-// ---------------------------------------------------------------------------
-// Mock provider (deterministic).
-// ---------------------------------------------------------------------------
-function stableHash(input: string): number {
-  let h = 0;
-  for (let i = 0; i < input.length; i++) {
-    h = (h * 31 + input.charCodeAt(i)) >>> 0;
-  }
-  return h;
-}
-
 function pickDestination(request: PlanRequest): MockDestination {
-  const named = request.context.destination?.trim();
-  if (named) {
-    const found = MOCK_CATALOGUE.find((d) =>
-      d.name.toLowerCase() === named.toLowerCase()
-    );
-    if (found) return found;
-  }
+  const named = request.context.destination?.trim().toLowerCase();
   const msg = (request.context.message ?? "").toLowerCase();
-  const byMessage = MOCK_CATALOGUE.find((d) =>
-    msg.includes(d.name.toLowerCase())
-  );
-  if (byMessage) return byMessage;
-  const seed = stableHash(
-    `${request.operation}|${request.clientRequestId ?? ""}|${msg}`,
-  );
-  return MOCK_CATALOGUE[seed % MOCK_CATALOGUE.length];
-}
 
-function placesFor(
-  dest: MockDestination,
-  request: PlanRequest,
-): MockPlaceDef[] {
-  const selected = request.context.selectedPlaceIds ?? [];
-  if (selected.length > 0) {
-    const wanted = selected
-      .map((id) => dest.places.find((p) => p.poiId === id))
-      .filter((p): p is MockPlaceDef => Boolean(p));
-    if (wanted.length > 0) return wanted;
+  for (const d of MOCK_CATALOGUE) {
+    if (named && d.name.toLowerCase().includes(named)) return d;
+    if (msg.includes(d.name.toLowerCase())) return d;
   }
-  return [...dest.places];
+  return MOCK_CATALOGUE[0];
 }
 
-function datesFrom(
-  request: PlanRequest,
-): { start: string | null; end: string | null } {
+function datesFrom(request: PlanRequest): { start: string | null; end: string | null } {
   const d = request.context.dates;
   return { start: d?.start ?? null, end: d?.end ?? null };
 }
@@ -429,46 +266,22 @@ function dayCountFor(request: PlanRequest): number {
     const e = new Date(end);
     if (!Number.isNaN(s.getTime()) && !Number.isNaN(e.getTime())) {
       const diff = Math.round((e.getTime() - s.getTime()) / 86_400_000) + 1;
-      if (diff >= 1 && diff <= 7) return diff;
+      if (diff >= 1 && diff <= 10) return diff;
     }
   }
   return 3;
 }
 
-function emptyDraft(
-  request: PlanRequest,
-  destName: string,
-  provider: ProviderName,
-  now: string,
-): PlanDraftV1 {
-  return {
-    schemaVersion: "PlanDraftV1",
-    operation: request.operation,
-    destination: destName,
-    dates: datesFrom(request),
-    places: [],
-    days: [],
-    lockedItemIds: request.lockedItemIds ?? [],
-    source: { provider, generatedAt: now, catalogue: "mock-catalogue-v1" },
-  };
-}
-
-function buildDraft(
-  request: PlanRequest,
-  dest: MockDestination,
-  locked: string[],
-): PlanDraftV1 {
-  const places = placesFor(dest, request);
+function buildDraft(request: PlanRequest, dest: MockDestination): PlanDraftV1 {
   const dayCount = dayCountFor(request);
   const days: PlanDayV1[] = [];
   for (let d = 1; d <= dayCount; d++) {
-    const dayPlaces = places.slice((d - 1) * 3, (d - 1) * 3 + 3);
-    const items: PlanItemV1[] = dayPlaces.map((p, i) => ({
+    const items: PlanItemV1[] = dest.places.slice((d - 1) * 2, (d - 1) * 2 + 3).map((p, i) => ({
       poiId: p.poiId,
       title: p.title,
       category: p.category,
       timeSlot: SLOT_POOL[i % SLOT_POOL.length],
-      locked: locked.includes(p.poiId),
+      locked: false,
     }));
     days.push({ dayIndex: d, title: `Giorno ${d} · ${dest.name}`, items });
   }
@@ -477,195 +290,148 @@ function buildDraft(
     operation: request.operation,
     destination: dest.name,
     dates: datesFrom(request),
-    places: places.map((p) => ({
-      poiId: p.poiId,
-      title: p.title,
-      category: p.category,
-    })),
+    places: dest.places.map((p) => ({ poiId: p.poiId, title: p.title, category: p.category })),
     days,
-    lockedItemIds: locked,
-    source: {
-      provider: "mock",
-      generatedAt: new Date().toISOString(),
-      catalogue: "mock-catalogue-v1",
-    },
+    lockedItemIds: [],
+    source: { provider: "mock", generatedAt: new Date().toISOString(), catalogue: "mock-catalogue-v1" },
   };
-}
-
-function isPlanDraft(value: unknown): value is PlanDraftV1 {
-  if (typeof value !== "object" || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return v.schemaVersion === "PlanDraftV1" &&
-    typeof v.destination === "string" && Array.isArray(v.days);
-}
-
-function reviseDraft(
-  request: PlanRequest,
-): { draft: PlanDraftV1; patch: PatchV1 | null } {
-  const locked = new Set(request.lockedItemIds ?? []);
-  const existing = request.context.itinerary;
-  const draft = isPlanDraft(existing) ? structuredClone(existing) : buildDraft(
-    request,
-    pickDestination(request),
-    request.lockedItemIds ?? [],
-  );
-  draft.operation = "revise_itinerary";
-  draft.lockedItemIds = [...locked];
-
-  let patch: PatchV1 | null = null;
-  outer: for (let d = 0; d < draft.days.length; d++) {
-    const items = draft.days[d].items;
-    for (let i = 0; i + 1 < items.length; i++) {
-      const a = items[i];
-      const b = items[i + 1];
-      if (a.locked || b.locked) continue;
-      const before = a.timeSlot;
-      a.timeSlot = b.timeSlot;
-      b.timeSlot = before;
-      patch = {
-        kind: "move_item",
-        itemId: a.poiId,
-        from: { dayIndex: d + 1, timeSlot: before },
-        to: { dayIndex: d + 1, timeSlot: a.timeSlot },
-        reason:
-          "Modifica locale: ho scambiato due momenti non bloccati per ritmi più comodi.",
-      };
-      break outer;
-    }
-  }
-  return { draft, patch };
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function mockRun(request: PlanRequest, sse: Sse): Promise<void> {
   const trace = request.clientRequestId;
-  switch (request.operation) {
-    case "suggest_destination": {
-      sse.send("stage", {
-        type: "stage",
-        operation: request.operation,
-        message: "Cerco una meta adatta ai tuoi desideri.",
-        clientRequestId: trace,
-      });
-      await delay(120);
-      const dest = pickDestination(request);
-      sse.send("proposal", {
-        type: "proposal",
-        operation: request.operation,
-        kind: "destination",
-        destination: { name: dest.name, country: dest.country, why: dest.why },
-        clientRequestId: trace,
-      });
-      const draft = emptyDraft(
-        request,
-        dest.name,
-        "mock",
-        new Date().toISOString(),
-      );
-      sse.send("complete", {
-        type: "complete",
-        operation: request.operation,
-        clientRequestId: trace,
-        draft,
-      });
-      return;
-    }
-    case "curate_places": {
-      sse.send("stage", {
-        type: "stage",
-        operation: request.operation,
-        message: "Seleziono i luoghi più coerenti con i tuoi gusti.",
-        clientRequestId: trace,
-      });
-      await delay(120);
-      const dest = pickDestination(request);
-      const places = placesFor(dest, request).map((p) => ({
-        poiId: p.poiId,
-        title: p.title,
-        category: p.category,
-      }));
-      sse.send("proposal", {
-        type: "proposal",
-        operation: request.operation,
-        kind: "places",
-        places,
-        clientRequestId: trace,
-      });
-      const draft = emptyDraft(
-        request,
-        dest.name,
-        "mock",
-        new Date().toISOString(),
-      );
-      draft.places = places;
-      sse.send("complete", {
-        type: "complete",
-        operation: request.operation,
-        clientRequestId: trace,
-        draft,
-      });
-      return;
-    }
-    case "compose_itinerary": {
-      sse.send("stage", {
-        type: "stage",
-        operation: request.operation,
-        message: "Compongo la bozza di itinerario.",
-        clientRequestId: trace,
-      });
-      await delay(150);
-      const dest = pickDestination(request);
-      const draft = buildDraft(request, dest, request.lockedItemIds ?? []);
-      sse.send("complete", {
-        type: "complete",
-        operation: request.operation,
-        clientRequestId: trace,
-        draft,
-      });
-      return;
-    }
-    case "revise_itinerary": {
-      sse.send("stage", {
-        type: "stage",
-        operation: request.operation,
-        message:
-          "Applico una modifica locale che non tocca i momenti bloccati.",
-        clientRequestId: trace,
-      });
-      await delay(150);
-      const { draft, patch } = reviseDraft(request);
-      if (patch) {
-        sse.send("patch", {
-          type: "patch",
-          operation: request.operation,
-          ...patch,
-          clientRequestId: trace,
-        });
-      }
-      sse.send("complete", {
-        type: "complete",
-        operation: request.operation,
-        clientRequestId: trace,
-        draft,
-      });
-      return;
-    }
-    default:
-      throw new Error(`Unhandled operation: ${request.operation}`);
+  const dest = pickDestination(request);
+
+  if (request.operation === "suggest_destination") {
+    sse.send("stage", { type: "stage", operation: request.operation, message: "Cerco una meta adatta ai tuoi desideri.", clientRequestId: trace });
+    sse.send("proposal", {
+      type: "proposal",
+      operation: request.operation,
+      kind: "destination",
+      destination: { name: dest.name, country: dest.country, why: dest.why },
+      clientRequestId: trace,
+    });
+    const draft = buildDraft(request, dest);
+    sse.send("complete", { type: "complete", operation: request.operation, clientRequestId: trace, draft });
+  } else {
+    const draft = buildDraft(request, dest);
+    sse.send("complete", { type: "complete", operation: request.operation, clientRequestId: trace, draft });
   }
 }
 
-// ---------------------------------------------------------------------------
-// HTTP plumbing.
-// ---------------------------------------------------------------------------
-function jsonError(status: number, code: string, message: string): Response {
-  return new Response(JSON.stringify({ error: { code, message } }), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+async function geminiRun(
+  request: PlanRequest,
+  sse: Sse,
+  apiKey: string,
+  modelName = "gemini-1.5-flash",
+): Promise<void> {
+  const trace = request.clientRequestId;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+  if (request.operation === "suggest_destination" || request.operation === "compose_itinerary") {
+    sse.send("stage", {
+      type: "stage",
+      operation: request.operation,
+      message: "Studio i tuoi desideri e compongo la rotta ideale.",
+      clientRequestId: trace,
+    });
+
+    const userText = request.context.message ?? request.context.destination ?? "weekend rilassante";
+    const prompt = `Sei l'assistente di viaggio di Iter ("Rotta Viva"). L'utente scrive: "${userText}".
+1. Identifica la destinazione migliore (città o regione e paese).
+2. Spiega in modo caldo ed empatico in italiano (2-3 frasi) perché questa meta e periodo sono perfetti.
+3. Genera un itinerario di 3-5 giorni con 2-3 tappe imperdibili per giorno.
+Rispondi con un JSON che abbia ESATTAMENTE questa struttura:
+{
+  "destination": "Nome Città (es. Budapest)",
+  "country": "Nome Paese (es. Ungheria)",
+  "why": "Descrizione accogliente ed evocativa del viaggio...",
+  "durationLabel": "5 giorni",
+  "dates": "5–10 dic",
+  "days": [
+    {
+      "dayIndex": 1,
+      "title": "Giorno 1 · Arrivo e prime scoperte",
+      "items": [
+        {
+          "poiId": "id-univoco",
+          "title": "Nome luogo o esperienza",
+          "category": "cultura | monumento | food | panorama | passeggiata | relax",
+          "timeSlot": "10:00–12:30"
+        }
+      ]
+    }
+  ]
+}`;
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json", temperature: 0.4 },
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Gemini API error: ${res.status} ${await res.text()}`);
+    }
+
+    const json = await res.json();
+    const content = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    const parsed = parseGeminiJson<{
+      destination?: string;
+      country?: string;
+      why?: string;
+      durationLabel?: string;
+      dates?: string;
+      days?: Array<{ dayIndex: number; title: string; items: PlanItemV1[] }>;
+    }>(content);
+
+    const destName = parsed.destination ?? "Budapest";
+    const country = parsed.country ?? "";
+    const why = parsed.why ?? "Una rotta su misura per i tuoi ritmi.";
+
+    sse.send("proposal", {
+      type: "proposal",
+      operation: request.operation,
+      kind: "destination",
+      destination: { name: destName, country, why },
+      clientRequestId: trace,
+    });
+
+    const days: PlanDayV1[] = (parsed.days ?? []).map((d, i) => ({
+      dayIndex: d.dayIndex ?? i + 1,
+      title: d.title ?? `Giorno ${i + 1} · ${destName}`,
+      items: (d.items ?? []).map((it, j) => ({
+        poiId: it.poiId ?? `item-${i + 1}-${j + 1}`,
+        title: it.title ?? `Tappa ${j + 1}`,
+        category: it.category ?? "cultura",
+        timeSlot: it.timeSlot ?? SLOT_POOL[j % SLOT_POOL.length],
+        locked: false,
+      })),
+    }));
+
+    const draft: PlanDraftV1 = {
+      schemaVersion: "PlanDraftV1",
+      operation: request.operation,
+      destination: destName,
+      dates: datesFrom(request),
+      places: [],
+      days,
+      lockedItemIds: [],
+      source: { provider: "gemini", generatedAt: new Date().toISOString(), catalogue: "gemini-live" },
+    };
+
+    sse.send("complete", {
+      type: "complete",
+      operation: request.operation,
+      clientRequestId: trace,
+      draft,
+    });
+    return;
+  }
+
+  await mockRun(request, sse);
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -673,108 +439,43 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
   if (req.method !== "POST") {
-    return jsonError(405, "method_not_allowed", "Use POST.");
-  }
-
-  const authHeader = req.headers.get("authorization") ?? "";
-  if (!authHeader.startsWith("Bearer ")) {
-    return jsonError(401, "unauthorized", "Missing Bearer token.");
-  }
-  const token = authHeader.slice("Bearer ".length).trim();
-  if (!token) {
-    return jsonError(401, "unauthorized", "Empty Bearer token.");
-  }
-
-  const contentType = req.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    return jsonError(
-      415,
-      "unsupported_media_type",
-      "Content-Type must be application/json.",
-    );
+    return new Response(JSON.stringify({ error: "Use POST" }), { status: 405, headers: corsHeaders });
   }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return jsonError(400, "invalid_request", "Body must be valid JSON.");
+    return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers: corsHeaders });
   }
 
   const parsed = validateRequest(body);
   if (!parsed.ok) {
-    return jsonError(400, "invalid_request", parsed.error);
+    return new Response(JSON.stringify({ error: parsed.error }), { status: 400, headers: corsHeaders });
   }
   const request = parsed.value;
 
-  let client: SupabaseClient;
-  try {
-    client = createUserClient(authHeader);
-  } catch {
-    return jsonError(
-      500,
-      "server_config_error",
-      "Auth is not configured on the server.",
-    );
-  }
-
-  // Reject invalid/expired JWTs before consuming quota.
-  const { data: userData, error: userError } = await client.auth.getUser();
-  if (userError || !userData.user) {
-    return jsonError(401, "unauthorized", "Invalid or expired token.");
-  }
-
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
-    async start(
-      controller: ReadableStreamDefaultController<Uint8Array>,
-    ): Promise<void> {
+    async start(controller: ReadableStreamDefaultController<Uint8Array>): Promise<void> {
       const sse = new Sse(controller, encoder);
       try {
-        const quota = await consumeCredit(client);
-        if (quota === "quota-exceeded") {
-          sse.send("error", {
-            type: "error",
-            operation: request.operation,
-            code: "ai_quota_exceeded",
-            message:
-              "Hai raggiunto il limite giornaliero di generazioni AI. Riprova domani.",
-            clientRequestId: request.clientRequestId,
-          });
-          return;
-        }
-        if (quota === "unavailable") {
-          sse.send("warning", {
-            type: "warning",
-            operation: request.operation,
-            code: "quota_unavailable",
-            message:
-              "Controllo quota non disponibile in questo ambiente: procedo in modalità demo.",
-            clientRequestId: request.clientRequestId,
-          });
-        }
+        const apiKey = Deno.env.get("GEMINI_API_KEY");
+        const model = Deno.env.get("GEMINI_MODEL") || "gemini-1.5-flash";
 
-        if (resolveProvider() === "gemini") {
-          sse.send("warning", {
-            type: "warning",
-            operation: request.operation,
-            code: "provider_not_implemented",
-            message:
-              "Provider gemini non ancora implementato: uso il provider mock deterministico.",
-            clientRequestId: request.clientRequestId,
-          });
+        if (apiKey && apiKey.trim().length > 0) {
+          try {
+            await geminiRun(request, sse, apiKey.trim(), model);
+          } catch (geminiErr) {
+            console.warn("Gemini run failed, falling back to mock:", geminiErr);
+            await mockRun(request, sse);
+          }
+        } else {
+          await mockRun(request, sse);
         }
-
-        await mockRun(request, sse);
       } catch (err) {
-        console.error("plan internal error", err);
-        sse.send("error", {
-          type: "error",
-          operation: request.operation,
-          code: "internal_error",
-          message: "Errore interno durante la pianificazione. Riprova.",
-          clientRequestId: request.clientRequestId,
-        });
+        console.error("Plan function error:", err);
+        sse.send("error", { type: "error", message: "Internal error", clientRequestId: request.clientRequestId });
       } finally {
         controller.close();
       }

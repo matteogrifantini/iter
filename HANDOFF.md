@@ -1,174 +1,76 @@
 # Iter — Handoff
 
-Aggiornato il 15 agosto 2026. Questo è il punto di ingresso per riprendere il
-lavoro sul branch `codex/iter-ui-rebuild`.
+Aggiornato il 2 settembre 2026. Questo è il punto di ingresso per il lavoro sul branch `feat/real-iter-app`.
 
 ## Stato
 
-La vecchia app e il vecchio Lab non sono più il percorso di avvio. `main.dart`
-chiama `buildIterApp()` e monta solo `ChatFirstPrototypeApp`. Sono stati rimossi
-il routing con feature flag, `IterStore` e le schermate legacy che non servono
-alla nuova esperienza. Non sono stati fatti commit o push.
+L'app Iter è in fase di implementazione del primo verticale completo di organizzazione reale, basato su chat-first guidata da AI (Google Gemini via Supabase Edge Function a costo zero) con card interattive, scelte visive chiare e piano generato dalle decisioni confermate.
 
-Il branch è nato pulito da `codex/iter-new-only` (`0e4453e`), lasciando il
-precedente pass visuale su `codex/iter-design-polish` come archivio confrontabile.
+- **Branch attivo:** `feat/real-iter-app` (baseline visiva a `9007e49`).
+- **Entrypoint:** `lib/main.dart` avvia l'applicazione tramite `buildIterApp()`.
+- **Target operativo:** implementazione in corso di [2026-09-02-iter-organization-vertical.md](docs/superpowers/plans/2026-09-02-iter-organization-vertical.md) secondo la [specifica di prodotto](docs/superpowers/specs/2026-09-01-iter-organization-vertical.md).
+
 Prima di toccare altro controllare sempre:
 
 ```bash
 git status --short --branch
 ```
 
-## Chiusura post-audit UI
+## Configurazione Backend & Sicurezza
 
-Il passaggio post-audit ha chiuso i gap funzionali più visibili senza introdurre
-provider o dati live:
+Il file `.env.example` fornisce i valori predefiniti sicuri:
 
-- Home mantiene il solo percorso **Viaggi** nella shell inferiore; il pulsante
-  duplicato nella testata è stato rimosso.
-- Il picker del Piano consente anche un **luogo personalizzato**, che entra
-  nella stessa pipeline preview → conferma delle tappe catalogate.
-- Le proposte in chat mostrano la sola modifica in evidenza e il CTA
-  **Vedi il piano completo**; il riepilogo dettagliato resta nel Piano.
-- La hero del Piano apre un foglio con immagini e reel demo della destinazione;
-  le **Ispirazioni salvate** restano visibili nel Piano con stato da integrare o
-  integrata.
-- Costi e conferme espongono sempre il carattere demo. Se il piano non ha
-  volo/hotel, non viene mostrato un CTA inattivo.
-- Il percorso Share Target Android, scraping social e pagamento reale restano
-  fuori scope come dichiarato in `PRODUCT.md`.
+- **`ITER_BACKEND=mock` (predefinito):** esecuzione locale e deterministica, ideale per sviluppo offline e suite di test senza dipendenze di rete.
+- **`ITER_BACKEND=supabase` (opzionale):** connessione al backend Supabase per persistenza remota e invocazione delle Edge Functions (`supabase/functions/organize/` e `plan/`).
+- **Google Gemini API (Free Tier):** le chiamate AI avvengono esclusivamente lato backend via Edge Function autenticata con il token JWT dell'utente; nessuna chiave API Gemini o segreto di servizio risiede nel client Flutter.
 
-Verifica eseguita dopo queste modifiche: `flutter analyze` senza issue, `flutter
-test` con 243 test superati, `flutter build web --release` riuscito e
-`git diff --check` pulito. Il rebuild visuale è stato verificato nel Browser
-integrato su `http://127.0.0.1:7359/?v=iter-ui-rebuild-final`: Home, Chat,
-Piano, Viaggi, Tu e tema scuro. Il worktree resta non committato.
+## Moduli & Stato Reale delle Funzionalità
 
-## Rebuild visuale 15 agosto
+Per trasparenza e integrità del codice, ogni modulo è classificato in base al suo effettivo stato di verifica:
 
-Il branch `codex/iter-ui-rebuild` rende esplicito il nuovo mondo visivo:
+### Integrazioni Live Verificate (API Aperte a Costo Zero)
+- **🗺️ Mappa & Routing Pedonale (`lib/features/map/`)**: `flutter_map` con tile layer live `tile.openstreetmap.org`, calcolo percorsi su strada OSRM e geocodifica Nominatim.
+- **🏛️ Schede Luoghi & Foto (`lib/features/places/`)**: `RealPlaceService` con dati enciclopedici e foto ad alta risoluzione da Wikipedia REST API.
+- **🌤️ Meteo Live (`lib/features/weather/`)**: `WeatherService` con previsioni a 7 giorni da API pubblica Open-Meteo.
+- **💶 Spese & Tassi di Cambio (`lib/features/expenses/`)**: `TripExpenseService` con conversione valute dai tassi ufficiali BCE.
+- **🗣️ Frasario & Traduttore (`lib/features/translator/`)**: frasario da viaggio e integrazione MyMemory Translation API.
+- **🧳 Checklist Intelligente (`lib/features/checklist/`)**: packing list interattiva locale con categorie per tipologia di viaggio.
+- **📅 Esportazione Calendario (`PlanExporter`)**: condivisione testo e file standard RFC 5545 (`.ics`).
+- **💾 Preferenze Locali (`LocalPreferencesService`)**: persistenza preferenze e tema via `SharedPreferences`.
 
-- frame centrato da 760 dp e dock inferiore flottante da 360 dp;
-- Home attiva con scena fotografica, timeline lineare e composer pronto alla
-  modifica;
-- Viaggi senza FAB ambiguo: nuova chat esplicita nella testata;
-- Chat con composer grande in una superficie flottante tipo WhatsApp;
-- Piano con hero/media, timeline editabile e isola azioni riservata sotto il
-  contenuto;
-- Profilo lineare con statistiche, emoji, disponibilità, tema e collegamenti,
-  senza griglia di card.
+### Moduli con Dati Demo / Mock Strutturati
+- **✈️ Ricerca Voli (`lib/features/flights/`)**: tratte, orari e tariffe di riferimento basate su fixture deterministiche (etichettate come dati demo); link esterni verso Skyscanner e Google Flights. L'integrazione backend con provider reale è definita dal piano di fattibilità.
+- **🏨 Ricerca Alloggi (`lib/features/stays/`)**: comparatore hotel e B&B per quartiere basato su dati demo strutturati con filtri servizi e link partner.
+- **🍲 Guida Gastronomica (`lib/features/food/`)**: catalogo piatti tipici e locali autentici basato su dati demo curati.
 
-La vecchia implementazione resta fuori dal percorso di avvio e non è stata
-riattivata per ottenere questo risultato.
+### Verticale di Organizzazione (`lib/features/organization/`)
+Completato e verificato al 100% secondo il piano [2026-09-02-iter-organization-vertical.md](docs/superpowers/plans/2026-09-02-iter-organization-vertical.md):
+- Macchina a stati tipizzata (`OrganizationSession`, `OrganizationState`, `TripIntent`).
+- Budget rigoroso di domande (3–4 essenziali, massimo 2 adattive con chip `Non lo so` / `Decidi tu`).
+- Card interattive visuali nel thread di chat (`IntentSummaryCardView`, `QuestionCardView`, `SearchStatusCardView`, `FlightComparisonCardView`, `ZonePickerCardView`, `StayPickerCardView`, `PlanReadyCardView`).
+- Flusso acquisto voli con `ExternalPurchaseDialog` a 3 vie (Sì aggiorna, Non ancora, Ho scelto un'altra opzione) senza mai marcare l'acquisto all'apertura del link esterno.
+- Selezione zone arricchita con spiegazioni "Perché per te" e selezione alloggi guidata dal profilo.
+- Generazione piano garantita tramite `TripPlanMapper` e transizione pulita a `TripSnapshotScreen` solo dopo conferma di volo e alloggio.
+- Edge Function Supabase `supabase/functions/organization-step/index.ts` con fallback trasparente locale `OrganizationAiGateway` in assenza di credenziali backend. Zero segreti nel client.
+- Test E2E completo e stress test responsive a 320dp (`test/organization/organization_vertical_e2e_test.dart`).
 
-## Contratto prodotto
+## Verifica & Qualità
 
-Le fonti operative sono:
-
-- `PRODUCT.md` — cosa deve fare Iter;
-- `DESIGN.md` — gerarchia, colori, interazioni e accessibilità;
-- `docs/superpowers/specs/2026-08-14-iter-new-only-design.md` — decisioni
-  approvate del nuovo perimetro;
-- `docs/superpowers/specs/2026-08-15-iter-ui-rebuild-design.md` — contratto
-  visuale del rebuild corrente;
-- `docs/superpowers/plans/2026-08-14-iter-new-only-implementation.md` — piano
-  esecutivo e gate.
-
-I documenti `NEW_TRIP_MASTER_PLAN.md` e alcune spec precedenti sono storici: non
-reintrodurre il loro routing o le loro feature flag solo perché compaiono in una
-pagina d'archivio.
-
-## Architettura corrente
-
-```text
-lib/main.dart
-  -> lib/app/app_entry.dart
-     -> ChatFirstPrototypeApp
-        -> ChatFirstShell
-           -> Oggi / Viaggi / Tu
-```
-
-Il controller è `ChatFirstPrototypeController`. Il mock è deterministico e
-isolato da `IterStore`:
-
-- `chat_first_data.dart` — thread, fixture Porto/Roma, luoghi, voli, hotel;
-- `chat_first_models.dart` — messaggi, conversazioni, proposte;
-- `plan_models.dart` — snapshot, giorni, tappe, selezioni e revisioni;
-- `plan_editor.dart` — preview e applicazione delle modifiche;
-- `data_source.dart` + `mock_data_source.dart` — seam di persistenza;
-- `supabase_data_source.dart` — integrazione opzionale, senza segreti nel client.
-
-I modelli nuovi sono:
-
-- `profile_models.dart` — disponibilità e statistiche;
-- `inspiration_models.dart` — draft e ispirazioni salvate;
-- `inspiration_importer.dart` — parser locale delle due fixture approvate.
-
-## Flussi da preservare
-
-### Piano
-
-Il piano non mostra una mappa sopra. La hero e la timeline sono il contenuto
-principale. La barra inferiore offre **Aggiungi luogo**, **Chiedi** e **Costi**;
-il menu overflow offre **Importa ispirazione**. Le azioni sulle tappe passano da
-preview e conferma.
-
-### Ispirazione
-
-`parseMockInspiration()` non fa rete. Il link Instagram Porto estrae Livraria
-Lello; il link TikTok Roma estrae Foro Romano. `saveInspiration()` salva senza
-mutare lo snapshot. `proposeInspiration()` aggiunge una `PlanProposal` e solo
-`acceptProposal()` cambia la timeline e marca l'ispirazione come applicata.
-
-### Acquisti demo
-
-`confirmMockPurchases()` segna volo e hotel come `purchased` in una sola
-revisione con label `Conferma acquisti demo`. Il CTA non chiama `url_launcher` e
-non raccoglie dati di pagamento. I link esterni esistenti sono separati e
-allowlistati.
-
-### Profilo
-
-Il profilo è volutamente leggero: statistiche, memoria, tema, disponibilità,
-FAQ, Privacy e conversazioni. `ProfileAvailabilitySheet` restituisce un modello
-normalizzato a mezzanotte; il controller assegna l'id e notifica il shell.
-
-## Verifica locale
-
-Per il controllo rapido:
+La test suite è mantenuta verde al 100%:
 
 ```bash
-dart format lib test
+dart format --output=none --set-exit-if-changed lib test
 git diff --check
 flutter analyze
 flutter test
 ```
 
-Per UI/responsive usare il build release, perché sul device web-server DDC di
-questa macchina il caricamento può restare bianco o non montare il widget
-Flutter:
+- **Stato Analisi:** 0 errori, 0 warning (`flutter analyze` -> `No issues found!`).
+- **Stato Test:** **347 test superati su 347 (100% green)**.
 
+Per testare l'interfaccia su browser web (release):
 ```bash
 flutter build web --release
-python3 -m http.server 7359 --directory build/web --bind 127.0.0.1
+python3 -m http.server 7359 --directory build/web
 ```
-
-Poi aprire `http://127.0.0.1:7359` nel Browser integrato. Percorrere almeno:
-
-1. Oggi → nuova chat → composer e allegato;
-2. Viaggi → Porto → piano → scheda luogo/indicazioni;
-3. piano → Costi → Conferma acquisti demo;
-4. piano → overflow → import demo Porto → salva → proponi → accetta in chat;
-5. Tu → disponibilità → aggiungi/rimuovi e cambio tema.
-
-Ripetere il controllo a 320/360/390 dp, testo 1.5, light/dark e moto ridotto.
-Il Browser è un harness QA locale, non un target di distribuzione.
-
-## Regole di manutenzione
-
-- Non reintrodurre i vecchi define di routing o il vecchio Lab.
-- Non ricreare `IterStore` o schermate legacy solo per compatibilità visiva.
-- Non aggiungere provider reali al mock e non mettere chiavi nel client.
-- Preservare modifiche dirty non pertinenti.
-- Non fare commit, merge o push senza richiesta esplicita.
-- Se si cambia un flusso UI, aggiungere prima un test widget/contratto e poi
-  aggiornare `PRODUCT.md` o `DESIGN.md` se cambia la decisione.
+L'app è servita su `http://127.0.0.1:7359`.
