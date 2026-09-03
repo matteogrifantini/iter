@@ -101,52 +101,146 @@ class StaySearchService {
       ];
     }
 
-    if (key.contains('porto')) {
+    if (key.contains('lisbona') || key.contains('lisbon')) {
       return [
         StayOffer(
-          id: 'stay-opo-1',
-          name: 'Ribeira Historic Riverfront House',
-          type: StayType.apartment,
-          neighborhood: 'Ribeira (sul fiume Douro)',
-          ratingScore: 9.6,
-          ratingCount: 1100,
-          ratingLabel: 'Eccezionale',
-          pricePerNightEur: 82.0,
-          amenities: [
-            'Balcone sul Douro',
-            'Azulejos originali',
-            'Cucina completa',
-            'Vino di Porto di benvenuto',
-          ],
-          imageUrl:
-              'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600',
+          id: 'stay-lis-1',
+          name: 'AlmaLusa Baixa / Chiado',
+          type: StayType.boutiqueHotel,
+          neighborhood: 'Baixa / Chiado (Baricentro)',
+          ratingScore: 9.4,
+          ratingCount: 1650,
+          ratingLabel: 'Eccellente',
+          pricePerNightEur: 98.0,
+          amenities: ['Colazione inclusa', 'WiFi fibra', 'Cancellazione gratuita', 'Concierge'],
+          imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600',
           bookingUrl: googleHotelsUrl,
-          badgeLabel: 'Vista mozzafiato',
-          walkingMinutesToCenter: 4,
+          badgeLabel: 'Baricentro perfetto',
+          walkingMinutesToCenter: 3,
         ),
         StayOffer(
-          id: 'stay-opo-2',
-          name: 'The Clérigos Design Boutique',
-          type: StayType.boutiqueHotel,
-          neighborhood: 'Baixa / Clérigos',
+          id: 'stay-lis-2',
+          name: 'Memmo Alfama Design Hotel',
+          type: StayType.designHotel,
+          neighborhood: 'Alfama (Vista Tago)',
           ratingScore: 9.2,
-          ratingCount: 940,
+          ratingCount: 980,
           ratingLabel: 'Eccellente',
-          pricePerNightEur: 95.0,
-          amenities: [
-            'Design contemporaneo',
-            'Colazione artigianale',
-            'Insonorizzazione',
-            'Cocktail bar',
-          ],
-          imageUrl:
-              'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600',
+          pricePerNightEur: 115.0,
+          amenities: ['Piscina panoramica', 'Rooftop bar', 'Vista fiume Tago', 'Colazione gourmet'],
+          imageUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=600',
           bookingUrl: googleHotelsUrl,
-          badgeLabel: 'Centrale & Silenzioso',
-          walkingMinutesToCenter: 2,
+          badgeLabel: 'Piscina & Panorama',
+          walkingMinutesToCenter: 7,
+        ),
+        StayOffer(
+          id: 'stay-lis-3',
+          name: 'Lisbon Chiado Vintage Loft',
+          type: StayType.apartment,
+          neighborhood: 'Bairro Alto / Chiado',
+          ratingScore: 9.5,
+          ratingCount: 720,
+          ratingLabel: 'Eccezionale',
+          pricePerNightEur: 79.0,
+          amenities: ['Cucina completa', 'Balcone tipico', 'Self check-in', 'Smart TV'],
+          imageUrl: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600',
+          bookingUrl: googleHotelsUrl,
+          badgeLabel: 'Miglior rapporto qualità/prezzo',
+          walkingMinutesToCenter: 5,
         ),
       ];
     }
+
+    if (key.contains('milano') || key.contains('milan')) {
+      return [
+        StayOffer(
+          id: 'stay-mil-1',
+          name: 'Room Mate Giulia Design Hotel',
+          type: StayType.designHotel,
+          neighborhood: 'Duomo / Galleria',
+          ratingScore: 9.3,
+          ratingCount: 2100,
+          ratingLabel: 'Eccellente',
+          pricePerNightEur: 135.0,
+          amenities: ['Sauna & Fitness', 'Colazione fino alle 12', 'Design Patricia Urquiola', 'WiFi fibra'],
+          imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600',
+          bookingUrl: googleHotelsUrl,
+          badgeLabel: 'A 2 passi dal Duomo',
+          walkingMinutesToCenter: 2,
+        ),
+        StayOffer(
+          id: 'stay-mil-2',
+          name: 'Brera Art District Suites',
+          type: StayType.apartment,
+          neighborhood: 'Brera (Baricentro)',
+          ratingScore: 9.4,
+          ratingCount: 650,
+          ratingLabel: 'Eccezionale',
+          pricePerNightEur: 110.0,
+          amenities: ['Balcone su via Fiori Chiari', 'Macchina Nespresso', 'Self check-in', 'Climatizzato'],
+          imageUrl: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600',
+          bookingUrl: googleHotelsUrl,
+          badgeLabel: 'Baricentro Brera',
+          walkingMinutesToCenter: 4,
+        ),
+      ];
+    }
+
+    if (key.contains('madrid')) {
+      return [
+        StayOffer(
+          id: 'stay-mad-1',
+          name: 'Only YOU Boutique Hotel Madrid',
+          type: StayType.boutiqueHotel,
+          neighborhood: 'Barrio de Las Letras / Huertas',
+          ratingScore: 9.4,
+          ratingCount: 1890,
+          ratingLabel: 'Eccellente',
+          pricePerNightEur: 118.0,
+          amenities: ['Colazione inclusa', 'Cocktail lounge', 'Palestra', 'Cancellazione gratuita'],
+          imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600',
+          bookingUrl: googleHotelsUrl,
+          badgeLabel: 'Scelta Iter a Madrid',
+          walkingMinutesToCenter: 5,
+        ),
+        StayOffer(
+          id: 'stay-mad-2',
+          name: 'Dear Hotel Madrid Gran Vía',
+          type: StayType.designHotel,
+          neighborhood: 'Gran Vía / Malasaña',
+          ratingScore: 9.1,
+          ratingCount: 2400,
+          ratingLabel: 'Eccellente',
+          pricePerNightEur: 92.0,
+          amenities: ['Rooftop con piscina panoramica', 'Ristorante panoramico', 'WiFi alta velocità'],
+          imageUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=600',
+          bookingUrl: googleHotelsUrl,
+          badgeLabel: 'Piscina sul tetto',
+          walkingMinutesToCenter: 6,
+        ),
+      ];
+    }
+
+    if (key.contains('roma') || key.contains('rome')) {
+      return [
+        StayOffer(
+          id: 'stay-rom-1',
+          name: 'The Fifteen Keys Boutique Hotel',
+          type: StayType.boutiqueHotel,
+          neighborhood: 'Rione Monti (Baricentro)',
+          ratingScore: 9.5,
+          ratingCount: 1100,
+          ratingLabel: 'Eccezionale',
+          pricePerNightEur: 125.0,
+          amenities: ['Corte interna con giardino', 'Colazione all\'aperto', 'Bici gratuite', 'Cancellazione flessibile'],
+          imageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600',
+          bookingUrl: googleHotelsUrl,
+          badgeLabel: 'Baricentro Monti',
+          walkingMinutesToCenter: 8,
+        ),
+      ];
+    }
+
 
     // Generic realistic accommodation
     return [

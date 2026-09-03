@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../stays/stay_models.dart';
+import '../../stays/centroid_solver.dart';
 
 class StaySelectorCard extends StatefulWidget {
   const StaySelectorCard({
@@ -9,12 +10,17 @@ class StaySelectorCard extends StatefulWidget {
     required this.stays,
     required this.onSelectStay,
     this.selectedStay,
+    this.centroidRecommendation,
+    this.onSkipStay,
   });
 
   final String destination;
   final List<StayOffer> stays;
   final ValueChanged<StayOffer> onSelectStay;
   final StayOffer? selectedStay;
+  final CentroidRecommendation? centroidRecommendation;
+  final VoidCallback? onSkipStay;
+
 
   @override
   State<StaySelectorCard> createState() => _StaySelectorCardState();
@@ -153,7 +159,83 @@ class _StaySelectorCardState extends State<StaySelectorCard> {
               ),
             ],
           ),
+          if (widget.centroidRecommendation != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.blue.withValues(alpha: 0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.explore_rounded, color: Colors.blue, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Baricentro: ${widget.centroidRecommendation!.optimalNeighborhood}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.centroidRecommendation!.explanation,
+                    style: theme.textTheme.bodySmall?.copyWith(height: 1.3),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.directions_walk_rounded, size: 13, color: Colors.green),
+                            const SizedBox(width: 4),
+                            Text(
+                              '~${widget.centroidRecommendation!.averageMinutesToSpots} min a piedi',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.speed_rounded, size: 13, color: Colors.blue),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${widget.centroidRecommendation!.walkingScore}/100 pedonabilità',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
+
 
           // Lista Hotel
           ...widget.stays.map((stay) {
@@ -345,6 +427,20 @@ class _StaySelectorCardState extends State<StaySelectorCard> {
               ),
             );
           }),
+          if (widget.onSkipStay != null) ...[
+            const SizedBox(height: 8),
+            Center(
+              child: TextButton.icon(
+                onPressed: widget.onSkipStay,
+                icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                label: const Text('Prosegui senza scegliere l\'alloggio (lo scelgo dopo)'),
+                style: TextButton.styleFrom(
+                  foregroundColor: colorScheme.onSurfaceVariant,
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

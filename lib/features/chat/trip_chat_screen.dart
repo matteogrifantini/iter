@@ -10,11 +10,14 @@ import 'widgets/daily_plan_card.dart';
 import 'widgets/flight_selector_card.dart';
 import 'widgets/stay_neighborhood_card.dart';
 import 'widgets/monument_swipe_deck.dart';
-
 import 'widgets/destination_hero_card.dart';
 import 'widgets/animated_route_map_card.dart';
 import 'widgets/stay_selector_card.dart';
+import 'widgets/cost_breakdown_card.dart';
+import 'widgets/trip_profiling_card.dart';
 import '../stays/stay_models.dart';
+import '../stays/centroid_solver.dart';
+
 
 
 
@@ -538,6 +541,13 @@ class _MessageBubble extends StatelessWidget {
                 onExploreAttractions: () => onSelectSuggestion?.call('Cosa vedere a ${message.planDraft!.destination}?'),
               ),
 
+            // Profilazione rapida se siamo in fase esplorativa
+            if (message.planDraft!.stage == TripPlanningStage.inspiration)
+              TripProfilingCard(
+                destination: message.planDraft!.destination.isNotEmpty ? message.planDraft!.destination : 'la tua meta ideale',
+                onProfileConfirmed: (prompt) => onSelectSuggestion?.call(prompt),
+              ),
+
             // Volo: FlightSelectorCard con scelta andata/ritorno
             if (message.planDraft!.flight != null)
               FlightSelectorCard(
@@ -554,44 +564,41 @@ class _MessageBubble extends StatelessWidget {
                 onConfirmed: (selected) => onAttractionsConfirmed?.call(selected),
               ),
 
-            // Alloggi e hotel veri nella zona scelta (senza uscire dall'app)
+            // Alloggi e hotel veri nella zona baricentrica scelta (senza uscire dall'app)
             if (message.planDraft!.stayOffers.isNotEmpty)
               StaySelectorCard(
                 destination: message.planDraft!.destination,
                 stays: message.planDraft!.stayOffers,
                 selectedStay: message.planDraft!.selectedStay,
+                centroidRecommendation: const CentroidSolver().solveOptimalArea(
+                  destination: message.planDraft!.destination,
+                  chosenAttractions: message.planDraft!.attractions,
+                ),
                 onSelectStay: (stay) => onStaySelected?.call(stay),
+                onSkipStay: () => onSelectSuggestion?.call(
+                  'Proseguiamo con l\'itinerario giorno per giorno, l\'alloggio lo sceglierò più tardi.',
+                ),
               )
             else if (message.planDraft!.neighborhoods.isNotEmpty)
               StayNeighborhoodCard(neighborhoods: message.planDraft!.neighborhoods),
 
-            // Itinerario: Mappa Rotta Animata e Programma Giornaliero
+            // Itinerario: Mappa Rotta Animata, Programma Giornaliero & Preventivo Trasparente
             if (message.planDraft!.days.isNotEmpty) ...[
               AnimatedRouteMapCard(
                 destination: message.planDraft!.destination,
                 day: message.planDraft!.days.first,
               ),
               DailyPlanCard(days: message.planDraft!.days),
-
-              const SizedBox(height: 12),
-              Center(
-                child: ElevatedButton.icon(
-                  onPressed: onOpenSnapshot,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: colorScheme.primary,
-                    foregroundColor: colorScheme.onPrimary,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  icon: const Icon(Icons.map_rounded),
-                  label: const Text(
-                    'Salva e vedi itinerario completo',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
+              const SizedBox(height: 8),
+              CostBreakdownCard(
+                destination: message.planDraft!.destination,
+                durationDays: message.planDraft!.durationDays,
+                plan: message.planDraft!,
+                onOpenSnapshot: onOpenSnapshot,
               ),
             ],
           ],
+
 
           // Suggerimenti rapidi di dialogo
           if (!isUser &&
