@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'iter_ui_primitives.dart';
 import 'profile_availability_sheet.dart';
 import 'profile_models.dart';
 
@@ -47,7 +46,7 @@ class ChatFirstProfileScreen extends StatelessWidget {
           const SizedBox(height: 24),
           _StatsRow(stats: stats),
           const SizedBox(height: 18),
-          const IterRouteDivider(active: true),
+          const Divider(height: 1),
           const SizedBox(height: 26),
           Text(
             'Il tuo modo di partire',
@@ -140,6 +139,9 @@ class ChatFirstProfileScreen extends StatelessWidget {
           const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: () => _openAvailabilitySheet(context),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(48, 48),
+            ),
             icon: const Icon(Icons.add),
             label: const Text('Aggiungi disponibilità'),
           ),
@@ -192,7 +194,7 @@ class ChatFirstProfileScreen extends StatelessWidget {
             onTap: onOpenChats,
           ),
           const SizedBox(height: 18),
-          const IterRouteDivider(active: false),
+          const Divider(height: 1),
           const SizedBox(height: 18),
           _LinkTile(
             icon: currentUserEmail == null
@@ -507,6 +509,9 @@ class _AvailabilityTile extends StatelessWidget {
           : IconButton(
               onPressed: onRemove,
               tooltip: 'Rimuovi disponibilità',
+              style: IconButton.styleFrom(
+                minimumSize: const Size(48, 48),
+              ),
               icon: const Icon(Icons.close),
             ),
     );
