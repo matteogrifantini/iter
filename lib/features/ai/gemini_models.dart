@@ -288,8 +288,16 @@ class GeminiTripPlanDraft {
         ? rawSuggestions.map((e) => e.toString()).toList()
         : const <String>[];
 
-    final shouldSearch = json['shouldSearchFlights'] == true ||
-        (flightJson is Map<String, dynamic> && flightJson.isNotEmpty);
+    final explicitSearch = json['shouldSearchFlights'];
+    final bool shouldSearch;
+    if (explicitSearch is bool) {
+      shouldSearch = explicitSearch;
+    } else {
+      shouldSearch = flightJson is Map<String, dynamic> &&
+          flightJson.isNotEmpty &&
+          (flightJson['outbound'] != null || flightJson['offers'] != null);
+    }
+
 
     return GeminiTripPlanDraft(
       message: json['message']?.toString() ?? '',

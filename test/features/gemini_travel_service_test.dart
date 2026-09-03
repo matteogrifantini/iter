@@ -110,7 +110,49 @@ void main() {
     expect(result.suggestedReplies, contains('Cerchiamo i voli'));
   });
 
+  test('GeminiTravelService NON forza mai i voli su tratte ferroviarie (es. Milano da Roma) al primo messaggio', () async {
+    final mockClient = MockClient((request) async {
+      final fakeResponse = {
+        'candidates': [
+          {
+            'content': {
+              'parts': [
+                {
+                  'text': jsonEncode({
+                    'message': 'Milano ad Halloween è vibrante tra mostre ed eventi. Da Roma preferisci il treno ad alta velocità (3h) o vuoi valutare i voli? E con chi andrai?',
+                    'destination': 'Milano',
+                    'durationDays': 3,
+                    'shouldSearchFlights': false,
+                    'suggestedReplies': ['Preferisco il treno', 'Mostrami i voli', 'In coppia', 'Ponte 31 ott - 2 nov']
+                  })
+                }
+              ]
+            }
+          }
+        ]
+      };
+      return http.Response.bytes(
+        utf8.encode(jsonEncode(fakeResponse)),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    });
+
+    final service = GeminiTravelService(apiKey: 'test-api-key', client: mockClient);
+    final result = await service.generateTripAdvice(
+      'Voglio andare a Milano ad Halloween',
+      departureCity: 'Roma',
+    );
+
+    expect(result.destination, 'Milano');
+    expect(result.shouldSearchFlights, isFalse);
+    expect(result.flight, isNull);
+    expect(result.suggestedReplies, contains('Preferisco il treno'));
+    expect(result.suggestedReplies, contains('Mostrami i voli'));
+  });
+
   test('GeminiTravelService gestisce errore HTTP in modo trasparente', () async {
+
     final mockClient = MockClient((request) async {
       return http.Response(jsonEncode({
         'error': {'message': 'API key not valid'}

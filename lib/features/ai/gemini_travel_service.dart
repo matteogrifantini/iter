@@ -39,33 +39,39 @@ class GeminiTravelService {
     switch (stage) {
       case TripPlanningStage.flight:
         return '''
-Sei Iter, un compagno di viaggio esperto, empatico e autentico per viaggiatori italiani.
-Stai dialogando in una chat naturale con il viaggiatore. Non forzare passaggi rigidi.
+Sei Iter, un compagno e consulente di viaggio esperto, umano ed empatico per viaggiatori italiani.
+Iter NON è un comparatore di voli o un'agenzia che vende biglietti aerei: è un vero consulente di viaggio che prima ascolta, dialoga, consiglia e definisce il viaggio, e SOLO QUANDO NECESSARIO apre le opzioni di trasporto.
 
-DISCREZIONE INTELLIGENTE SUI VOLI ("shouldSearchFlights"):
-1. SE L'UTENTE STA SOLO ESPLORANDO (es. "Voglio andare a Budapest", "Cosa ne pensi di Madrid?", "Consigliami su Lisbona"):
-   - NON aprire la ricerca voli! Imposta "shouldSearchFlights": false.
-   - Rispondi con calore e competenza spiegando se e perché la meta è adatta, l'atmosfera magica, le esperienze uniche (es. terme a Budapest, tapas bar a Madrid), e dai un consiglio sincero.
-   - Chiedigli che tipo di esperienza cerca (relax, cultura, gastronomia) o se ha già in mente un periodo o delle date specifiche per valutare i collegamenti migliori.
-   - Fornisci 2 o 3 suggerimenti rapidi in "suggestedReplies" (es. ["Cerchiamo i voli", "Consigliami il periodo migliore", "Cosa vedere"]).
+REGOLE ASSOLUTE DI DIALOGO E PREAMBOLO INTELLIGENTE:
+1. MAI APRIRE I VOLI AL PRIMO CONTATTO O SU PROPOSTA DELLA META:
+   Se il viaggiatore esprime un'idea, una meta o un'occasione (es. "Voglio andare a Milano ad Halloween", "Vorrei andare a Budapest", "Pensavo a Lisbona", "Weekend a Praga"):
+   - NON aprire la ricerca voli! Imposta TASSATIVAMENTE "shouldSearchFlights": false.
+   - Fai un preambolo accogliente, vivo e intelligente:
+     a) Commenta la meta e il periodo/occasione con competenza e atmosfera (es. per Milano ad Halloween il fascino del ponte di Ognissanti, mostre a Palazzo Reale, eventi nei locali e serate speciali, aperitivi sui Navigli o a Brera).
+     b) Poni 2-3 domande da consulente per impostare il viaggio PRIMA di toccare i trasporti:
+        * COME VUOLE SPOSTARSI / MEZZO: Per tratte interne italiane (es. Roma-Milano o Roma-Firenze) fai notare che il treno ad alta velocità Frecciarossa/Italo ci mette meno di 3 ore centro-centro senza stress di aeroporto, oppure chiedi se preferisce l'aereo o l'auto. Per l'estero, chiedi se preferisce valutare voli diretti o altre formule.
+        * CON CHI ANDRÀ / QUANTE PERSONE: Chiedi con chi viaggia (da solo, in coppia, con amici/famiglia, quante persone?).
+        * CONFERMA DATE: Chiedi conferma delle date (es. "Stavi pensando al ponte dal 31 ottobre al 2 novembre o qualche giorno in più?").
+     c) Fornisci 3-4 chip rapidi in "suggestedReplies" (es. per Milano: ["Preferisco il treno", "Mostrami i voli", "In coppia", "Ponte 31 ott - 2 nov"]).
 
-2. SE L'UTENTE HA DATE O CHIEDE ESPLICITAMENTE I VOLI (es. "prossimo weekend", "dal 5 al 10 dicembre", "cercami i voli", "quanto costa il volo?", "come ci arrivo?"):
-   - Imposta "shouldSearchFlights": true.
-   - Interpreta le date rispetto a oggi (es. "prossimo weekend" = venerdì prossimo a domenica).
-   - Inserisci "departureDate" e "returnDate" in formato YYYY-MM-DD.
-   - Nel messaggio commenta con entusiasmo l'itinerario e introduce le opzioni di volo.
+2. QUANDO APRIRE I VOLI ("shouldSearchFlights": true):
+   Imposta "shouldSearchFlights": true SOLO ED ESCLUSIVAMENTE SE:
+   - Il viaggiatore chiede esplicitamente i voli (es. "Cerca i voli", "Mostrami i voli", "Quanto costa il volo?", "Voli da Roma", o tocca il chip "Mostrami i voli").
+   - OPPURE dopo che avete già concordato che il mezzo è l'aereo e le date sono state confermate (es. "Vogliamo andare in aereo dal 31 al 2").
+   In TUTTI gli altri casi, mantieni "shouldSearchFlights": false e continua a dialogare in modo naturale.
 
 Rispondi SEMPRE con questo JSON valido (e nessun altro testo):
 {
-  "message": "Testo naturale, empatico e ricco di consigli",
-  "destination": "Nome città o meta",
+  "message": "Il tuo testo discorsivo con preambolo intelligente, commento autentico e le 2-3 domande per impostare il viaggio",
+  "destination": "Nome città o meta (es. Milano, Budapest)",
   "durationDays": 3,
-  "shouldSearchFlights": true o false,
+  "shouldSearchFlights": false (oppure true solo se richiesto esplicitamente),
   "departureDate": "YYYY-MM-DD (se specificata o dedotta)",
   "returnDate": "YYYY-MM-DD (se specificata o dedotta)",
-  "suggestedReplies": ["Suggerimento 1", "Suggerimento 2"]
+  "suggestedReplies": ["Suggerimento 1", "Suggerimento 2", "Suggerimento 3"]
 }
 ''';
+
 
 
 
@@ -228,8 +234,16 @@ Rispondi SEMPRE con questo JSON valido (e nessun altro testo):
 
       // Arricchisce i voli usando il motore reale di Google Flights (fast-flights)
       // solo se l'IA ha deciso che è il momento opportuno (shouldSearchFlights == true)
+      // e non si tratta di un primo messaggio esplorativo o di una tratta tipicamente ferroviaria
       FlightAdvice? enrichedFlight;
-      final shouldSearch = rawDraft.shouldSearchFlights;
+      final hasFlightKeywords = _hasExplicitFlightIntent(userPrompt);
+      final isFirstMessage = conversationHistory.isEmpty;
+      final isRailFavoriteRoute = _isRailFavoriteDestination(departureCity, rawDraft.destination);
+
+      final shouldSearch = rawDraft.shouldSearchFlights &&
+          (hasFlightKeywords || (!isFirstMessage && !isRailFavoriteRoute) || rawDraft.flight != null);
+
+
 
       if (shouldSearch) {
         DateTime? geminiDep;
@@ -280,15 +294,14 @@ Rispondi SEMPRE con questo JSON valido (e nessun altro testo):
         destination: rawDraft.destination,
         durationDays: rawDraft.durationDays,
         stage: stage,
-        flight: enrichedFlight,
+        flight: enrichedFlight ?? (shouldSearch ? rawDraft.flight : null),
         neighborhoods: rawDraft.neighborhoods,
         days: rawDraft.days,
         suggestedReplies: rawDraft.suggestedReplies,
         shouldSearchFlights: shouldSearch,
       );
-
-
     } catch (e) {
+
 
       if (e is GeminiServiceException) rethrow;
       throw GeminiServiceException('Impossibile elaborare i dati del viaggio da Gemini: $e');
@@ -348,5 +361,47 @@ Rispondi SEMPRE con questo JSON valido (e nessun altro testo):
       trimmed = trimmed.substring(0, trimmed.length - 3);
     }
     return trimmed.trim();
+  }
+
+  static bool _hasExplicitFlightIntent(String text) {
+    final lower = text.toLowerCase();
+    final flightTerms = [
+      'volo',
+      'voli',
+      'aereo',
+      'aerei',
+      'flight',
+      'flights',
+      'volare',
+      'aeroporto',
+      'skyscanner',
+      'google flight',
+      'biglietto aereo',
+      'biglietti aerei',
+      'mostrami i voli',
+      'cerca voli',
+      'cerchiamo i voli',
+    ];
+    return flightTerms.any((term) => lower.contains(term));
+  }
+
+  static bool _isRailFavoriteDestination(String origin, String destination) {
+    final orig = origin.toLowerCase();
+    final dest = destination.toLowerCase();
+    final railCities = [
+      'milano',
+      'milan',
+      'firenze',
+      'florence',
+      'bologna',
+      'napoli',
+      'naples',
+      'torino',
+      'turin',
+      'venezia',
+      'venice',
+    ];
+    return (orig.contains('roma') || orig.contains('rome')) &&
+        railCities.any((city) => dest.contains(city));
   }
 }
