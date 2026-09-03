@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import '../stays/stay_models.dart';
+
 
 @immutable
 class FlightRealOffer {
@@ -241,8 +243,52 @@ class DailyPlanDraft {
   };
 }
 
+@immutable
+class AttractionItem {
+
+  const AttractionItem({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.why,
+    required this.imageUrl,
+    this.estimatedTimeMinutes = 90,
+  });
+
+  final String id;
+  final String name;
+  final String category;
+  final String why;
+  final String imageUrl;
+  final int estimatedTimeMinutes;
+
+  factory AttractionItem.fromJson(Map<String, dynamic> json) {
+    return AttractionItem(
+      id: json['id']?.toString() ?? 'attr_${json['name'].toString().hashCode}',
+      name: json['name']?.toString() ?? '',
+      category: json['category']?.toString() ?? 'Attrazione',
+      why: json['why']?.toString() ?? '',
+      imageUrl: json['imageUrl']?.toString() ??
+          'https://images.unsplash.com/photo-1513581166391-887a96ddeafd?w=600',
+      estimatedTimeMinutes: (json['estimatedTimeMinutes'] as num?)?.toInt() ?? 90,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'category': category,
+    'why': why,
+    'imageUrl': imageUrl,
+    'estimatedTimeMinutes': estimatedTimeMinutes,
+  };
+}
+
 enum TripPlanningStage {
+  inspiration,
+  transport,
   flight,
+  attractions,
   stay,
   itinerary,
 }
@@ -253,12 +299,15 @@ class GeminiTripPlanDraft {
     required this.message,
     required this.destination,
     required this.durationDays,
-    this.stage = TripPlanningStage.flight,
+    this.stage = TripPlanningStage.transport,
     this.flight,
     this.neighborhoods = const [],
     this.days = const [],
     this.suggestedReplies = const [],
     this.shouldSearchFlights = false,
+    this.attractions = const [],
+    this.stayOffers = const [],
+    this.selectedStay,
   });
 
   final String message;
@@ -270,19 +319,26 @@ class GeminiTripPlanDraft {
   final List<DailyPlanDraft> days;
   final List<String> suggestedReplies;
   final bool shouldSearchFlights;
+  final List<AttractionItem> attractions;
+  final List<StayOffer> stayOffers;
+  final StayOffer? selectedStay;
 
   factory GeminiTripPlanDraft.fromJson(Map<String, dynamic> json, {TripPlanningStage? stage}) {
     final flightJson = json['flight'];
     final rawNeighborhoods = json['neighborhoods'];
     final rawDays = json['days'];
     final rawSuggestions = json['suggestedReplies'];
+    final rawAttractions = json['attractions'];
+
 
     final parsedStage = stage ??
         (rawDays is List && rawDays.isNotEmpty
             ? TripPlanningStage.itinerary
             : (rawNeighborhoods is List && rawNeighborhoods.isNotEmpty
                 ? TripPlanningStage.stay
-                : TripPlanningStage.flight));
+                : (rawAttractions is List && rawAttractions.isNotEmpty
+                    ? TripPlanningStage.attractions
+                    : TripPlanningStage.transport)));
 
     final parsedSuggestions = rawSuggestions is List
         ? rawSuggestions.map((e) => e.toString()).toList()
@@ -298,6 +354,12 @@ class GeminiTripPlanDraft {
           (flightJson['outbound'] != null || flightJson['offers'] != null);
     }
 
+    final parsedAttractions = rawAttractions is List
+        ? rawAttractions
+            .whereType<Map<String, dynamic>>()
+            .map(AttractionItem.fromJson)
+            .toList()
+        : const <AttractionItem>[];
 
     return GeminiTripPlanDraft(
       message: json['message']?.toString() ?? '',
@@ -319,6 +381,9 @@ class GeminiTripPlanDraft {
           : const [],
       suggestedReplies: parsedSuggestions,
       shouldSearchFlights: shouldSearch,
+      attractions: parsedAttractions,
+      stayOffers: const [],
+      selectedStay: null,
     );
   }
 
@@ -332,6 +397,9 @@ class GeminiTripPlanDraft {
     List<DailyPlanDraft>? days,
     List<String>? suggestedReplies,
     bool? shouldSearchFlights,
+    List<AttractionItem>? attractions,
+    List<StayOffer>? stayOffers,
+    StayOffer? selectedStay,
   }) {
     return GeminiTripPlanDraft(
       message: message ?? this.message,
@@ -343,6 +411,9 @@ class GeminiTripPlanDraft {
       days: days ?? this.days,
       suggestedReplies: suggestedReplies ?? this.suggestedReplies,
       shouldSearchFlights: shouldSearchFlights ?? this.shouldSearchFlights,
+      attractions: attractions ?? this.attractions,
+      stayOffers: stayOffers ?? this.stayOffers,
+      selectedStay: selectedStay ?? this.selectedStay,
     );
   }
 
@@ -356,5 +427,7 @@ class GeminiTripPlanDraft {
     'days': days.map((d) => d.toJson()).toList(),
     'suggestedReplies': suggestedReplies,
     'shouldSearchFlights': shouldSearchFlights,
+    'attractions': attractions.map((a) => a.toJson()).toList(),
+    if (selectedStay != null) 'selectedStay': selectedStay!.name,
   };
 }

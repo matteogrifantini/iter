@@ -157,31 +157,101 @@ class TripDetailsScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                   ],
 
-                  // Dove dormire
-                  if (plan?.neighborhoods.isNotEmpty == true) ...[
+                  // Monumenti e attrazioni scelte
+                  if (plan?.attractions.isNotEmpty == true) ...[
+                    _sectionTitle(context, 'Monumenti & Tappe scelte', Icons.account_balance_rounded),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: plan!.attractions.map((a) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.place_rounded, size: 14, color: Colors.redAccent),
+                              const SizedBox(width: 4),
+                              Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Dove dormire (Alloggio salvato o quartieri consigliati)
+                  if (plan?.selectedStay != null || plan?.neighborhoods.isNotEmpty == true) ...[
                     _sectionTitle(context, 'Dove alloggiare', Icons.hotel_rounded),
                     const SizedBox(height: 8),
-                    ...plan!.neighborhoods.map((n) {
-                      return Container(
+                    if (plan?.selectedStay != null)
+                      Container(
                         margin: const EdgeInsets.only(bottom: 8),
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: colorScheme.surfaceContainerLow,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
+                          border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(n.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                            const SizedBox(height: 4),
-                            Text(n.why, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13)),
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 22),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    plan!.selectedStay!.name,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${plan.selectedStay!.pricePerNightEur.toStringAsFixed(0)}€/notte · ${plan.selectedStay!.neighborhood}',
+                                    style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
-                      );
-                    }),
+                      )
+                    else
+                      ...plan!.neighborhoods.map((n) {
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(n.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              const SizedBox(height: 4),
+                              Text(n.why, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13)),
+                            ],
+                          ),
+                        );
+                      }),
                     const SizedBox(height: 24),
                   ],
+
 
                   // Itinerario giorno per giorno
                   _sectionTitle(context, 'Itinerario Giorno per Giorno', Icons.calendar_today_rounded),

@@ -4,6 +4,9 @@ import '../flights/fast_flights_service.dart';
 import '../flights/google_flights_url_builder.dart';
 import '../trips/trip_entity.dart';
 import 'gemini_models.dart';
+import '../places/real_place_service.dart';
+import '../stays/stay_models.dart';
+import '../stays/stay_search_service.dart';
 
 
 
@@ -36,97 +39,133 @@ class GeminiTravelService {
   static const String _baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
 
   static String _buildSystemPrompt(TripPlanningStage stage) {
+    const commonPersona = '''
+Sei Iter, il consulente di viaggio personale per viaggiatori italiani.
+Parla come un concierge o un amico esperto su WhatsApp:
+- TONO DIRETTO E UMANO: Niente frasi generiche o cerimoniosi convenevoli (VIETATO dire "Budapest è un'ottima città" o "Milano è una splendida meta"). Esprimi opinioni forti da insider.
+- BREVE E INCISIVO: Massimo 2-3 frasi chiare per messaggio. Dritto al punto.
+- CONOSCI IL VIAGGIATORE: Il viaggiatore parte di default da Roma se non specificato altrimenti.
+''';
+
     switch (stage) {
-      case TripPlanningStage.flight:
+      case TripPlanningStage.inspiration:
         return '''
-Sei Iter, un compagno e consulente di viaggio esperto, umano ed empatico per viaggiatori italiani.
-Iter NON è un comparatore di voli o un'agenzia che vende biglietti aerei: è un vero consulente di viaggio che prima ascolta, dialoga, consiglia e definisce il viaggio, e SOLO QUANDO NECESSARIO apre le opzioni di trasporto.
+$commonPersona
+STATO: IL VIAGGIATORE CERCA ISPIRAZIONE / NON HA ANCORA UNA META.
+1. Proponi 2 sole mete a contrasto adatte alla stagione (es. per l'autunno: Siviglia per sole e tapas all'aperto, oppure Budapest per terme storiche e foliage).
+2. Spiega in mezza riga perché ognuna vale la pena adesso.
+3. Chiedi che vibe cerca (caldo/relax, cultura, vita serale).
+4. Fornisci 3-4 "suggestedReplies" con i nomi delle mete.
 
-REGOLE ASSOLUTE DI DIALOGO E PREAMBOLO INTELLIGENTE:
-1. MAI APRIRE I VOLI AL PRIMO CONTATTO O SU PROPOSTA DELLA META:
-   Se il viaggiatore esprime un'idea, una meta o un'occasione (es. "Voglio andare a Milano ad Halloween", "Vorrei andare a Budapest", "Pensavo a Lisbona", "Weekend a Praga"):
-   - NON aprire la ricerca voli! Imposta TASSATIVAMENTE "shouldSearchFlights": false.
-   - Fai un preambolo accogliente, vivo e intelligente:
-     a) Commenta la meta e il periodo/occasione con competenza e atmosfera (es. per Milano ad Halloween il fascino del ponte di Ognissanti, mostre a Palazzo Reale, eventi nei locali e serate speciali, aperitivi sui Navigli o a Brera).
-     b) Poni 2-3 domande da consulente per impostare il viaggio PRIMA di toccare i trasporti:
-        * COME VUOLE SPOSTARSI / MEZZO: Per tratte interne italiane (es. Roma-Milano o Roma-Firenze) fai notare che il treno ad alta velocità Frecciarossa/Italo ci mette meno di 3 ore centro-centro senza stress di aeroporto, oppure chiedi se preferisce l'aereo o l'auto. Per l'estero, chiedi se preferisce valutare voli diretti o altre formule.
-        * CON CHI ANDRÀ / QUANTE PERSONE: Chiedi con chi viaggia (da solo, in coppia, con amici/famiglia, quante persone?).
-        * CONFERMA DATE: Chiedi conferma delle date (es. "Stavi pensando al ponte dal 31 ottobre al 2 novembre o qualche giorno in più?").
-     c) Fornisci 3-4 chip rapidi in "suggestedReplies" (es. per Milano: ["Preferisco il treno", "Mostrami i voli", "In coppia", "Ponte 31 ott - 2 nov"]).
-
-2. QUANDO APRIRE I VOLI ("shouldSearchFlights": true):
-   Imposta "shouldSearchFlights": true SOLO ED ESCLUSIVAMENTE SE:
-   - Il viaggiatore chiede esplicitamente i voli (es. "Cerca i voli", "Mostrami i voli", "Quanto costa il volo?", "Voli da Roma", o tocca il chip "Mostrami i voli").
-   - OPPURE dopo che avete già concordato che il mezzo è l'aereo e le date sono state confermate (es. "Vogliamo andare in aereo dal 31 al 2").
-   In TUTTI gli altri casi, mantieni "shouldSearchFlights": false e continua a dialogare in modo naturale.
-
-Rispondi SEMPRE con questo JSON valido (e nessun altro testo):
+Rispondi SOLO con questo JSON valido:
 {
-  "message": "Il tuo testo discorsivo con preambolo intelligente, commento autentico e le 2-3 domande per impostare il viaggio",
-  "destination": "Nome città o meta (es. Milano, Budapest)",
+  "message": "2-3 frasi dirette da insider che mettono a confronto le 2 mete",
+  "destination": "",
   "durationDays": 3,
-  "shouldSearchFlights": false (oppure true solo se richiesto esplicitamente),
-  "departureDate": "YYYY-MM-DD (se specificata o dedotta)",
-  "returnDate": "YYYY-MM-DD (se specificata o dedotta)",
-  "suggestedReplies": ["Suggerimento 1", "Suggerimento 2", "Suggerimento 3"]
+  "shouldSearchFlights": false,
+  "suggestedReplies": ["Meta 1", "Meta 2", "Altro"]
 }
 ''';
 
+      case TripPlanningStage.flight:
+      case TripPlanningStage.transport:
+        return '''
+$commonPersona
+STATO: DEFINIZIONE TRASPORTI & COME ARRIVARE.
+1. Se il viaggiatore menziona solo una meta (es. "Milano ad Halloween", "Budapest", "Lisbona"):
+   - NON aprire i voli! "shouldSearchFlights": false.
+   - Da Roma per tratte italiane (Milano, Firenze, Bologna, Napoli): raccomanda seccamente il treno AV (Frecciarossa/Italo 3h centro-centro, zero stress di aeroporto).
+   - Per l'estero: chiedi se preferisce voli diretti, con quante persone andrà e conferma le date.
+   - Fornisci chip per facilitare la risposta (es. ["In treno AV", "Mostrami i voli", "In coppia", "31 ott - 2 nov"]).
+2. Apri i voli ("shouldSearchFlights": true) SOLO se l'utente lo chiede esplicitamente ("Cerca i voli", "Mostrami i voli", o chip volo).
 
+Rispondi SOLO con questo JSON valido:
+{
+  "message": "Consiglio secco sul mezzo migliore e 2 domande rapide su compagni e date",
+  "destination": "Nome città",
+  "durationDays": 3,
+  "shouldSearchFlights": false,
+  "departureDate": "YYYY-MM-DD",
+  "returnDate": "YYYY-MM-DD",
+  "suggestedReplies": ["Opzione 1", "Opzione 2", "Opzione 3"]
+}
+''';
 
+      case TripPlanningStage.attractions:
+        return '''
+$commonPersona
+STATO: CURAZIONE MONUMENTI ED ESPERIENZE ("MI PIACE / NON MI PIACE").
+Proponi da 4 a 6 monumenti, scorci o esperienze autentiche per la destinazione.
+Per ciascuna fornisci: nome iconico, categoria (es. Panorama, Arte, Relax, Serata), e un motivo da insider per cui non perderla (1 riga).
 
+Rispondi SOLO con questo JSON valido:
+{
+  "message": "1-2 frasi secche che introducono le esperienze più forti della città",
+  "destination": "Nome città",
+  "durationDays": 3,
+  "shouldSearchFlights": false,
+  "attractions": [
+    {
+      "name": "Nome monumento o luogo",
+      "category": "Categoria breve",
+      "why": "Motivo da insider in 1 riga"
+    }
+  ],
+  "suggestedReplies": ["Ho scelto le attrazioni", "Mostrami dove alloggiare"]
+}
+''';
 
       case TripPlanningStage.stay:
         return '''
-Sei Iter, un compagno di viaggio esperto e autentico per viaggiatori italiani.
-Stai aiutando il viaggiatore nel SECONDO PASSO: DOVE ALLOGGIARE (QUARTIERI E ALLOGGI).
-NON generare itinerari giornalieri in questo step!
-Concentrati su:
-1. Consiglia 2 quartieri ideali e autentici dove fare base per dormire, lontani dal caos turistico.
-2. Spiega brevemente il motivo per cui alloggiare lì (atmosfera, sicurezza, vicinanza a piedi o metro).
-3. Link di ricerca su Booking per ogni quartiere.
-4. Invita a scegliere la zona prima di pianificare le giornate.
+$commonPersona
+STATO: DOVE ALLOGGIARE & HOTEL STRATEGICI.
+In base alle attrazioni scelte dal viaggiatore o alla geografia della città:
+1. Spiega in 2 frasi qual è il quartiere baricentrico perfetto per non perdere tempo sui mezzi (es. Brera a Milano, Terézváros a Budapest, Malasaña a Madrid).
+2. Spiega brevemente il vibe della zona (vicinanza a piedi, sicurezza, locali la sera).
+3. Invita a scegliere la struttura ideale per dormire nella card qui sotto.
 
-Rispondi SEMPRE con questo JSON valido (e nessun altro testo):
+Rispondi SOLO con questo JSON valido:
 {
-  "message": "Breve consiglio sui quartieri ideali dove alloggiare",
-  "destination": "Nome città o meta",
-  "durationDays": 5,
+  "message": "Consiglio secco sul quartiere baricentrico perfetto per le tappe scelte",
+  "destination": "Nome città",
+  "durationDays": 3,
+  "shouldSearchFlights": false,
   "neighborhoods": [
     {
-      "name": "Nome quartiere ideale",
-      "why": "Perché alloggiare qui",
-      "searchUrl": "https://www.booking.com/searchresults.html?ss=..."
+      "name": "Nome quartiere consigliato",
+      "why": "Perché è strategico per visitare la città",
+      "searchUrl": "https://www.google.com/travel/hotels"
     }
-  ]
+  ],
+  "suggestedReplies": ["Salva alloggio e prosegui", "Passiamo all'itinerario"]
 }
 ''';
 
       case TripPlanningStage.itinerary:
         return '''
-Sei Iter, un compagno di viaggio esperto e autentico per viaggiatori italiani.
-Stai aiutando il viaggiatore nel TERZO PASSO: ITINERARIO GIORNO PER GIORNO.
-Crea un itinerario autentico, rilassato e senza trappole per turisti:
-- Tappe a piedi, scorci panoramici, mercati storici e ritmi umani.
-- Per ogni giorno: tema, 2-3 tappe e una raccomandazione gastronomica autentica (trattoria, mercato o bistrot tipico).
+$commonPersona
+STATO: ITINERARIO OTTIMIZZATO GIORNO PER GIORNO.
+Crea la timeline giorno per giorno ordinata geograficamente, includendo i monumenti scelti e raccomandazioni gastronomiche tipiche (trattoria o mercato, no trappole per turisti).
 
-Rispondi SEMPRE con questo JSON valido (e nessun altro testo):
+Rispondi SOLO con questo JSON valido:
 {
-  "message": "Ecco il tuo itinerario giorno per giorno!",
-  "destination": "Nome città o meta",
-  "durationDays": 5,
+  "message": "1-2 frasi: ecco il tuo piano ottimizzato per vicinanza a piedi",
+  "destination": "Nome città",
+  "durationDays": 3,
   "days": [
     {
       "dayNumber": 1,
       "theme": "Tema della giornata",
-      "stops": ["Tappa 1", "Tappa 2"],
+      "stops": ["Tappa 1", "Tappa 2", "Tappa 3"],
       "diningRecommendation": "Locale tipico e cosa ordinare"
     }
-  ]
+  ],
+  "suggestedReplies": ["Salva viaggio", "Modifica tappe"]
 }
 ''';
     }
   }
+
 
   Future<GeminiTripPlanDraft> generateTripAdvice(
 
@@ -289,6 +328,48 @@ Rispondi SEMPRE con questo JSON valido (e nessun altro testo):
         );
       }
 
+      // Arricchimento alloggi se siamo nello step soggiorno o se l'utente chiede alloggi
+      List<StayOffer> enrichedStays = rawDraft.stayOffers;
+      if (rawDraft.neighborhoods.isNotEmpty || stage == TripPlanningStage.stay || _hasStayIntent(userPrompt)) {
+        try {
+          const stayService = StaySearchService();
+          final results = await stayService.searchStays(
+            destination: rawDraft.destination.isNotEmpty ? rawDraft.destination : 'Milano',
+          );
+          if (results.isNotEmpty) {
+            enrichedStays = results;
+          }
+        } catch (_) {}
+      }
+
+      // Arricchimento immagini attrazioni se presenti
+      List<AttractionItem> enrichedAttractions = rawDraft.attractions;
+      if (rawDraft.attractions.isNotEmpty) {
+        final placeService = RealPlaceService(httpClient: _client);
+        final list = <AttractionItem>[];
+        for (final item in rawDraft.attractions) {
+          if (item.imageUrl.contains('unsplash.com/photo-1513581166391')) {
+            try {
+              final detail = await placeService.fetchPlaceDetails(item.name, destination: rawDraft.destination)
+                  .timeout(const Duration(milliseconds: 1500));
+              if (detail?.imageUrl != null) {
+                list.add(AttractionItem(
+                  id: item.id,
+                  name: item.name,
+                  category: item.category,
+                  why: item.why,
+                  imageUrl: detail!.imageUrl!,
+                  estimatedTimeMinutes: item.estimatedTimeMinutes,
+                ));
+                continue;
+              }
+            } catch (_) {}
+          }
+          list.add(item);
+        }
+        enrichedAttractions = list;
+      }
+
       return GeminiTripPlanDraft(
         message: rawDraft.message,
         destination: rawDraft.destination,
@@ -299,7 +380,11 @@ Rispondi SEMPRE con questo JSON valido (e nessun altro testo):
         days: rawDraft.days,
         suggestedReplies: rawDraft.suggestedReplies,
         shouldSearchFlights: shouldSearch,
+        attractions: enrichedAttractions,
+        stayOffers: enrichedStays,
+        selectedStay: rawDraft.selectedStay,
       );
+
     } catch (e) {
 
 
@@ -403,5 +488,14 @@ Rispondi SEMPRE con questo JSON valido (e nessun altro testo):
     ];
     return (orig.contains('roma') || orig.contains('rome')) &&
         railCities.any((city) => dest.contains(city));
+  }
+
+  static bool _hasStayIntent(String text) {
+    final lower = text.toLowerCase();
+    return lower.contains('allogg') ||
+        lower.contains('hotel') ||
+        lower.contains('dormire') ||
+        lower.contains('quartier') ||
+        lower.contains('struttur');
   }
 }

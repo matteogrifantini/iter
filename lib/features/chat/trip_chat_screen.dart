@@ -9,6 +9,9 @@ import '../trips/trip_repository.dart';
 import 'widgets/daily_plan_card.dart';
 import 'widgets/flight_selector_card.dart';
 import 'widgets/stay_neighborhood_card.dart';
+import 'widgets/attraction_curation_card.dart';
+import 'widgets/stay_selector_card.dart';
+import '../stays/stay_models.dart';
 
 
 class TripChatScreen extends StatefulWidget {
@@ -166,7 +169,11 @@ class _TripChatScreenState extends State<TripChatScreen> {
     TripPlanningStage stage = explicitStage ?? _currentStage;
 
     if (explicitStage == null) {
-      if (lower.contains('dormire') || lower.contains('hotel') || lower.contains('allogg') || lower.contains('quartier')) {
+      if (lower.contains('non so dove') || lower.contains('ispirami') || lower.contains('idee per') || lower.contains('dove potrei')) {
+        stage = TripPlanningStage.inspiration;
+      } else if (lower.contains('monument') || lower.contains('attrazion') || lower.contains('cosa vedere') || lower.contains('vedere') || lower.contains('visitare')) {
+        stage = TripPlanningStage.attractions;
+      } else if (lower.contains('dormire') || lower.contains('hotel') || lower.contains('allogg') || lower.contains('quartier')) {
         stage = TripPlanningStage.stay;
       } else if (lower.contains('itinerario') || lower.contains('cosa fare') || lower.contains('programma') || lower.contains('tappe') || lower.contains('giorn')) {
         stage = TripPlanningStage.itinerary;
@@ -214,8 +221,12 @@ class _TripChatScreenState extends State<TripChatScreen> {
               neighborhoods: draft.neighborhoods.isNotEmpty ? draft.neighborhoods : _latestDraft!.neighborhoods,
               days: draft.days.isNotEmpty ? draft.days : _latestDraft!.days,
               message: draft.message,
+              attractions: draft.attractions.isNotEmpty ? draft.attractions : _latestDraft!.attractions,
+              stayOffers: draft.stayOffers.isNotEmpty ? draft.stayOffers : _latestDraft!.stayOffers,
+              selectedStay: draft.selectedStay ?? _latestDraft!.selectedStay,
             );
           }
+
           if (draft.destination.isNotEmpty) {
             _destination = draft.destination;
           }
@@ -295,6 +306,33 @@ class _TripChatScreenState extends State<TripChatScreen> {
     _scrollToBottom();
   }
 
+  void _onAttractionsConfirmed(List<AttractionItem> selected) {
+    final names = selected.map((a) => a.name).join(', ');
+    _sendMessage(
+      'Ho scelto queste attrazioni a $_destination: $names. Quali alloggi e hotel mi consigli per fare base vicino a queste zone?',
+    );
+  }
+
+  void _onStaySelected(StayOffer stay) {
+    setState(() {
+      if (_latestDraft != null) {
+        _latestDraft = _latestDraft!.copyWith(selectedStay: stay);
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✓ ${stay.name} salvato nel viaggio (${stay.pricePerNightEur.toStringAsFixed(0)}€/notte)'),
+        backgroundColor: Colors.green.shade700,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    _saveCurrentTrip(status: TripStatus.planning);
+    _sendMessage(
+      'Ho salvato ${stay.name} per dormire. Ora generiamo l\'itinerario giorno per giorno ottimizzato?',
+    );
+  }
+
+
   Future<void> _handleOpenSnapshot() async {
     final trip = await _saveCurrentTrip(status: TripStatus.ready);
     widget.onOpenSnapshot(trip);
@@ -355,7 +393,10 @@ class _TripChatScreenState extends State<TripChatScreen> {
                     onOpenSnapshot: _handleOpenSnapshot,
                     onOptionSaved: _onFlightOptionSaved,
                     onSelectSuggestion: (s) => _sendMessage(s),
+                    onAttractionsConfirmed: _onAttractionsConfirmed,
+                    onStaySelected: _onStaySelected,
                   );
+
 
 
                 },
@@ -429,6 +470,8 @@ class _MessageBubble extends StatelessWidget {
     required this.onOpenSnapshot,
     this.onOptionSaved,
     this.onSelectSuggestion,
+    this.onAttractionsConfirmed,
+    this.onStaySelected,
   });
 
   final ChatMessage message;
@@ -442,6 +485,8 @@ class _MessageBubble extends StatelessWidget {
     required String bookingUrl,
   })? onOptionSaved;
   final ValueChanged<String>? onSelectSuggestion;
+  final ValueChanged<List<AttractionItem>>? onAttractionsConfirmed;
+  final ValueChanged<StayOffer>? onStaySelected;
 
   @override
   Widget build(BuildContext context) {
@@ -487,12 +532,28 @@ class _MessageBubble extends StatelessWidget {
                 onOptionSaved: onOptionSaved,
               ),
 
-            // Alloggio (solo se l'utente ha chiesto quartieri/hotel)
-            if (message.planDraft!.neighborhoods.isNotEmpty)
+            // Attrazioni / Monumenti curati ("Mi piace / Salta")
+            if (message.planDraft!.attractions.isNotEmpty)
+              AttractionCurationCard(
+                destination: message.planDraft!.destination,
+                attractions: message.planDraft!.attractions,
+                onConfirmed: (selected) => onAttractionsConfirmed?.call(selected),
+              ),
+
+            // Alloggi e hotel veri nella zona scelta (senza uscire dall'app)
+            if (message.planDraft!.stayOffers.isNotEmpty)
+              StaySelectorCard(
+                destination: message.planDraft!.destination,
+                stays: message.planDraft!.stayOffers,
+                selectedStay: message.planDraft!.selectedStay,
+                onSelectStay: (stay) => onStaySelected?.call(stay),
+              )
+            else if (message.planDraft!.neighborhoods.isNotEmpty)
               StayNeighborhoodCard(neighborhoods: message.planDraft!.neighborhoods),
 
             // Itinerario (solo se l'utente ha chiesto l'itinerario)
             if (message.planDraft!.days.isNotEmpty) ...[
+
               DailyPlanCard(days: message.planDraft!.days),
               const SizedBox(height: 12),
               Center(
