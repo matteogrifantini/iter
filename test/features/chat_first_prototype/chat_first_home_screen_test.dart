@@ -26,20 +26,23 @@ void main() {
         ),
       );
 
-      // Verify fixed hero title and subtitle
-      expect(find.text('Che viaggio ti farebbe bene adesso?'), findsOneWidget);
+      // Verify fixed hero title and subtitle (empty-state copy is
+      // 'Dove vorresti andare?' — see chat_first_home_screen.dart; the
+      // 'Che viaggio...' string predates 9007e49 and no longer exists).
+      expect(find.text('Dove vorresti andare?'), findsOneWidget);
       expect(
         find.text(
-          'Raccontami il momento. Alla destinazione penso io.',
+          'Scrivi una città, un’idea o descrivi il tipo di esperienza che cerchi.',
         ),
         findsOneWidget,
       );
 
 
-      // Verify seeds
+      // Verify seeds (5-destination set @9007e49 — see rottaVivaSeeds in
+      // rotta_viva_home_sections.dart; Task 4 preserved it as-is).
       expect(find.textContaining('Mare e pause'), findsOneWidget);
-      expect(find.textContaining('Partire in treno'), findsOneWidget);
-      expect(find.textContaining('Mangiare bene'), findsOneWidget);
+      expect(find.textContaining('Lisbona a novembre'), findsOneWidget);
+      expect(find.textContaining('Weekend a Porto'), findsOneWidget);
 
       // Tap seed to populate composer
       await tester.tap(find.textContaining('Mare e pause'));
