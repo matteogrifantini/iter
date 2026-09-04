@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../places/visual_media_service.dart';
 import '../../trips/trip_entity.dart';
 
 class HomeTripsSection extends StatelessWidget {
@@ -87,7 +88,7 @@ class HomeTripsSection extends StatelessWidget {
           )
         else
           SizedBox(
-            height: 160,
+            height: 170,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: trips.length,
@@ -115,66 +116,147 @@ class _TripCard extends StatelessWidget {
   final TripEntity trip;
   final VoidCallback onTap;
 
+  String _resolvePhotoUrl() {
+    if (trip.coverImageUrl.isNotEmpty) {
+      return trip.coverImageUrl;
+    }
+    return VisualMediaService.getPhotoForDestination(trip.destination);
+  }
+
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final photoUrl = _resolvePhotoUrl();
+    final isReady = trip.status == TripStatus.ready;
 
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Container(
-        width: 200,
-        padding: const EdgeInsets.all(16),
+        width: 210,
+        height: 170,
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${trip.durationDays} giorni',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 14,
-                  color: colorScheme.outline,
-                ),
-              ],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-            const Spacer(),
-            Text(
-              trip.destination,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
+          ],
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Foto di sfondo della destinazione
+            Image.network(
+              photoUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => Container(
+                color: const Color(0xFF2D63FF),
+                child: const Center(
+                  child: Icon(Icons.flight_rounded, color: Colors.white, size: 36),
+                ),
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              trip.status == TripStatus.ready ? 'Itinerario pronto' : 'In pianificazione',
-              style: TextStyle(
-                fontSize: 12,
-                color: trip.status == TripStatus.ready ? Colors.green.shade700 : colorScheme.primary,
-                fontWeight: FontWeight.w600,
+
+            // Gradient per leggibilità
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withValues(alpha: 0.25),
+                    Colors.black.withValues(alpha: 0.1),
+                    Colors.black.withValues(alpha: 0.75),
+                    Colors.black.withValues(alpha: 0.90),
+                  ],
+                  stops: const [0.0, 0.3, 0.7, 1.0],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+
+            // Contenuto
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                        ),
+                        child: Text(
+                          '${trip.durationDays} giorni',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 12,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Text(
+                    trip.destination,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: isReady ? const Color(0xFFE7FF67) : Colors.amberAccent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          isReady ? 'Itinerario pronto' : 'In pianificazione',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isReady ? const Color(0xFFE7FF67) : Colors.amberAccent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                ],
               ),
             ),
           ],

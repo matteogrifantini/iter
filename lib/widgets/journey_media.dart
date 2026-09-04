@@ -308,12 +308,15 @@ class _JourneyVideoState extends State<JourneyVideo> {
         fit: StackFit.expand,
         children: [
           if (ready)
-            FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: controller.value.size.width,
-                height: controller.value.size.height,
-                child: VideoPlayer(controller),
+            IgnorePointer(
+              ignoring: !widget.showControl,
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: controller.value.size.width,
+                  height: controller.value.size.height,
+                  child: VideoPlayer(controller),
+                ),
               ),
             )
           else if (widget.placeholderAsset != null)

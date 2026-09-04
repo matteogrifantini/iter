@@ -17,13 +17,16 @@ class AppConfig {
       supabaseAnonKey: String.fromEnvironment('SUPABASE_ANON_KEY'),
       geminiModel: String.fromEnvironment(
         'GEMINI_MODEL',
-        defaultValue: 'gemini-2.5-flash',
+        defaultValue: 'gemini-3.5-flash-lite',
       ),
     );
   }
 
+  static const String geminiApiKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: 'YOUR_GEMINI_API_KEY',
+  );
 
-  static const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
 
   final String backend;

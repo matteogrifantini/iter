@@ -29,8 +29,50 @@ class CentroidSolver {
     final destLower = destination.trim().toLowerCase();
     final names = chosenAttractions.map((a) => a.name.toLowerCase()).join(' ');
 
-    if (destLower.contains('palermo')) {
+    if (destLower.contains('berlino') || destLower.contains('berlin')) {
+      return const CentroidRecommendation(
+        optimalNeighborhood: 'Mitte & Hackescher Markt',
+        explanation: 'Baricentro perfetto tra l\'Isola dei Musei, la Porta di Brandeburgo a ovest e i locali creativi di Prenzlauer Berg a nord.',
+        walkingScore: 94,
+        averageMinutesToSpots: 8,
+        metroLineAdvice: 'U-Bahn U2/U8 e S-Bahn S3/S5/S7/S9 dirette',
+      );
+    }
 
+    if (destLower.contains('monaco') || destLower.contains('munich')) {
+      return const CentroidRecommendation(
+        optimalNeighborhood: 'Altstadt & Glockenbachviertel (Marienplatz)',
+        explanation: 'Baricentro ideale per vivere Monaco a piedi: a due passi da Marienplatz, dal Viktualienmarkt e dai locali del Glockenbach.',
+        walkingScore: 96,
+        averageMinutesToSpots: 7,
+        metroLineAdvice: 'Tutte le linee S-Bahn a Marienplatz e U-Bahn U3/U6',
+      );
+    }
+
+    if (destLower.contains('stoccarda') || destLower.contains('stuttgart')) {
+      return const CentroidRecommendation(
+        optimalNeighborhood: 'Stuttgart-Mitte & Schlossplatz',
+        explanation: 'Baricentro perfetto tra Schlossplatz, Neues Schloss, i grandi viali dello shopping pedonale e le stazioni S-Bahn dirette per i musei.',
+        walkingScore: 95,
+        averageMinutesToSpots: 8,
+        metroLineAdvice: 'Tutte le linee S-Bahn (S1-S6) a Hauptbahnhof e Stadtbahn U5/U6/U7',
+      );
+    }
+
+
+    if (destLower.contains('messina')) {
+
+
+      return const CentroidRecommendation(
+        optimalNeighborhood: 'Centro Storico / Piazza Duomo (tra via Garibaldi e il porto)',
+        explanation: 'Baricentro ideale per muoversi a piedi tra il Duomo, l\'Orologio Astronomico, la Fontana di Orione e il lungomare con gli imbarchi panoramici.',
+        walkingScore: 96,
+        averageMinutesToSpots: 6,
+        metroLineAdvice: 'Tutto a piedi nel quadrilatero centrale e tram costiero',
+      );
+    }
+
+    if (destLower.contains('palermo')) {
       return const CentroidRecommendation(
         optimalNeighborhood: 'Centro Storico / Kalsa (tra Ballarò e il mare)',
         explanation: 'Baricentro perfetto tra i mercati storici di Ballarò, i Quattro Canti e piazza Marina con i suoi locali serali all\'aperto.',
@@ -39,6 +81,7 @@ class CentroidSolver {
         metroLineAdvice: 'Tutto a piedi nel centro e bus 806 per Mondello',
       );
     }
+
 
     if (destLower.contains('barcellona') || destLower.contains('barcelona')) {
       return const CentroidRecommendation(

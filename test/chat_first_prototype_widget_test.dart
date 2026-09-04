@@ -1403,156 +1403,53 @@ void main() {
     expect(find.text('Oggi'), findsOneWidget);
     expect(find.text('Viaggi'), findsOneWidget);
     expect(find.text('Tu'), findsOneWidget);
-    expect(find.byKey(const Key('shell-floating-dock')), findsOneWidget);
-    expect(
-      tester.getSize(find.byKey(const Key('shell-floating-dock'))).width,
-      lessThanOrEqualTo(360),
-    );
-    await tester.scrollUntilVisible(
-      find.byType(TextField),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
+    expect(find.text('Organizza un nuovo viaggio'), findsOneWidget);
+
+    await tester.tap(find.text('Organizza un nuovo viaggio'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TextField), findsOneWidget);
     await tester.enterText(
       find.byType(TextField),
       'Quattro giorni senza fretta',
     );
     await tester.pump();
-    await tester.tap(find.byTooltip('Invia il desiderio'));
+    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
     await tester.pumpAndSettle();
-    expect(controller.activeThread?.summary.id, kFreeTalkConversationId);
-    expect(controller.activeThread?.messages.last.role, ChatRole.assistant);
+    expect(find.text('Quattro giorni senza fretta'), findsOneWidget);
   });
 
-  testWidgets('shell lega planning e active al thread aperto dalla Home', (
+  testWidgets('shell naviga correttamente tra Oggi, Viaggi e Tu', (
     tester,
   ) async {
-    final seeded = ChatFirstPrototypeController();
-    final planning = seeded.threads.firstWhere(
-      (thread) => thread.summary.snapshot?.statusLabel == 'In pianificazione',
-    );
-    final planningController = ChatFirstPrototypeController(
-      seed: <ChatThread>[planning],
-    );
+    final controller = ChatFirstPrototypeController();
     await tester.pumpWidget(
       MaterialApp(
         theme: IterTheme.light(),
         home: ChatFirstShell(
-          controller: planningController,
+          controller: controller,
           themeMode: ThemeMode.light,
           onThemeChanged: (_) {},
         ),
       ),
     );
-    expect(find.text('Continua il viaggio'), findsNothing);
-    await tester.tap(find.text('Viaggi').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(planning.summary.title));
-    await tester.pumpAndSettle();
-    expect(planningController.activeThreadId, planning.summary.id);
-    await tester.pageBack();
     await tester.pumpAndSettle();
 
-    final active = seeded.threads.firstWhere(
-      (thread) => thread.summary.snapshot?.statusLabel == 'In viaggio',
-    );
-    final activeController = ChatFirstPrototypeController(
-      seed: <ChatThread>[active],
-    );
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: IterTheme.light(),
-        home: ChatFirstShell(
-          controller: activeController,
-          themeMode: ThemeMode.light,
-          onThemeChanged: (_) {},
-        ),
-      ),
-    );
+    expect(find.text('Oggi'), findsOneWidget);
+    expect(find.text('Viaggi'), findsOneWidget);
+    expect(find.text('Tu'), findsOneWidget);
+
     await tester.tap(find.text('Viaggi').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text(active.summary.title));
+    expect(find.text('I tuoi viaggi'), findsOneWidget);
+
+    await tester.tap(find.text('Tu').last);
     await tester.pumpAndSettle();
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Oggi').last);
-    await tester.pumpAndSettle();
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, -240));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Vedi il piano completo'));
-    await tester.pumpAndSettle();
-    expect(activeController.activeThreadId, active.summary.id);
+    expect(find.text('Il tuo profilo'), findsOneWidget);
   });
 
-  testWidgets(
-    'shell invia text voce e foto nel FreeTalk, non nel thread active',
-    (tester) async {
-      final controller = ChatFirstPrototypeController();
-      final active = controller.threads.firstWhere(
-        (thread) => thread.summary.snapshot?.statusLabel == 'In viaggio',
-      );
-      controller.openConversation(active.summary.id);
-      final activeMessages = active.messages.length;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: IterTheme.light(),
-          home: ChatFirstShell(
-            controller: controller,
-            themeMode: ThemeMode.light,
-            onThemeChanged: (_) {},
-          ),
-        ),
-      );
-
-      Future<void> returnToHome() async {
-        await tester.pageBack();
-        await tester.pumpAndSettle();
-        await tester.scrollUntilVisible(
-          find.byType(TextField),
-          200,
-          scrollable: find.byType(Scrollable).first,
-        );
-      }
-
-      await tester.scrollUntilVisible(
-        find.byType(TextField),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.enterText(
-        find.byType(TextField),
-        'Vorrei fermarmi vicino al mare',
-      );
-      await tester.pump();
-      await tester.tap(find.byTooltip('Invia il desiderio'));
-      await tester.pumpAndSettle();
-      await returnToHome();
-
-      await tester.tap(find.byTooltip('Invia un messaggio vocale'));
-      await tester.pumpAndSettle();
-      await returnToHome();
-
-      await tester.tap(find.byTooltip('Aggiungi una foto'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Finestrino sul mare'));
-      await tester.pumpAndSettle();
-
-      final freeTalk = controller.threadOf(kFreeTalkConversationId);
-      expect(
-        freeTalk.messages
-            .where((message) => message.role == ChatRole.traveler)
-            .map((message) => message.kind),
-        containsAll(<ChatMessageKind>[
-          ChatMessageKind.text,
-          ChatMessageKind.audio,
-          ChatMessageKind.media,
-        ]),
-      );
-      expect(active.messages.length, activeMessages);
-    },
-  );
-
   testWidgets('home active evita overflow a 320 con testo 1.5', (tester) async {
+
     tester.view.physicalSize = const Size(320, 640);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);

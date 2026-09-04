@@ -1,25 +1,20 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../app/app_config.dart';
+
 import '../ai/gemini_models.dart';
 import '../ai/gemini_travel_service.dart';
 import '../chat_first_prototype/local_preferences_service.dart';
 import '../flights/google_flights_url_builder.dart';
+import '../stays/stay_models.dart';
+import '../stays/stay_search_service.dart';
 import '../trips/trip_entity.dart';
 import '../trips/trip_repository.dart';
-import 'widgets/daily_plan_card.dart';
-import 'widgets/flight_selector_card.dart';
-import 'widgets/stay_neighborhood_card.dart';
-import 'widgets/monument_swipe_deck.dart';
+import 'widgets/attractions_picker_sheet.dart';
 import 'widgets/destination_hero_card.dart';
-import 'widgets/animated_route_map_card.dart';
-import 'widgets/stay_selector_card.dart';
-import 'widgets/cost_breakdown_card.dart';
-import 'widgets/trip_profiling_card.dart';
-import '../stays/stay_models.dart';
-import '../stays/centroid_solver.dart';
-
-
-
+import 'widgets/flight_picker_sheet.dart';
+import 'widgets/interactive_question_options.dart';
+import 'widgets/stay_picker_sheet.dart';
 
 class TripChatScreen extends StatefulWidget {
   const TripChatScreen({
@@ -48,13 +43,21 @@ class _TripChatScreenState extends State<TripChatScreen> {
 
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  Timer? _scrollSecondaryTimer;
 
   List<ChatMessage> _messages = [];
   bool _isThinking = false;
+  bool _isFlightSaved = false;
+  bool _areAttractionsConfirmed = false;
+  List<AttractionItem> _selectedAttractions = [];
+  StayOffer? _selectedStay;
+  FlightRealOffer? _selectedFlight;
   GeminiTripPlanDraft? _latestDraft;
   String _destination = 'Nuovo viaggio';
   int _durationDays = 3;
-  TripPlanningStage _currentStage = TripPlanningStage.flight;
+  TripPlanningStage _currentStage = TripPlanningStage.transport;
+  TripPlanningContext _planningContext = const TripPlanningContext();
+  bool _userHasAnsweredActive = false;
 
   @override
   void initState() {
@@ -70,6 +73,7 @@ class _TripChatScreenState extends State<TripChatScreen> {
           timestamp: DateTime.now(),
         ),
       );
+      _updateContextFromUserText(widget.initialPrompt!.trim());
       _isThinking = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _queryAi(widget.initialPrompt!.trim());
@@ -79,12 +83,19 @@ class _TripChatScreenState extends State<TripChatScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _scrollSecondaryTimer?.cancel();
+    _scrollController.dispose();
+    _inputController.dispose();
+    super.dispose();
+  }
+
   void _setupAiService() {
     if (widget.aiService != null) {
       _ai = widget.aiService!;
       return;
     }
-    // Leggi da preferenze locali o .env
     final storedKey = LocalPreferencesService().geminiApiKey;
     final apiKey = (storedKey != null && storedKey.trim().isNotEmpty)
         ? storedKey.trim()
@@ -102,127 +113,231 @@ class _TripChatScreenState extends State<TripChatScreen> {
           _destination = existing.destination;
           _durationDays = existing.durationDays;
           if (existing.latestPlan != null) {
-            _currentStage = existing.latestPlan!.stage;
+            _selectedStay = existing.latestPlan!.selectedStay;
+            _selectedAttractions = existing.latestPlan!.attractions;
+            _isFlightSaved = existing.latestPlan!.flight != null;
+            _areAttractionsConfirmed = _selectedAttractions.isNotEmpty;
           }
         });
         return;
       }
     }
 
-    setState(() {
-      _messages.add(
-        ChatMessage(
-          role: 'assistant',
-          text: 'Ciao! Sono Iter. Raccontami dove vorresti andare, in quali date o quanti giorni hai a disposizione. Iniziamo subito dal volo e dai collegamenti ideali.',
-          timestamp: DateTime.now(),
-        ),
-      );
-    });
+    _isThinking = true;
+    _queryAi('Vorrei organizzare un nuovo viaggio. Da dove cominciamo?');
   }
 
-  @override
-  void dispose() {
-    _inputController.dispose();
-    _scrollController.dispose();
-    super.dispose();
+  void _updateContextFromUserText(String text) {
+    final lower = text.toLowerCase();
+
+    // Companions
+    if (lower.contains('coppia') || lower.contains('in due') || lower.contains('fidanzat')) {
+      _planningContext = _planningContext.copyWith(travelers: 'In coppia');
+    } else if (lower.contains('solo') || lower.contains('solitario') || lower.contains('da sol')) {
+      _planningContext = _planningContext.copyWith(travelers: 'Da solo');
+    } else if (lower.contains('amici') || lower.contains('gruppo')) {
+      _planningContext = _planningContext.copyWith(travelers: 'Con amici');
+    } else if (lower.contains('famiglia') || lower.contains('bambin')) {
+      _planningContext = _planningContext.copyWith(travelers: 'In famiglia');
+    }
+
+    // Vibe
+    if (lower.contains('cultur') || lower.contains('muse')) {
+      _planningContext = _planningContext.copyWith(tripStyle: 'Cultura & Musei');
+    } else if (lower.contains('relax') || lower.contains('parch')) {
+      _planningContext = _planningContext.copyWith(tripStyle: 'Relax & Parchi');
+    } else if (lower.contains('seral') || lower.contains('local') || lower.contains('notturn')) {
+      _planningContext = _planningContext.copyWith(tripStyle: 'Vita serale & Locali');
+    } else if (lower.contains('scorc') || lower.contains('quartier') || lower.contains('avventur')) {
+      _planningContext = _planningContext.copyWith(tripStyle: 'Scorci & Quartieri');
+    }
+
+    // Month detection
+    for (final m in GoogleFlightsUrlBuilder.italianMonths.keys) {
+      if (lower.contains(m)) {
+        _planningContext = _planningContext.copyWith(month: m);
+        break;
+      }
+    }
+
+    // Dates detection con defaultMonth dal contesto
+    final (dep, ret) = GoogleFlightsUrlBuilder.extractDatesFromText(
+      text,
+      defaultMonth: _planningContext.monthIndex,
+    );
+    if (dep != null && ret != null) {
+      final rangeStr = GoogleFlightsUrlBuilder.formatDateRange(dep, ret);
+      final days = ret.difference(dep).inDays;
+      _planningContext = _planningContext.copyWith(
+        dates: rangeStr,
+        durationDays: days > 0 ? days : 3,
+      );
+    }
   }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
+        // Secondo passaggio per garantire che le action card e i widget asincroni abbiano completato il layout
+        _scrollSecondaryTimer?.cancel();
+        _scrollSecondaryTimer = Timer(const Duration(milliseconds: 200), () {
+          if (mounted && _scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+            );
+          }
+        });
       }
     });
   }
 
   Future<void> _sendMessage(String text, {TripPlanningStage? explicitStage}) async {
-    if (text.trim().isEmpty) return;
+    final clean = text.trim();
+    if (clean.isEmpty) return;
 
     final userMessage = ChatMessage(
       role: 'user',
-      text: text,
+      text: clean,
       timestamp: DateTime.now(),
     );
 
+    _updateContextFromUserText(clean);
+
     setState(() {
       _messages.add(userMessage);
-      _isThinking = true;
+      _userHasAnsweredActive = true;
     });
     _inputController.clear();
     _scrollToBottom();
-    _queryAi(text, explicitStage: explicitStage);
+
+    final lower = clean.toLowerCase();
+    if (lower == 'salva viaggio' || lower == 'salva il viaggio' || lower == 'salva questo viaggio') {
+      await _saveCurrentTrip(status: TripStatus.ready);
+      setState(() {
+        _isThinking = false;
+        _messages.add(
+          ChatMessage(
+            role: 'assistant',
+            text: '🎉 **Viaggio a $_destination salvato con successo!**\n\n'
+                'Tutti i dettagli (voli, alloggio baricentrico e tappe a piedi) sono stati salvati nelle tue pianificazioni.\n'
+                'Puoi consultare l\'itinerario giorno per giorno e tutti i dettagli dalla tab **Viaggi**.',
+            timestamp: DateTime.now(),
+          ),
+        );
+      });
+      _scrollToBottom();
+      return;
+    }
+
+    setState(() {
+      _isThinking = true;
+    });
+    _queryAi(clean, explicitStage: explicitStage);
   }
 
   String? _detectedOriginCity;
   bool _directOnly = false;
 
   Future<void> _queryAi(String text, {TripPlanningStage? explicitStage}) async {
-    // Detect origin city from user text (e.g. "sono di Roma", "parto da Milano")
     final detectedOrigin = GoogleFlightsUrlBuilder.extractOriginCity(text);
     if (detectedOrigin != null) {
       _detectedOriginCity = detectedOrigin;
     }
 
-    // Detect directOnly preference
     if (GoogleFlightsUrlBuilder.isDirectFlightRequested(text)) {
       _directOnly = true;
     }
 
     final lower = text.toLowerCase();
     TripPlanningStage stage = explicitStage ?? _currentStage;
+    String queryPrompt = text;
 
     if (explicitStage == null) {
-      if (lower.contains('non so dove') || lower.contains('ispirami') || lower.contains('idee per') || lower.contains('dove potrei')) {
+      final isContinue = lower == 'continua' ||
+          lower == 'avanti' ||
+          lower == 'prosegui' ||
+          lower == 'ok' ||
+          lower == 'va bene' ||
+          lower == 'proseguiamo' ||
+          lower == 'vai avanti';
+
+      if (isContinue) {
+        if (!_isFlightSaved && _latestDraft?.flight != null) {
+          _isFlightSaved = true;
+          stage = TripPlanningStage.attractions;
+          queryPrompt = 'Quali sono le tappe e attrazioni imperdibili da vedere a $_destination?';
+        } else if (!_areAttractionsConfirmed) {
+          stage = TripPlanningStage.attractions;
+          queryPrompt = 'Quali sono le tappe e attrazioni imperdibili da vedere a $_destination?';
+        } else if (_selectedStay == null) {
+          stage = TripPlanningStage.stay;
+          queryPrompt = 'Dove conviene alloggiare a $_destination? Consigliami quartieri e hotel.';
+        } else {
+          stage = TripPlanningStage.itinerary;
+          queryPrompt = 'Mostrami l\'itinerario giorno per giorno per $_destination.';
+        }
+      } else if (lower.contains('non so dove') || lower.contains('ispirami') || lower.contains('idee per') || lower.contains('dove potrei')) {
         stage = TripPlanningStage.inspiration;
-      } else if (lower.contains('cosa vedere') || lower.contains('monumenti') || lower.contains('attrazioni') || lower.contains('esperienze imperdibili')) {
+      } else if (lower.contains('cosa vedere') || lower.contains('monumenti') || lower.contains('attrazioni') || lower.contains('esperienze imperdibili') || lower.contains('scegliamo le tappe') || lower.contains('tappe')) {
         stage = TripPlanningStage.attractions;
-      } else if (lower.contains('dove alloggiare') || lower.contains('consigliami un hotel') || lower.contains('dove dormire') || lower.contains('quale quartiere')) {
+      } else if (lower.contains('dove alloggiare') || lower.contains('consigliami un hotel') || lower.contains('dove dormire') || lower.contains('quale quartiere') || lower.contains('scegli dove alloggiare') || lower.contains('alloggi')) {
         stage = TripPlanningStage.stay;
       } else if (lower.contains('crea itinerario') || lower.contains('mostrami l\'itinerario') || lower.contains('itinerario giorno per giorno') || lower.contains('programma completo')) {
         stage = TripPlanningStage.itinerary;
       } else if (lower.contains('cerca voli') || lower.contains('mostrami i voli') || lower.contains('voli diretti') || lower.contains('trova volo')) {
         stage = TripPlanningStage.flight;
+      } else if (_isFlightSaved) {
+        stage = TripPlanningStage.attractions;
       } else if (_latestDraft?.flight == null && !lower.contains('salva') && !lower.contains('conferma')) {
-        // Se non abbiamo ancora gestito il volo/trasporto, rimaniamo su transport/inquadramento
         stage = TripPlanningStage.transport;
       }
     }
+
 
     setState(() {
       _currentStage = stage;
     });
 
-
-    // Determine departure city: from user text > preferences > default Roma
     final departureCity = _detectedOriginCity
         ?? LocalPreferencesService().departureCity;
 
     try {
       final draft = await _ai.generateTripAdvice(
-        text,
+        queryPrompt,
+
         departureCity: departureCity,
         userStyle: LocalPreferencesService().travelStyle,
         budget: LocalPreferencesService().budget,
         stage: stage,
         directOnly: _directOnly,
         conversationHistory: _messages.where((m) => m.text.trim().isNotEmpty).toList(),
+        planningContext: _planningContext,
       );
 
+      final enrichedDraft = draft.copyWith(
+        flight: draft.flight ?? _latestDraft?.flight,
+        destinationVisual: draft.destinationVisual ?? _latestDraft?.destinationVisual,
+      );
 
       final assistantMessage = ChatMessage(
         role: 'assistant',
         text: draft.message,
-        planDraft: draft,
+        planDraft: enrichedDraft,
         timestamp: DateTime.now(),
       );
 
       if (mounted) {
         setState(() {
           _messages.add(assistantMessage);
+          _userHasAnsweredActive = false; // resetta per la nuova domanda attiva
           if (_latestDraft == null) {
             _latestDraft = draft;
           } else {
@@ -237,123 +352,162 @@ class _TripChatScreenState extends State<TripChatScreen> {
               attractions: draft.attractions.isNotEmpty ? draft.attractions : _latestDraft!.attractions,
               stayOffers: draft.stayOffers.isNotEmpty ? draft.stayOffers : _latestDraft!.stayOffers,
               selectedStay: draft.selectedStay ?? _latestDraft!.selectedStay,
-              destinationVisual: draft.destinationVisual ?? _latestDraft!.destinationVisual,
             );
           }
-
-
           if (draft.destination.isNotEmpty) {
             _destination = draft.destination;
+            _planningContext = _planningContext.copyWith(destination: draft.destination);
           }
           if (draft.durationDays > 0) {
             _durationDays = draft.durationDays;
+            _planningContext = _planningContext.copyWith(durationDays: draft.durationDays);
           }
           _isThinking = false;
         });
+
+        _saveCurrentTrip(status: TripStatus.planning);
         _scrollToBottom();
-        await _saveCurrentTrip();
       }
     } catch (e) {
       if (mounted) {
         setState(() {
+          _isThinking = false;
           _messages.add(
             ChatMessage(
               role: 'assistant',
-              text: 'Si è verificato un problema di connessione: $e\n\nPuoi verificare le impostazioni di connessione nella tab Profilo.',
+              text: 'Si è verificato un problema di connessione. Puoi riprovare o specificare un\'altra richiesta per il viaggio a $_destination.',
               timestamp: DateTime.now(),
             ),
           );
-
-          _isThinking = false;
         });
         _scrollToBottom();
       }
     }
   }
 
+  Future<TripEntity> _saveCurrentTrip({required TripStatus status}) async {
+    final now = DateTime.now();
+    final coverUrl = _latestDraft?.destinationVisual?.images.firstOrNull ??
+        'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800';
 
-
-  Future<TripEntity> _saveCurrentTrip({TripStatus status = TripStatus.planning}) async {
-    final trip = TripEntity(
+    final entity = TripEntity(
       id: _tripId,
       destination: _destination,
       durationDays: _durationDays,
       status: status,
-      coverImageUrl: 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&q=80',
-      createdAt: DateTime.now(),
-      messages: _messages,
+      coverImageUrl: coverUrl,
+      createdAt: now,
       latestPlan: _latestDraft,
+      messages: List.from(_messages),
     );
-    await _repo.saveTrip(trip);
-    return trip;
+
+    await _repo.saveTrip(entity);
+    return entity;
   }
 
-  void _onFlightOptionSaved({
-    FlightRealOffer? outbound,
-    FlightRealOffer? returnOffer,
-    FlightRealOffer? combined,
-    required int totalPrice,
-    required String bookingUrl,
-  }) {
-    if (_latestDraft?.flight != null) {
-      final updatedFlight = _latestDraft!.flight!.copyWith(
-        priceEstimate: '$totalPrice €',
-        searchUrl: bookingUrl,
-      );
-      _latestDraft = _latestDraft!.copyWith(flight: updatedFlight);
-      _saveCurrentTrip(status: TripStatus.planning);
+  // --- Handlers dei Picker Dedicati (Nessun messaggio di chat artificiale!) ---
+
+  void _openFlightPicker(FlightAdvice flight) {
+    FlightPickerSheet.show(
+      context,
+      flight: flight,
+      onSaveFlight: ({combined, outbound, returnOffer, required totalPrice, required bookingUrl}) {
+        setState(() {
+          _isFlightSaved = true;
+          _selectedFlight = combined ?? outbound;
+          if (_latestDraft != null) {
+            _latestDraft = _latestDraft!.copyWith(
+              flight: flight.copyWith(
+                priceEstimate: '$totalPrice € a/r',
+                searchUrl: bookingUrl,
+              ),
+            );
+          }
+        });
+        _saveCurrentTrip(status: TripStatus.planning);
+        // Avanza naturalmente alla fase successiva (attrazioni) senza snackbar né pop-up
+        if (!_areAttractionsConfirmed) {
+          _queryAi(
+            'Quali sono le tappe e attrazioni imperdibili da vedere a $_destination?',
+            explicitStage: TripPlanningStage.attractions,
+          );
+        }
+      },
+    );
+  }
+
+  void _openAttractionsPicker(List<AttractionItem> attractions) {
+    AttractionsPickerSheet.show(
+      context,
+      destination: _destination,
+      attractions: attractions,
+      initiallySelected: _selectedAttractions,
+      onSave: (selected) {
+        setState(() {
+          _selectedAttractions = selected;
+          _areAttractionsConfirmed = true;
+          if (_latestDraft != null) {
+            _latestDraft = _latestDraft!.copyWith(attractions: selected);
+          }
+        });
+        _saveCurrentTrip(status: TripStatus.planning);
+        // Avanza naturalmente alla fase successiva (alloggio) senza snackbar
+        if (_selectedStay == null) {
+          _queryAi(
+            'Dove conviene alloggiare a $_destination? Quali quartieri e hotel consigli?',
+            explicitStage: TripPlanningStage.stay,
+          );
+        }
+      },
+    );
+  }
+
+  Future<void> _openStayPicker(GeminiTripPlanDraft draft) async {
+    // Se non ci sono offerte caricate nel draft, caricale al volo dal service
+    List<StayOffer> stays = draft.stayOffers;
+    if (stays.isEmpty) {
+      stays = await const StaySearchService().searchStays(destination: _destination);
     }
 
-    final descOut = outbound != null ? '${outbound.airline} (${outbound.departureTime})' : '';
-    final descRet = returnOffer != null ? '${returnOffer.airline} (${returnOffer.departureTime})' : '';
-    final descComb = combined != null ? '${combined.airline} (${combined.departureTime})' : '';
-    final flightSummary = descComb.isNotEmpty ? descComb : '$descOut andata, $descRet ritorno';
+    if (!mounted) return;
 
-    final assistantMsg = ChatMessage(
-      role: 'assistant',
-      text: "Perfetto! Ho salvato l'opzione volo ($flightSummary per $totalPrice€ a/r) nel tuo piano di viaggio. Ora scegliamo cosa vedere a $_destination: swipa a destra per aggiungere all'itinerario o a sinistra per saltare!",
-      timestamp: DateTime.now(),
-    );
-
-    setState(() {
-      _messages.add(assistantMsg);
-    });
-    _saveCurrentTrip(status: TripStatus.planning);
-    _scrollToBottom();
-
-    // Transizione fluida alla selezione dei monumenti DOPO i voli
-    _queryAi(
-      'Cosa vedere a $_destination? Mostrami i monumenti ed esperienze imperdibili.',
-      explicitStage: TripPlanningStage.attractions,
-    );
-  }
-
-
-  void _onAttractionsConfirmed(List<AttractionItem> selected) {
-    final names = selected.map((a) => a.name).join(', ');
-    _sendMessage(
-      'Ho scelto queste attrazioni a $_destination: $names. Quali alloggi e hotel mi consigli per fare base vicino a queste zone?',
-    );
-  }
-
-  void _onStaySelected(StayOffer stay) {
-    setState(() {
-      if (_latestDraft != null) {
-        _latestDraft = _latestDraft!.copyWith(selectedStay: stay);
-      }
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('✓ ${stay.name} salvato nel viaggio (${stay.pricePerNightEur.toStringAsFixed(0)}€/notte)'),
-        backgroundColor: Colors.green.shade700,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-    _saveCurrentTrip(status: TripStatus.planning);
-    _sendMessage(
-      'Ho salvato ${stay.name} per dormire. Ora generiamo l\'itinerario giorno per giorno ottimizzato?',
+    StayPickerSheet.show(
+      context,
+      destination: _destination,
+      stays: stays,
+      neighborhoods: draft.neighborhoods,
+      selectedStay: _selectedStay ?? draft.selectedStay,
+      onStayBooked: (stay) {
+        setState(() {
+          _selectedStay = stay;
+          if (_latestDraft != null) {
+            _latestDraft = _latestDraft!.copyWith(selectedStay: stay);
+          }
+        });
+        _saveCurrentTrip(status: TripStatus.planning);
+        // Avanza all'itinerario giorno per giorno
+        _queryAi(
+          'Perfetto, ho scelto ${stay.name}. Ora mostrami l\'itinerario completo giorno per giorno per $_destination.',
+          explicitStage: TripPlanningStage.itinerary,
+        );
+      },
+      onSkip: () {
+        // L'utente salta l'alloggio: procedi direttamente all'itinerario giorno per giorno!
+        _saveCurrentTrip(status: TripStatus.planning);
+        _queryAi(
+          'Ho già un alloggio. Mostrami direttamente l\'itinerario completo giorno per giorno per $_destination.',
+          explicitStage: TripPlanningStage.itinerary,
+        );
+      },
+      onCustomQuery: (q) {
+        _queryAi(
+          q,
+          explicitStage: TripPlanningStage.stay,
+        );
+      },
     );
   }
+
 
 
   Future<void> _handleOpenSnapshot() async {
@@ -403,70 +557,183 @@ class _TripChatScreenState extends State<TripChatScreen> {
             // Area Messaggi
             Expanded(
               child: ListView.builder(
-
                 controller: _scrollController,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
                 itemCount: _messages.length,
                 itemBuilder: (context, index) {
                   final msg = _messages[index];
                   final isUser = msg.role == 'user';
+
+                  // Mostra DestinationHeroCard solo sul primissimo messaggio dell'assistente con visual
+                  final firstVisualIndex = _messages.indexWhere(
+                    (m) => m.role != 'user' && m.planDraft?.destinationVisual != null,
+                  );
+                  final showDestinationHero = !isUser &&
+                      msg.planDraft?.destinationVisual != null &&
+                      index == firstVisualIndex;
+
+                  // Calcolo indici per mostrare ciascuna card ESATTAMENTE UNA SOLA VOLTA nella cronologia!
+                  int activeFlightCardIndex = -1;
+                  if (_isFlightSaved) {
+                    // Quando il volo è salvato, resta agganciato al messaggio dove è stata fatta l'offerta
+                    activeFlightCardIndex = _messages.indexWhere(
+                      (m) => m.role != 'user' && m.planDraft?.flight != null,
+                    );
+                  } else {
+                    for (int i = _messages.length - 1; i >= 0; i--) {
+                      final m = _messages[i];
+                      if (m.role != 'user' && m.planDraft?.flight != null) {
+                        final t = m.text.toLowerCase();
+                        final isFlightTopic = (t.contains('volo') || t.contains('voli') || t.contains('scalo') || t.contains('scali')) &&
+                            !t.contains('hotel') && !t.contains('allogg') && !t.contains('dormire');
+                        final isQuestion = t.contains('?');
+                        final isAskingFlight = isFlightTopic && isQuestion && (
+                          t.contains('preferisci') ||
+                          t.contains('mattina') ||
+                          t.contains('pomeriggio') ||
+                          t.contains('dirett') ||
+                          t.contains('orari') ||
+                          t.contains('scalo')
+                        );
+                        // Se è l'ultimo messaggio assistente e sta attivamente chiedendo le preferenze volo,
+                        // attendiamo la risposta dell'utente prima di mostrare il selettore volo.
+                        if (i == _messages.lastIndexWhere((msg) => msg.role != 'user') && isAskingFlight) {
+                          continue;
+                        }
+                        activeFlightCardIndex = i;
+                        break;
+                      }
+                    }
+                  }
+
+                  final showFlightCard = !isUser &&
+                      msg.planDraft?.flight != null &&
+                      index == activeFlightCardIndex;
+
+                  final singleAttractionsIndex = _messages.lastIndexWhere(
+                    (m) => m.role != 'user' && m.planDraft?.attractions.isNotEmpty == true,
+                  );
+                  final showAttractionsCard = !isUser &&
+                      msg.planDraft?.attractions.isNotEmpty == true &&
+                      (_isFlightSaved || msg.planDraft?.flight == null) &&
+                      (index == singleAttractionsIndex);
+
+                  final singleStayIndex = _messages.lastIndexWhere(
+                    (m) => m.role != 'user' && (m.planDraft?.stayOffers.isNotEmpty == true || m.planDraft?.neighborhoods.isNotEmpty == true),
+                  );
+                  final showStayCard = !isUser &&
+                      (msg.planDraft?.stayOffers.isNotEmpty == true || msg.planDraft?.neighborhoods.isNotEmpty == true) &&
+                      (_isFlightSaved || msg.planDraft?.flight == null) &&
+                      (_areAttractionsConfirmed || _selectedStay != null || _currentStage == TripPlanningStage.stay || _currentStage == TripPlanningStage.itinerary) &&
+                      (index == singleStayIndex);
+
+                  final singleItineraryIndex = _messages.lastIndexWhere(
+                    (m) => m.role != 'user' && m.planDraft?.days.isNotEmpty == true,
+                  );
+                  final showItineraryCard = !isUser &&
+                      msg.planDraft?.days.isNotEmpty == true &&
+                      (_isFlightSaved || msg.planDraft?.flight == null) &&
+                      (_areAttractionsConfirmed || _selectedStay != null || _currentStage == TripPlanningStage.itinerary) &&
+                      (index == singleItineraryIndex);
+
+                  // Le chip dinamiche appaiono ESCLUSIVAMENTE sull'ultimo messaggio assistente e solo se non si è ancora risposto!
+                  final lastAssistantIndex = _messages.lastIndexWhere((m) => m.role != 'user');
+                  final showInteractiveOptions = index == lastAssistantIndex &&
+                      !_isThinking &&
+                      !_userHasAnsweredActive;
+
+                  List<String>? cleanReplies = showInteractiveOptions ? msg.planDraft?.suggestedReplies : null;
+                  if (cleanReplies != null) {
+                    final isItineraryStage = showItineraryCard || _currentStage == TripPlanningStage.itinerary || (msg.planDraft?.days.isNotEmpty == true);
+                    cleanReplies = cleanReplies.where((opt) {
+                      final o = opt.toLowerCase();
+                      if (isItineraryStage) {
+                        if (o.contains('volo') || o.contains('voli') || o.contains('hotel') || o.contains('allogg') || o.contains('mostrami l\'itinerario') || o.contains('cerchiamo') || o.contains('partire')) return false;
+                      }
+                      if (showFlightCard || _isFlightSaved) {
+                        if (o.contains('volo') || o.contains('voli') || o.contains('orari') || o.contains('compagnia') || o.contains('prezzo')) return false;
+                      }
+                      if (showStayCard || _selectedStay != null) {
+                        if (o.contains('hotel') || o.contains('allogg') || o.contains('dormire') || o.contains('quartier')) return false;
+                      }
+                      if (showAttractionsCard || _areAttractionsConfirmed) {
+                        if (o.contains('monument') || o.contains('attrazion') || o.contains('tappe') || o.contains('vedere')) return false;
+                      }
+                      return true;
+                    }).toList();
+                    if (isItineraryStage && cleanReplies.isEmpty) {
+                      cleanReplies = ['Cosa mangiare di tipico?', 'Consigli sui trasporti', 'Meteo e periodo migliore'];
+                    } else if (cleanReplies.isEmpty) {
+                      cleanReplies = null;
+                    }
+                  }
+
+                  // Non mostrare chip testuali contrastanti o ridondanti sotto le card di azione principali
+                  if ((showFlightCard && !_isFlightSaved) ||
+                      (showStayCard && _selectedStay == null) ||
+                      (showAttractionsCard && !_areAttractionsConfirmed)) {
+                    cleanReplies = null;
+                  }
+
+
+
                   return _MessageBubble(
                     message: msg,
                     isUser: isUser,
-                    onOpenSnapshot: _handleOpenSnapshot,
-                    onOptionSaved: _onFlightOptionSaved,
-                    onSelectSuggestion: (s) => _sendMessage(s),
-                    onAttractionsConfirmed: _onAttractionsConfirmed,
-                    onStaySelected: _onStaySelected,
+                    showDestinationHero: showDestinationHero,
+                    showFlightCard: showFlightCard,
+                    showAttractionsCard: showAttractionsCard,
+                    showStayCard: showStayCard,
+                    showItineraryCard: showItineraryCard,
+                    interactiveOptions: cleanReplies,
+                    isFlightSaved: _isFlightSaved,
+                    selectedFlight: _selectedFlight,
+                    areAttractionsConfirmed: _areAttractionsConfirmed,
+                    selectedAttractionsCount: _selectedAttractions.length,
+                    selectedStay: _selectedStay,
+                    onSelectOption: (opt) => _sendMessage(opt),
+                    onOpenFlightPicker: (flight) => _openFlightPicker(flight),
+                    onOpenAttractionsPicker: (attractions) => _openAttractionsPicker(attractions),
+                    onOpenStayPicker: (draft) => _openStayPicker(draft),
+                    onOpenItinerary: _handleOpenSnapshot,
                   );
-
-
 
                 },
               ),
             ),
 
             if (_isThinking)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.primary),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Iter sta preparando il tuo viaggio...',
-                      style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.primary),
-                    ),
-
-                  ],
-                ),
+              _DynamicLoadingIndicator(
+                stage: _currentStage,
+                destination: _destination,
               ),
 
             // Composer Inferiore
             Container(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: colorScheme.surface,
-                border: Border(top: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.3))),
+                border: Border(
+                  top: BorderSide(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                  ),
+                ),
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _inputController,
-                      minLines: 1,
-                      maxLines: 4,
                       decoration: InputDecoration(
-                        hintText: 'Scrivi qui le tue idee o domande...',
+                        hintText: 'Scrivi un messaggio a Iter...',
+                        hintStyle: TextStyle(color: colorScheme.outline, fontSize: 14),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                           borderSide: BorderSide(color: colorScheme.outlineVariant),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerHigh,
                       ),
                       onSubmitted: (v) => _sendMessage(v),
                     ),
@@ -475,7 +742,6 @@ class _TripChatScreenState extends State<TripChatScreen> {
                   IconButton.filled(
                     onPressed: () => _sendMessage(_inputController.text),
                     icon: const Icon(Icons.arrow_upward_rounded),
-                    tooltip: 'Invia',
                   ),
                 ],
               ),
@@ -491,38 +757,63 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
     required this.isUser,
-    required this.onOpenSnapshot,
-    this.onOptionSaved,
-    this.onSelectSuggestion,
-    this.onAttractionsConfirmed,
-    this.onStaySelected,
+    required this.onOpenItinerary,
+    this.showDestinationHero = true,
+    this.showFlightCard = true,
+    this.showAttractionsCard = true,
+    this.showStayCard = true,
+    this.showItineraryCard = true,
+    this.interactiveOptions,
+    this.isFlightSaved = false,
+    this.selectedFlight,
+    this.areAttractionsConfirmed = false,
+    this.selectedAttractionsCount = 0,
+    this.selectedStay,
+    this.onSelectOption,
+    this.onOpenFlightPicker,
+    this.onOpenAttractionsPicker,
+    this.onOpenStayPicker,
   });
 
   final ChatMessage message;
   final bool isUser;
-  final VoidCallback onOpenSnapshot;
-  final void Function({
-    FlightRealOffer? outbound,
-    FlightRealOffer? returnOffer,
-    FlightRealOffer? combined,
-    required int totalPrice,
-    required String bookingUrl,
-  })? onOptionSaved;
-  final ValueChanged<String>? onSelectSuggestion;
-  final ValueChanged<List<AttractionItem>>? onAttractionsConfirmed;
-  final ValueChanged<StayOffer>? onStaySelected;
+  final bool showDestinationHero;
+  final bool showFlightCard;
+  final bool showAttractionsCard;
+  final bool showStayCard;
+  final bool showItineraryCard;
+  final List<String>? interactiveOptions;
+  final bool isFlightSaved;
+  final FlightRealOffer? selectedFlight;
+  final bool areAttractionsConfirmed;
+  final int selectedAttractionsCount;
+  final StayOffer? selectedStay;
+  final ValueChanged<String>? onSelectOption;
+  final ValueChanged<FlightAdvice>? onOpenFlightPicker;
+  final ValueChanged<List<AttractionItem>>? onOpenAttractionsPicker;
+  final ValueChanged<GeminiTripPlanDraft>? onOpenStayPicker;
+  final VoidCallback onOpenItinerary;
 
   @override
   Widget build(BuildContext context) {
-
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
         crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
+          // 1. Scheda visiva della destinazione (mostrata per prima come hero card)
+          if (showDestinationHero && message.planDraft?.destinationVisual != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: DestinationHeroCard(
+                visualData: message.planDraft!.destinationVisual!,
+                onExploreAttractions: () => onOpenAttractionsPicker?.call(message.planDraft!.attractions),
+              ),
+            ),
+
+          // 2. Bolla testuale del messaggio
           Container(
             constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.82),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -545,106 +836,260 @@ class _MessageBubble extends StatelessWidget {
             ),
           ),
 
-          // Blocchi interattivi in base al contenuto (senza passi forzati)
+          // 3. Action Cards Compatte e Snelle (al posto dei vecchi muri di card invasive!)
           if (message.planDraft != null) ...[
             const SizedBox(height: 8),
 
-            // Card Visiva della Destinazione (Zero token Gemini)
-            if (message.planDraft!.destinationVisual != null)
-              DestinationHeroCard(
-                visualData: message.planDraft!.destinationVisual!,
-                onExploreAttractions: () => onSelectSuggestion?.call('Cosa vedere a ${message.planDraft!.destination}?'),
+            // Action Card Volo (UNICA e in-place!)
+            if (showFlightCard && message.planDraft!.flight != null)
+              _ActionPillCard(
+                icon: Icons.flight_takeoff_rounded,
+                iconColor: isFlightSaved ? Colors.green : Colors.blue,
+                title: isFlightSaved
+                    ? 'Volo Selezionato: ${message.planDraft!.destination}'
+                    : 'Opzioni Volo per ${message.planDraft!.destination}',
+                subtitle: isFlightSaved
+                    ? '✓ ${selectedFlight?.airline ?? 'Volo confermato'} • ${selectedFlight?.price ?? ''}€ a/r'
+                    : 'Tariffe analizzate • Clicca per vedere le opzioni',
+                actionLabel: isFlightSaved ? 'Modifica' : 'Scegli volo',
+                onTap: () => onOpenFlightPicker?.call(message.planDraft!.flight!),
               ),
 
-            // Profilazione rapida se siamo in fase esplorativa o inquadramento trasporti
-            if (message.planDraft!.stage == TripPlanningStage.inspiration ||
-                (message.planDraft!.stage == TripPlanningStage.transport && message.planDraft!.flight == null))
-              TripProfilingCard(
-                destination: message.planDraft!.destination.isNotEmpty ? message.planDraft!.destination : 'la tua meta ideale',
-                onProfileConfirmed: (prompt) => onSelectSuggestion?.call(prompt),
+            // Action Card Monumenti & Tappe (UNICA!)
+            if (showAttractionsCard && message.planDraft!.attractions.isNotEmpty)
+              _ActionPillCard(
+                icon: Icons.account_balance_rounded,
+                iconColor: areAttractionsConfirmed ? Colors.green : Colors.purple,
+                title: areAttractionsConfirmed
+                    ? 'Tappe Salvate: ${message.planDraft!.destination}'
+                    : 'Tappe & Monumenti a ${message.planDraft!.destination}',
+                subtitle: areAttractionsConfirmed
+                    ? '✓ $selectedAttractionsCount tappe salvate nel viaggio'
+                    : '${message.planDraft!.attractions.length} tappe con foto reali disponibili',
+                actionLabel: areAttractionsConfirmed ? 'Modifica' : 'Seleziona tappe',
+                onTap: () => onOpenAttractionsPicker?.call(message.planDraft!.attractions),
               ),
 
-
-            // Volo: FlightSelectorCard con scelta andata/ritorno
-            if (message.planDraft!.flight != null)
-              FlightSelectorCard(
-                flight: message.planDraft!.flight!,
-                onOptionSaved: onOptionSaved,
+            // Action Card Alloggio & Zone (UNICA!)
+            if (showStayCard && (message.planDraft!.stayOffers.isNotEmpty || message.planDraft!.neighborhoods.isNotEmpty))
+              _ActionPillCard(
+                icon: Icons.hotel_rounded,
+                iconColor: selectedStay != null ? Colors.green : Colors.teal,
+                title: selectedStay != null ? 'Alloggio Prenotato' : 'Alloggi & Zone Consigliate',
+                subtitle: selectedStay != null
+                    ? '✓ ${selectedStay!.name} (${selectedStay!.neighborhood})'
+                    : 'Analisi quartieri e hotel con simulazione Vio.com',
+                actionLabel: selectedStay != null ? 'Modifica' : 'Scegli hotel',
+                onTap: () => onOpenStayPicker?.call(message.planDraft!),
               ),
 
-            // Attrazioni / Monumenti a Swipe stile Tinder con Pace Calculator (solo dopo i trasporti)
-            if (message.planDraft!.stage == TripPlanningStage.attractions &&
-                message.planDraft!.attractions.isNotEmpty)
-              MonumentSwipeDeck(
-
-                destination: message.planDraft!.destination,
-                attractions: message.planDraft!.attractions,
-                durationDays: message.planDraft!.durationDays,
-                onConfirmed: (selected) => onAttractionsConfirmed?.call(selected),
+            // Action Card Itinerario Completo Pronto
+            if (showItineraryCard && message.planDraft!.days.isNotEmpty)
+              _ActionPillCard(
+                icon: Icons.map_rounded,
+                iconColor: Colors.deepOrange,
+                isHighlight: true,
+                title: 'Itinerario ${message.planDraft!.days.length} Giorni Pronto!',
+                subtitle: 'Guida completa giorno per giorno e mappa OpenStreetMap',
+                actionLabel: 'Apri Itinerario & Mappa',
+                onTap: onOpenItinerary,
               ),
+          ],
 
-            // Alloggi e hotel veri nella zona baricentrica scelta (senza uscire dall'app)
-            if (message.planDraft!.stayOffers.isNotEmpty)
-              StaySelectorCard(
-                destination: message.planDraft!.destination,
-                stays: message.planDraft!.stayOffers,
-                selectedStay: message.planDraft!.selectedStay,
-                centroidRecommendation: const CentroidSolver().solveOptimalArea(
-                  destination: message.planDraft!.destination,
-                  chosenAttractions: message.planDraft!.attractions,
+          // 4. Opzioni interattive a chip dinamiche (mostrate in fondo sotto il messaggio/azioni)
+          if (interactiveOptions != null && interactiveOptions!.isNotEmpty)
+            InteractiveQuestionOptions(
+              options: interactiveOptions!,
+              onSelect: (opt) => onSelectOption?.call(opt),
+            ),
+        ],
+      ),
+    );
+  }
+
+}
+
+
+class _ActionPillCard extends StatelessWidget {
+  const _ActionPillCard({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.actionLabel,
+    required this.onTap,
+    this.isHighlight = false,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final String actionLabel;
+  final VoidCallback onTap;
+  final bool isHighlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.90),
+      decoration: BoxDecoration(
+        color: isHighlight
+            ? colorScheme.primaryContainer.withValues(alpha: 0.4)
+            : colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isHighlight ? colorScheme.primary : colorScheme.outlineVariant.withValues(alpha: 0.35),
+          width: isHighlight ? 1.5 : 1,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                onSelectStay: (stay) => onStaySelected?.call(stay),
-                onSkipStay: () => onSelectSuggestion?.call(
-                  'Proseguiamo con l\'itinerario giorno per giorno, l\'alloggio lo sceglierò più tardi.',
-                ),
-              )
-            else if (message.planDraft!.neighborhoods.isNotEmpty)
-              StayNeighborhoodCard(neighborhoods: message.planDraft!.neighborhoods),
-
-            // Itinerario: Mappa Rotta Animata, Programma Giornaliero & Preventivo Trasparente
-            if (message.planDraft!.days.isNotEmpty) ...[
-              AnimatedRouteMapCard(
-                destination: message.planDraft!.destination,
-                day: message.planDraft!.days.first,
+                child: Icon(icon, color: iconColor, size: 20),
               ),
-              DailyPlanCard(days: message.planDraft!.days),
-              const SizedBox(height: 8),
-              CostBreakdownCard(
-                destination: message.planDraft!.destination,
-                durationDays: message.planDraft!.durationDays,
-                plan: message.planDraft!,
-                onOpenSnapshot: onOpenSnapshot,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: isHighlight ? colorScheme.primary : colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isHighlight ? colorScheme.primary : colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      actionLabel,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: isHighlight ? colorScheme.onPrimary : colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 11,
+                      color: isHighlight ? colorScheme.onPrimary : colorScheme.onSurface,
+                    ),
+                  ],
+                ),
               ),
             ],
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
+class _DynamicLoadingIndicator extends StatefulWidget {
+  const _DynamicLoadingIndicator({
+    required this.stage,
+    required this.destination,
+  });
 
-          // Suggerimenti rapidi di dialogo
-          if (!isUser &&
-              message.planDraft?.suggestedReplies != null &&
-              message.planDraft!.suggestedReplies.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: message.planDraft!.suggestedReplies.map((reply) {
-                return ActionChip(
-                  label: Text(
-                    reply,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  backgroundColor: colorScheme.primaryContainer.withValues(alpha: 0.35),
-                  side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.25)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  onPressed: () => onSelectSuggestion?.call(reply),
-                );
-              }).toList(),
+  final TripPlanningStage stage;
+  final String destination;
+
+  @override
+  State<_DynamicLoadingIndicator> createState() => _DynamicLoadingIndicatorState();
+}
+
+class _DynamicLoadingIndicatorState extends State<_DynamicLoadingIndicator> {
+  int _tipIndex = 0;
+  Timer? _timer;
+
+  static const _tips = [
+    'Confronto rotte aeree e tariffe in tempo reale...',
+    'Analisi dei quartieri baricentrici per muoversi a piedi...',
+    'Calcolo tempi ottimali di visita tra i monumenti...',
+    'Composizione dell\'itinerario giorno per giorno...',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 2200), (timer) {
+      if (mounted) {
+        setState(() {
+          _tipIndex = (_tipIndex + 1) % _tips.length;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: Text(
+                _tips[_tipIndex],
+                key: ValueKey<int>(_tipIndex),
+                style: TextStyle(
+                  color: colorScheme.primary,
+                  fontSize: 13,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
             ),
-          ],
+          ),
         ],
       ),
     );

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../ai/gemini_models.dart';
 import 'google_flights_url_builder.dart';
@@ -30,6 +31,7 @@ class FastFlightsService {
     DateTime? departureDate,
     DateTime? returnDate,
     String? textWithDates,
+    int? defaultMonth,
     bool directOnly = false,
   }) async {
     final httpClient = client ?? http.Client();
@@ -38,7 +40,10 @@ class FastFlightsService {
     DateTime? ret = returnDate;
 
     if (dep == null && textWithDates != null) {
-      final (d, r) = GoogleFlightsUrlBuilder.extractDatesFromText(textWithDates);
+      final (d, r) = GoogleFlightsUrlBuilder.extractDatesFromText(
+        textWithDates,
+        defaultMonth: defaultMonth,
+      );
       dep = d;
       ret = r;
     }
@@ -61,9 +66,11 @@ class FastFlightsService {
     final origIata = GoogleFlightsUrlBuilder.resolveIata(originCity, fallback: 'ROM');
     final destIata = GoogleFlightsUrlBuilder.resolveIata(destination, fallback: 'MAD');
 
+    final effectiveBaseUrl = _resolveBaseUrl(baseUrl);
     final endpoint = Uri.parse(
-      '$baseUrl/search?origin=$origIata&destination=$destIata&departureDate=$depStr&returnDate=$retStr&directOnly=$directOnly',
+      '$effectiveBaseUrl/search?origin=$origIata&destination=$destIata&departureDate=$depStr&returnDate=$retStr&directOnly=$directOnly',
     );
+
 
     try {
       final res = await httpClient.get(endpoint).timeout(const Duration(seconds: 10));
@@ -261,6 +268,22 @@ class FastFlightsService {
     return (offers: defaultOffers, outbound: defaultOffers, returns: defaultOffers);
   }
 
+
+  static String _resolveBaseUrl(String currentBaseUrl) {
+    const envUrl = String.fromEnvironment('FAST_FLIGHTS_URL');
+    if (envUrl.isNotEmpty) return envUrl;
+    if (kIsWeb) {
+      if (currentBaseUrl.isNotEmpty && currentBaseUrl != 'http://127.0.0.1:5050') {
+        return currentBaseUrl;
+      }
+      final origin = Uri.base.origin;
+      if (origin.contains('localhost') || origin.contains('127.0.0.1')) {
+        return 'http://127.0.0.1:5050';
+      }
+      return origin;
+    }
+    return currentBaseUrl;
+  }
 
   static String _formatDate(DateTime dt) {
     final y = dt.year.toString().padLeft(4, '0');

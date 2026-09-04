@@ -10,6 +10,7 @@
 .pub/
 .pub-cache/
 build/
+public/
 coverage/
 
 # Legacy web artifacts from the pre-Flutter prototype
@@ -57,3 +58,4 @@ android/captures/
 # Python bytecode (skill scripts)
 __pycache__/
 *.pyc
+.vercel

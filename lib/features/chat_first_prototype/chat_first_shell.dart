@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../chat/trip_chat_screen.dart';
@@ -167,13 +168,15 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
     BuildContext context, {
     String? destination,
     String? tripId,
+    String? initialPrompt,
   }) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => TripChatScreen(
-          initialPrompt: destination != null
-              ? 'Vorrei organizzare un viaggio a $destination'
-              : null,
+          initialPrompt: initialPrompt ??
+              (destination != null
+                  ? 'Vorrei organizzare un viaggio a $destination'
+                  : null),
           initialTripId: tripId,
           onOpenSnapshot: (trip) => _openSnapshotFromTrip(context, trip),
         ),
@@ -181,14 +184,22 @@ class _ChatFirstShellState extends State<ChatFirstShell> {
     );
   }
 
-  void _openSnapshotFromTrip(BuildContext context, TripEntity trip) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => TripDetailsScreen(trip: trip),
+  void _openSnapshotFromTrip(BuildContext context, TripEntity trip) async {
+    final prompt = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        builder: (_) => TripDetailsScreen(
+          trip: trip,
+          onContinueChat: (p) => Navigator.of(context).pop(p),
+        ),
       ),
     );
+    if (prompt != null && prompt.trim().isNotEmpty && context.mounted) {
+      _openTripChat(context, tripId: trip.id, initialPrompt: prompt.trim());
+    }
+
   }
 }
+
 
 class _ChatBottomNavigation extends StatelessWidget {
   const _ChatBottomNavigation({
@@ -203,10 +214,14 @@ class _ChatBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      minimum: const EdgeInsets.only(bottom: 12),
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    // Su Chrome mobile/web evitiamo margini artificiali eccessivi che sollevano la barra
+    final bottomSpacing = kIsWeb ? 4.0 : math.max(bottomInset, 6.0);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomSpacing),
       child: LayoutBuilder(
+
         builder: (context, constraints) {
           final width = math
               .min(360.0, math.max(0.0, constraints.maxWidth - 32))

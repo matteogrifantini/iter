@@ -15,19 +15,35 @@ class GoogleFlightsUrlBuilder {
     'torino': 'TRN',
     'palermo': 'PMO',
     'catania': 'CTA',
+    'messina': 'CTA',
+    'taormina': 'CTA',
+    'siracusa': 'CTA',
+    'trapani': 'TPS',
     'bari': 'BRI',
+    'brindisi': 'BDS',
+    'cagliari': 'CAG',
+    'olbia': 'OLB',
+    'alghero': 'AHO',
     'firenze': 'FLR',
     'verona': 'VRN',
     'pisa': 'PSA',
     'genova': 'GOA',
     'lisbona': 'LIS',
     'barcellona': 'BCN',
+
     'madrid': 'MAD',
     'siviglia': 'SVQ',
     'valencia': 'VLC',
     'parigi': 'CDG',
     'berlino': 'BER',
+    'monaco': 'MUC',
+    'monaco di baviera': 'MUC',
+    'munich': 'MUC',
+    'stoccarda': 'STR',
+    'stuttgart': 'STR',
     'amsterdam': 'AMS',
+
+
     'praga': 'PRG',
     'vienna': 'VIE',
     'londra': 'LHR',
@@ -39,7 +55,12 @@ class GoogleFlightsUrlBuilder {
     'oslo': 'OSL',
     'tokyo': 'NRT',
     'new york': 'JFK',
+    'tenerife': 'TFS',
+    'tenerife sud': 'TFS',
+    'tenerife nord': 'TFN',
+    'canarie': 'TFS',
   };
+
 
   static const Map<String, int> italianMonths = {
     'gennaio': 1,
@@ -146,8 +167,12 @@ class GoogleFlightsUrlBuilder {
   }
 
   /// Cerca di estrarre date di partenza e ritorno da frasi in linguaggio naturale
-  /// (es. "dal 5 al 10 dicembre", "prossimo weekend", "questo fine settimana", "05/12 - 10/12").
-  static (DateTime?, DateTime?) extractDatesFromText(String text, {int referenceYear = 2026}) {
+  /// (es. "dal 5 al 10 dicembre", "dall'11 al 19", "prossimo weekend", "05/12 - 10/12").
+  static (DateTime?, DateTime?) extractDatesFromText(
+    String text, {
+    int referenceYear = 2026,
+    int? defaultMonth,
+  }) {
     final lower = text.toLowerCase();
 
     // 1. Riconoscimento "prossimo weekend" o "questo weekend / fine settimana"
@@ -179,7 +204,7 @@ class GoogleFlightsUrlBuilder {
     }
 
     // 2. Pattern: "dal 5 al 10 dicembre" oppure "5-10 dicembre"
-    final regexRange = RegExp(r'(?:dal\s+)?(\d{1,2})\s*(?:al|-)\s*(\d{1,2})\s+([a-z]+)');
+    final regexRange = RegExp(r"(?:dal\s+|dall['’]\s*)?(\d{1,2})\s*(?:al|-)\s*(\d{1,2})\s+([a-z]+)");
     final matchRange = regexRange.firstMatch(lower);
     if (matchRange != null) {
       final startDay = int.tryParse(matchRange.group(1) ?? '');
@@ -196,6 +221,23 @@ class GoogleFlightsUrlBuilder {
         } catch (_) {}
       }
     }
+
+    // 2b. Pattern con solo giorni: "dall'11 al 19" o "11-19" con mese di contesto (es. dicembre)
+    final regexJustDays = RegExp(r"(?:dal\s+|dall['’]\s*)(\d{1,2})\s*(?:al|-)\s*(\d{1,2})\b");
+    final matchJustDays = regexJustDays.firstMatch(lower);
+    if (matchJustDays != null && defaultMonth != null) {
+      final startDay = int.tryParse(matchJustDays.group(1) ?? '');
+      final endDay = int.tryParse(matchJustDays.group(2) ?? '');
+      if (startDay != null && endDay != null) {
+        try {
+          return (
+            DateTime(referenceYear, defaultMonth, startDay),
+            DateTime(referenceYear, defaultMonth, endDay),
+          );
+        } catch (_) {}
+      }
+    }
+
 
     // 3. Pattern con slash: "05/12 - 10/12"
     final regexSlash = RegExp(r'(\d{1,2})/(\d{1,2})(?:/(\d{4}))?\s*(?:al|-)\s*(\d{1,2})/(\d{1,2})(?:/(\d{4}))?');

@@ -37,7 +37,35 @@ class TripMapSheet extends StatefulWidget {
     'douro': (41.1396, -8.6094),
     'gaia': (41.1350, -8.6140),
 
+    // New York
+    'statua': (40.6892, -74.0445),
+    'central park': (40.7851, -73.9683),
+    'empire': (40.7484, -73.9857),
+    'rockefeller': (40.7587, -73.9787),
+    'brooklyn': (40.7061, -73.9969),
+    'metropolitan': (40.7794, -73.9632),
+    'the met': (40.7794, -73.9632),
+    'high line': (40.7480, -74.0048),
+    'times square': (40.7580, -73.9855),
+    'dumbo': (40.7033, -73.9884),
+
+    // Tenerife
+    'teide': (28.2723, -16.6425),
+    'masca': (28.3056, -16.8403),
+    'gigantes': (28.2439, -16.8419),
+    'los gigantes': (28.2439, -16.8419),
+    'adeje': (28.0772, -16.7314),
+    'costa adeje': (28.0772, -16.7314),
+    'americas': (28.0583, -16.7297),
+    'puerto de la cruz': (28.4162, -16.5447),
+    'la laguna': (28.4872, -16.3159),
+    'santa cruz': (28.4636, -16.2518),
+    'teresitas': (28.5086, -16.1856),
+    'anaga': (28.5528, -16.1958),
+
     // Roma
+
+
     'colosseo': (41.8902, 12.4922),
     'borghese': (41.9142, 12.4922),
     'trastevere': (41.8883, 12.4704),
@@ -61,6 +89,19 @@ class TripMapSheet extends StatefulWidget {
       final title = placeTitles[i];
       final titleLower = title.toLowerCase();
       var coord = const (47.4979, 19.0402);
+      final destLower = destination.toLowerCase();
+      if (destLower.contains('tenerife') || destLower.contains('canarie')) {
+        coord = const (28.2916, -16.6291);
+      } else if (destLower.contains('new york') || destLower.contains('nyc')) {
+        coord = const (40.7128, -74.0060);
+      } else if (destLower.contains('roma')) {
+        coord = const (41.9028, 12.4964);
+      } else if (destLower.contains('porto')) {
+        coord = const (41.1579, -8.6291);
+      } else if (destLower.contains('lisbona')) {
+        coord = const (38.7223, -9.1393);
+      }
+
 
       for (final entry in _knownCoordinates.entries) {
         if (titleLower.contains(entry.key)) {

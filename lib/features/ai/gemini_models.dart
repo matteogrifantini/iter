@@ -438,3 +438,91 @@ class GeminiTripPlanDraft {
     if (selectedStay != null) 'selectedStay': selectedStay!.name,
   };
 }
+
+@immutable
+class TripPlanningContext {
+  const TripPlanningContext({
+    this.destination,
+    this.travelers,
+    this.tripStyle,
+    this.month,
+    this.dates,
+    this.durationDays,
+    this.originCity,
+    this.budget,
+    this.selectedAttractions = const [],
+    this.selectedFlight,
+    this.selectedStay,
+    this.stage = TripPlanningStage.transport,
+  });
+
+  final String? destination;
+  final String? travelers; // 'coppia', 'solo', 'amici', 'famiglia'
+  final String? tripStyle; // 'cultura', 'relax', 'vita serale', 'avventura'
+  final String? month; // 'dicembre'
+  final String? dates; // 'dall\'11 al 19'
+  final int? durationDays;
+  final String? originCity;
+  final String? budget;
+  final List<AttractionItem> selectedAttractions;
+  final FlightRealOffer? selectedFlight;
+  final StayOffer? selectedStay;
+  final TripPlanningStage stage;
+
+  static const Map<String, int> _monthMap = {
+    'gennaio': 1, 'febbraio': 2, 'marzo': 3, 'aprile': 4,
+    'maggio': 5, 'giugno': 6, 'luglio': 7, 'agosto': 8,
+    'settembre': 9, 'ottobre': 10, 'novembre': 11, 'dicembre': 12,
+  };
+
+  int? get monthIndex {
+    if (month == null) return null;
+    return _monthMap[month!.toLowerCase()];
+  }
+
+
+  TripPlanningContext copyWith({
+    String? destination,
+    String? travelers,
+    String? tripStyle,
+    String? month,
+    String? dates,
+    int? durationDays,
+    String? originCity,
+    String? budget,
+    List<AttractionItem>? selectedAttractions,
+    FlightRealOffer? selectedFlight,
+    StayOffer? selectedStay,
+    TripPlanningStage? stage,
+  }) {
+    return TripPlanningContext(
+      destination: destination ?? this.destination,
+      travelers: travelers ?? this.travelers,
+      tripStyle: tripStyle ?? this.tripStyle,
+      month: month ?? this.month,
+      dates: dates ?? this.dates,
+      durationDays: durationDays ?? this.durationDays,
+      originCity: originCity ?? this.originCity,
+      budget: budget ?? this.budget,
+      selectedAttractions: selectedAttractions ?? this.selectedAttractions,
+      selectedFlight: selectedFlight ?? this.selectedFlight,
+      selectedStay: selectedStay ?? this.selectedStay,
+      stage: stage ?? this.stage,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    if (destination != null) 'destination': destination,
+    if (travelers != null) 'travelers': travelers,
+    if (tripStyle != null) 'tripStyle': tripStyle,
+    if (month != null) 'month': month,
+    if (dates != null) 'dates': dates,
+    if (durationDays != null) 'durationDays': durationDays,
+    if (originCity != null) 'originCity': originCity,
+    if (budget != null) 'budget': budget,
+    'selectedAttractionsCount': selectedAttractions.length,
+    if (selectedFlight != null) 'selectedFlight': selectedFlight!.airline,
+    if (selectedStay != null) 'selectedStay': selectedStay!.name,
+    'stage': stage.name,
+  };
+}

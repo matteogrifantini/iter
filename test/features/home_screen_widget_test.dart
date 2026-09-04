@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:iter/features/home/home_screen.dart';
+import 'package:iter/features/home/widgets/home_trips_section.dart';
 import 'package:iter/features/trips/trip_entity.dart';
-import 'package:iter/features/trips/trip_repository.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -12,7 +12,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('HomeScreen NON contiene TextField chat ed espone banner e sezioni', (tester) async {
+  testWidgets('HomeScreen NON contiene TextField chat ed espone banner e sezioni snelle', (tester) async {
     tester.view.physicalSize = const Size(800, 1600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -22,7 +22,6 @@ void main() {
 
     var openedChat = false;
     String? selectedDestination;
-
 
     await tester.pumpWidget(
       MaterialApp(
@@ -49,15 +48,17 @@ void main() {
     expect(openedChat, isTrue);
     expect(selectedDestination, isNull);
 
-    // Verificare la presenza delle sezioni
-    expect(find.text('Le tue pianificazioni'), findsOneWidget);
+    // Verificare che Le tue pianificazioni sia rimosso dalla Home (come richiesto)
+    expect(find.text('Le tue pianificazioni'), findsNothing);
+
+    // Verificare la presenza delle sezioni multimediali
+    expect(find.text('Momenti & Atmosfere'), findsOneWidget);
     expect(find.text('Consigli & Offerte per te'), findsOneWidget);
     expect(find.text('Scopri nuovi posti'), findsOneWidget);
   });
 
-  testWidgets('HomeScreen mostra le card dei viaggi se presenti nel repository', (tester) async {
-    final repo = TripRepository();
-    await repo.saveTrip(
+  testWidgets('HomeTripsSection mostra le card dei viaggi se presenti', (tester) async {
+    final trips = [
       TripEntity(
         id: 'trip-99',
         destination: 'Siviglia',
@@ -66,20 +67,19 @@ void main() {
         coverImageUrl: '',
         createdAt: DateTime(2026, 9, 2),
       ),
-    );
+    ];
 
     String? openedTripId;
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: HomeScreen(
-            tripRepository: repo,
-            onOpenNewTripChat: ({destination}) {},
+          body: HomeTripsSection(
+            trips: trips,
+            onOpenNewTripChat: () {},
             onOpenTripDetails: (trip) {
               openedTripId = trip.id;
             },
-            onOpenProfile: () {},
           ),
         ),
       ),

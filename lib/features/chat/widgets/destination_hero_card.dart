@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import '../../places/visual_media_service.dart';
 import '../../places/destination_detail_sheet.dart';
 
+/// Redesigned Destination Hero Card for chat:
+/// - Vertical, sleek proportions (~220px height) like home reels.
+/// - Vibrant, clear photos (no muddy black overlays).
+/// - Swipeable photo carousel with smooth dot indicators.
+/// - Prominent, clean CTA pill "[ ℹ️ Scopri di più su Destination ]" opening DestinationDetailSheet.
 class DestinationHeroCard extends StatefulWidget {
   const DestinationHeroCard({
     super.key,
@@ -17,8 +22,14 @@ class DestinationHeroCard extends StatefulWidget {
 }
 
 class _DestinationHeroCardState extends State<DestinationHeroCard> {
-  final PageController _pageController = PageController();
+  late final PageController _pageController;
   int _currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
 
   @override
   void dispose() {
@@ -26,159 +37,64 @@ class _DestinationHeroCardState extends State<DestinationHeroCard> {
     super.dispose();
   }
 
+  void _openDetails() {
+    DestinationDetailSheet.show(
+      context,
+      visualData: widget.visualData,
+      onStartPlanning: () {
+        widget.onExploreAttractions?.call();
+      },
+    );
+  }
+
+
+
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final images = widget.visualData.images;
+    final images = widget.visualData.images.isNotEmpty
+        ? widget.visualData.images
+        : ['https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&q=80'];
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.only(top: 4, bottom: 10),
+      height: 220,
       decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: 0.14),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Visual Carousel (toccabile per aprire la scheda a tutto schermo)
-          InkWell(
-            onTap: () => DestinationDetailSheet.show(
-              context,
-              visualData: widget.visualData,
-            ),
-            child: SStack(
-              images: images,
-              pageController: _pageController,
-              onPageChanged: (idx) => setState(() => _currentPage = idx),
-              currentPage: _currentPage,
-              destination: widget.visualData.destination,
-            ),
-          ),
-
-
-          // Content & Insights
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.visualData.tagline,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                    height: 1.35,
-                    color: colorScheme.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Pillole Informative Veloci (Clima, Mobilità, Prezzo)
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    _PillBadge(
-                      icon: Icons.wb_sunny_outlined,
-                      label: widget.visualData.climatePill,
-                      color: Colors.orange.shade700,
-                      bg: Colors.orange.withValues(alpha: 0.12),
-                    ),
-                    _PillBadge(
-                      icon: Icons.directions_subway_outlined,
-                      label: widget.visualData.transportPill,
-                      color: Colors.blue.shade700,
-                      bg: Colors.blue.withValues(alpha: 0.12),
-                    ),
-                    _PillBadge(
-                      icon: Icons.confirmation_number_outlined,
-                      label: widget.visualData.flightAdvicePill,
-                      color: Colors.teal.shade700,
-                      bg: Colors.teal.withValues(alpha: 0.12),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.tonalIcon(
-                    onPressed: () => DestinationDetailSheet.show(
-                      context,
-                      visualData: widget.visualData,
-                    ),
-                    style: FilledButton.styleFrom(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    icon: const Icon(Icons.info_outline_rounded, size: 18),
-                    label: Text(
-                      'Scopri ${widget.visualData.destination} · Info, periodo & costi',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                    ),
-                  ),
-                ),
-
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class SStack extends StatelessWidget {
-  const SStack({
-    super.key,
-    required this.images,
-    required this.pageController,
-    required this.onPageChanged,
-    required this.currentPage,
-    required this.destination,
-  });
-
-  final List<String> images;
-  final PageController pageController;
-  final ValueChanged<int> onPageChanged;
-  final int currentPage;
-  final String destination;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-
-      height: 200,
-      width: double.infinity,
       child: Stack(
+        fit: StackFit.expand,
         children: [
+          // 1. Carosello Foto ad alta definizione
           PageView.builder(
-            controller: pageController,
-            onPageChanged: onPageChanged,
+            controller: _pageController,
             itemCount: images.length,
+            onPageChanged: (page) => setState(() => _currentPage = page),
             itemBuilder: (context, index) {
               return Image.network(
                 images[index],
                 fit: BoxFit.cover,
-                width: double.infinity,
                 errorBuilder: (context, error, stackTrace) => Container(
-                  color: Colors.grey.shade300,
-                  child: const Center(child: Icon(Icons.image_not_supported_outlined, size: 40)),
+                  color: colorScheme.primaryContainer,
+                  child: Center(
+                    child: Icon(Icons.landscape_rounded, color: colorScheme.primary, size: 48),
+                  ),
                 ),
               );
             },
           ),
 
-          // Gradient overlay
+          // 2. Scrim sfumato trasparente SOLO in basso (nessun nero fango totale!)
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -186,87 +102,148 @@ class SStack extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withValues(alpha: 0.1),
-                    Colors.black.withValues(alpha: 0.65),
+                    Colors.black.withValues(alpha: 0.15),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.4),
+                    Colors.black.withValues(alpha: 0.85),
                   ],
+                  stops: const [0.0, 0.35, 0.65, 1.0],
                 ),
               ),
             ),
           ),
 
-          // Destination title on photo
+          // 3. Indicatore dot carousel in alto a destra
+          if (images.length > 1)
+            Positioned(
+              top: 14,
+              right: 14,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(images.length, (idx) {
+                    final isSel = idx == _currentPage;
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                      width: isSel ? 14 : 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: isSel ? Colors.white : Colors.white54,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ),
+
+          // 4. Badge Destinazione & Tagline in alto a sinistra
           Positioned(
-            bottom: 12,
-            left: 16,
-            child: Text(
-              destination,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                shadows: [Shadow(color: Colors.black54, blurRadius: 8)],
+            top: 14,
+            left: 14,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 0.8),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.photo_library_outlined, color: Colors.white, size: 13),
+                  SizedBox(width: 5),
+                  Text(
+                    'Scorri foto',
+                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ],
               ),
             ),
           ),
 
-          // Dots Indicator
-          if (images.length > 1)
-            Positioned(
-              bottom: 14,
-              right: 16,
-              child: Row(
-                children: List.generate(images.length, (idx) {
-                  final isActive = idx == currentPage;
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
-                    width: isActive ? 16 : 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: isActive ? Colors.white : Colors.white54,
-                      borderRadius: BorderRadius.circular(3),
+          // 5. Contenuto Inferiore: Destinazione, Clima e CTA "Scopri di più"
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 14,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.visualData.destination,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                    shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  widget.visualData.climatePill,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: _openDetails,
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.92),
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.15),
+                                blurRadius: 6,
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.info_outline_rounded, size: 15, color: colorScheme.primary),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Scopri di più su ${widget.visualData.destination}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: colorScheme.primary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(Icons.arrow_forward_ios_rounded, size: 11, color: colorScheme.primary),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
-                  );
-                }),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PillBadge extends StatelessWidget {
-  const _PillBadge({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.bg,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-  final Color bg;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: color,
+                  ],
+                ),
+              ],
             ),
           ),
         ],

@@ -34,8 +34,9 @@ void main() {
     expect(find.text('Organizza un nuovo viaggio'), findsOneWidget);
 
 
-    expect(find.text('Le tue pianificazioni'), findsOneWidget);
+    expect(find.text('Le tue pianificazioni'), findsNothing);
     expect(find.text('Consigli & Offerte per te'), findsOneWidget);
+
     expect(find.text('Scopri nuovi posti'), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
 
@@ -62,8 +63,9 @@ void main() {
 
     // Ora siamo nella TripChatScreen a schermo intero con composer dedicato
     expect(find.text('Organizzazione viaggio'), findsOneWidget);
-    expect(find.text('Scrivi qui le tue idee o domande...'), findsOneWidget);
+    expect(find.text('Scrivi un messaggio a Iter...'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
+
   });
 }
 

@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 import json
 import re
+import traceback
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
-from primp import Client
-from fast_flights import FlightQuery, Passengers, create_query
-from fast_flights.parser import parse
 
-PORT = 5050
+IMPORT_ERROR = None
+try:
+    from primp import Client
+    from fast_flights import FlightQuery, Passengers, create_query
+    from fast_flights.parser import parse
+except Exception as e:
+    IMPORT_ERROR = traceback.format_exc()
+
 
 CITY_TO_IATA = {
     'budapest': 'BUD',
@@ -37,7 +42,6 @@ CITY_TO_IATA = {
     'olbia': 'OLB',
     'alghero': 'AHO',
     'lisbona': 'LIS',
-
     'barcellona': 'BCN',
     'madrid': 'MAD',
     'siviglia': 'SVQ',
@@ -50,12 +54,10 @@ CITY_TO_IATA = {
     'stoccarda': 'STR',
     'stuttgart': 'STR',
     'amsterdam': 'AMS',
-
     'praga': 'PRG',
     'vienna': 'VIE',
     'londra': 'LON',
 }
-
 
 def resolve_iata(name, fallback='ROM'):
     if not name:
@@ -87,9 +89,6 @@ def _query_google(flights_query, is_round_trip):
     return parsed, tfs
 
 def _map_offers(parsed, orig_iata, dest_iata, dep_date, ret_date, google_url, direct_only=False):
-
-    # Se ci sono voli diretti nella ricerca, diamo sempre priorità assoluta ai diretti
-    # ed escludiamo quelli con scalo (salvo se non esistono affatto voli diretti)
     has_direct = any(len(f.flights) == 1 for f in parsed)
 
     offers = []
@@ -98,7 +97,6 @@ def _map_offers(parsed, orig_iata, dest_iata, dep_date, ret_date, google_url, di
         stops_count = len(f.flights) - 1
         is_direct = stops_count == 0
 
-        # Escludi i voli con scalo se richiesto o se esistono voli diretti per la tratta
         if (direct_only or has_direct) and not is_direct:
             continue
 
@@ -126,11 +124,9 @@ def _map_offers(parsed, orig_iata, dest_iata, dep_date, ret_date, google_url, di
             "bookingUrl": google_url,
         })
     offers.sort(key=lambda x: (not x["isDirect"], x["price"]))
-    # Mostra al massimo 4 opzioni selezionate e più economiche
     offers = offers[:4]
     if offers:
         offers[0]["badge"] = "Miglior prezzo"
-        # Se un'altra opzione è più veloce, assegna badge Più rapido
         fastest = min(offers, key=lambda x: x["durationMinutes"])
         if fastest != offers[0] and fastest["durationMinutes"] <= offers[0]["durationMinutes"] - 15:
             fastest["badge"] = "Più rapido"
@@ -163,13 +159,11 @@ def search_real_flights(origin_city, dest_city, dep_date, ret_date=None, direct_
         parsed_ret, tfs_ret = _query_google([FlightQuery(date=ret_date, from_airport=dest_iata, to_airport=orig_iata)], is_round_trip=False)
         return_offers = _map_offers(parsed_ret, dest_iata, orig_iata, ret_date, None, google_url, direct_only=direct_only)
 
-    # Calcolo valutazione prezzo coerente con le opzioni visualizzate
     min_out = outbound_offers[0]["price"] if outbound_offers else 0
     min_ret = return_offers[0]["price"] if return_offers else 0
     combo_sum = (min_out + min_ret) if (min_out > 0 and min_ret > 0) else 0
     min_round = combined_offers[0]["price"] if combined_offers else 0
 
-    # Determina il prezzo di riferimento per il banner
     if min_round > 0 and (combo_sum == 0 or min_round <= combo_sum):
         min_p = min_round
         if combo_sum > 0 and combo_sum != min_round:
@@ -209,8 +203,6 @@ def search_real_flights(origin_city, dest_city, dep_date, ret_date=None, direct_
         'MUC': 'Monaco di Baviera (MUC)',
         'STR': 'Stoccarda (STR)',
         'AMS': 'Amsterdam (AMS)',
-
-
         'PRG': 'Praga (PRG)',
         'VIE': 'Vienna (VIE)',
         'LHR': 'Londra (LHR)',
@@ -231,8 +223,6 @@ def search_real_flights(origin_city, dest_city, dep_date, ret_date=None, direct_
         price_eval = "nella media"
         price_adv = "Tariffe monitorate in tempo reale su Google Flights."
 
-
-
     return {
         "success": True,
         "origin": orig_iata,
@@ -248,8 +238,7 @@ def search_real_flights(origin_city, dest_city, dep_date, ret_date=None, direct_
         "priceAdvice": price_adv,
     }
 
-
-class FlightRequestHandler(BaseHTTPRequestHandler):
+class handler(BaseHTTPRequestHandler):
     def _send_cors(self):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -261,49 +250,52 @@ class FlightRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        if IMPORT_ERROR:
+            self.send_response(500)
+            self._send_cors()
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(f"Vercel Python Import Error:\n{IMPORT_ERROR}".encode('utf-8'))
+            return
+
         parsed_url = urlparse(self.path)
-        if parsed_url.path == '/search':
-            qs = parse_qs(parsed_url.query)
-            origin = qs.get('origin', ['Roma'])[0]
-            dest = qs.get('destination', ['Budapest'])[0]
-            dep = qs.get('departureDate', ['2026-12-05'])[0]
-            ret = qs.get('returnDate', [None])[0]
-            if ret in ('null', '', 'None', 'undefined'):
-                ret = None
-            direct_only = qs.get('directOnly', ['false'])[0].lower() in ('true', '1', 'yes')
+        if 'health' in parsed_url.path:
 
-
-            try:
-                result = search_real_flights(origin, dest, dep, ret, direct_only=direct_only)
-                payload = json.dumps(result).encode('utf-8')
-                self.send_response(200)
-                self._send_cors()
-                self.send_header('Content-Type', 'application/json; charset=utf-8')
-                self.send_header('Content-Length', str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-            except Exception as e:
-                err_payload = json.dumps({"success": False, "error": str(e)}).encode('utf-8')
-                self.send_response(500)
-                self._send_cors()
-                self.send_header('Content-Type', 'application/json; charset=utf-8')
-                self.end_headers()
-                self.wfile.write(err_payload)
-        elif parsed_url.path == '/health':
             payload = b'{"status":"ok"}'
             self.send_response(200)
             self._send_cors()
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(payload)
-        else:
-            self.send_response(404)
-            self.end_headers()
+            return
 
-def run_server():
-    server = HTTPServer(('127.0.0.1', PORT), FlightRequestHandler)
-    print(f"Fast-flights server listening on http://127.0.0.1:{PORT}")
-    server.serve_forever()
+        qs = parse_qs(parsed_url.query)
+        origin = qs.get('origin', ['Roma'])[0]
+        dest = qs.get('destination', ['Budapest'])[0]
+        dep = qs.get('departureDate', ['2026-12-05'])[0]
+        ret = qs.get('returnDate', [None])[0]
+        if ret in ('null', '', 'None', 'undefined'):
+            ret = None
+        direct_only = qs.get('directOnly', ['false'])[0].lower() in ('true', '1', 'yes')
+
+        try:
+            result = search_real_flights(origin, dest, dep, ret, direct_only=direct_only)
+            payload = json.dumps(result).encode('utf-8')
+            self.send_response(200)
+            self._send_cors()
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Content-Length', str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+        except Exception as e:
+            err_payload = json.dumps({"success": False, "error": str(e)}).encode('utf-8')
+            self.send_response(500)
+            self._send_cors()
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(err_payload)
 
 if __name__ == '__main__':
-    run_server()
+    server = HTTPServer(('127.0.0.1', 5050), handler)
+    print("Fast-flights Vercel Handler listening on http://127.0.0.1:5050")
+    server.serve_forever()

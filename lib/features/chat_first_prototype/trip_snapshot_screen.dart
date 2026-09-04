@@ -69,12 +69,20 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
     super.dispose();
   }
 
+  TripSnapshot? get _currentSnapshot {
+    final hasThread = _controller.threads.any((t) => t.summary.id == _conversationId);
+    if (hasThread) {
+      return _controller.conversationOf(_conversationId).snapshot ?? widget.initialSnapshot;
+    }
+    return widget.initialSnapshot;
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: _controller,
       builder: (context, _) {
-        final snapshot = _controller.conversationOf(_conversationId).snapshot;
+        final snapshot = _currentSnapshot;
         if (snapshot == null) {
           return Scaffold(
             appBar: AppBar(title: const Text('Piano')),
@@ -83,6 +91,7 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
         }
         if (_selectedDay >= snapshot.days.length) _selectedDay = 0;
         final fixture = ChatFirstDemoData.operationalFixtureForSnapshot(
+
           snapshot,
         );
         final media = snapshot.destinationMedia ?? fixture?.media;
@@ -314,10 +323,7 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => PlaceReelScreen(
-          placeTitle: _controller
-              .conversationOf(_conversationId)
-              .snapshot!
-              .destinationTitle,
+          placeTitle: _currentSnapshot?.destinationTitle ?? '',
           media: media,
         ),
       ),
@@ -333,10 +339,7 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
       builder: (sheetContext) => Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         child: _DestinationMediaRail(
-          destination: _controller
-              .conversationOf(_conversationId)
-              .snapshot!
-              .destinationTitle,
+          destination: _currentSnapshot?.destinationTitle ?? '',
           media: media,
           onOpenReel: (item) {
             Navigator.of(sheetContext).pop();
@@ -346,6 +349,7 @@ class _TripSnapshotScreenState extends State<TripSnapshotScreen> {
       ),
     );
   }
+
 
   Future<void> _openPlacePicker({
     required TripSnapshot snapshot,

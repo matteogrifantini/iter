@@ -30,10 +30,9 @@ class FlightSelectorCard extends StatefulWidget {
 }
 
 class _FlightSelectorCardState extends State<FlightSelectorCard> {
-  int _activeTabIndex = 0; // 0: Andata, 1: Ritorno, 2: Pacchetti
+  int _activeTabIndex = 0; // 0: Andata, 1: Ritorno
   FlightRealOffer? _selectedOutbound;
   FlightRealOffer? _selectedReturn;
-  FlightRealOffer? _selectedCombined;
   late bool _directOnly;
   bool _isSaved = false;
 
@@ -61,10 +60,6 @@ class _FlightSelectorCardState extends State<FlightSelectorCard> {
     if (rets.isNotEmpty && _selectedReturn == null) {
       _selectedReturn = rets.first;
     }
-    final combs = _filteredList(widget.flight.offers);
-    if (combs.isNotEmpty && _selectedCombined == null) {
-      _selectedCombined = combs.first;
-    }
   }
 
   List<FlightRealOffer> _filteredList(List<FlightRealOffer> list) {
@@ -73,17 +68,14 @@ class _FlightSelectorCardState extends State<FlightSelectorCard> {
   }
 
   int get _totalPrice {
-    if (_activeTabIndex == 2 && _selectedCombined != null) {
-      return _selectedCombined!.price;
-    }
     if (_selectedOutbound != null && _selectedReturn != null) {
       return _selectedOutbound!.price + _selectedReturn!.price;
     }
-    if (_selectedCombined != null) {
-      return _selectedCombined!.price;
-    }
+    if (_selectedOutbound != null) return _selectedOutbound!.price;
+    if (_selectedReturn != null) return _selectedReturn!.price;
     return 0;
   }
+
 
   Future<void> _launchConfiguredGoogleFlights() async {
     final effectiveUrl = GoogleFlightsUrlBuilder.build(
@@ -105,6 +97,21 @@ class _FlightSelectorCardState extends State<FlightSelectorCard> {
       return '';
     }
   }
+
+  String _reverseRoute(String route) {
+    if (route.contains('➔')) {
+      final parts = route.split('➔');
+      if (parts.length == 2) return '${parts[1].trim()} ➔ ${parts[0].trim()}';
+    } else if (route.contains('→')) {
+      final parts = route.split('→');
+      if (parts.length == 2) return '${parts[1].trim()} → ${parts[0].trim()}';
+    } else if (route.contains('-')) {
+      final parts = route.split('-');
+      if (parts.length == 2) return '${parts[1].trim()} - ${parts[0].trim()}';
+    }
+    return route;
+  }
+
 
   Color _evalColor(String? eval) {
     if (eval == 'economico') return Colors.green;
@@ -196,14 +203,6 @@ class _FlightSelectorCardState extends State<FlightSelectorCard> {
                   style: theme.textTheme.bodySmall,
                 ),
               ),
-            if (_activeTabIndex == 2 && _selectedCombined != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Text(
-                  '• Pacchetto: ${_selectedCombined!.airline} (${_selectedCombined!.departureTime} ➔ ${_selectedCombined!.arrivalTime})',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
             const SizedBox(height: 8),
             Wrap(
               alignment: WrapAlignment.spaceBetween,
@@ -220,7 +219,6 @@ class _FlightSelectorCardState extends State<FlightSelectorCard> {
                 ),
               ],
             ),
-
           ],
         ),
       );
@@ -228,12 +226,11 @@ class _FlightSelectorCardState extends State<FlightSelectorCard> {
 
     final rawOut = _filteredList(widget.flight.outboundOffers);
     final rawRet = _filteredList(widget.flight.returnOffers);
-    final rawComb = _filteredList(widget.flight.offers);
 
     // Limit to top 4 options so the user has the best choices without long scrolling
     final outboundList = rawOut.take(4).toList();
     final returnList = rawRet.take(4).toList();
-    final combinedList = rawComb.take(4).toList();
+
 
     final hasSeparateLegs = outboundList.isNotEmpty || returnList.isNotEmpty;
 
@@ -348,7 +345,7 @@ class _FlightSelectorCardState extends State<FlightSelectorCard> {
           ],
           const SizedBox(height: 12),
 
-          // Tabs per scegliere Andata, Ritorno o Pacchetti A/R
+          // Tabs per scegliere Andata e Ritorno (zero confusione pacchetti)
           if (hasSeparateLegs) ...[
             Container(
               decoration: BoxDecoration(
@@ -377,18 +374,6 @@ class _FlightSelectorCardState extends State<FlightSelectorCard> {
                       onTap: () => setState(() => _activeTabIndex = 1),
                     ),
                   ),
-                  if (combinedList.isNotEmpty) ...[
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: _TabButton(
-                        label: '3. A/R Insieme',
-                        icon: Icons.sync_alt_rounded,
-                        isActive: _activeTabIndex == 2,
-                        badge: 'da ${combinedList.first.price}€',
-                        onTap: () => setState(() => _activeTabIndex = 2),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -401,41 +386,36 @@ class _FlightSelectorCardState extends State<FlightSelectorCard> {
               else
                 ...outboundList.map((offer) => _FlightOptionTile(
                       offer: offer,
+                      routeLabel: '${widget.flight.outbound} · Andata',
                       isSelected: _selectedOutbound?.id == offer.id,
                       onSelect: () => setState(() => _selectedOutbound = offer),
                     )),
-            ] else if (_activeTabIndex == 1) ...[
+            ] else ...[
               if (returnList.isEmpty)
                 _emptyMessage('Nessun volo di ritorno diretto trovato.')
               else
                 ...returnList.map((offer) => _FlightOptionTile(
                       offer: offer,
+                      routeLabel: 'Ritorno · ${_reverseRoute(widget.flight.outbound)}',
                       isSelected: _selectedReturn?.id == offer.id,
                       onSelect: () => setState(() => _selectedReturn = offer),
                     )),
-            ] else ...[
-              if (combinedList.isEmpty)
-                _emptyMessage('Nessun pacchetto a/r diretto trovato.')
-              else
-                ...combinedList.map((offer) => _FlightOptionTile(
-                      offer: offer,
-                      isSelected: _selectedCombined?.id == offer.id,
-                      onSelect: () => setState(() => _selectedCombined = offer),
-                    )),
             ],
           ] else ...[
-            // Se non ci sono tratte separate, mostra le opzioni a/r combinate
-            if (combinedList.isEmpty)
-              _emptyMessage('Nessun volo diretto trovato.')
-            else
-              ...combinedList.map((offer) => _FlightOptionTile(
+            if (outboundList.isNotEmpty)
+              ...outboundList.map((offer) => _FlightOptionTile(
                     offer: offer,
-                    isSelected: _selectedCombined?.id == offer.id,
-                    onSelect: () => setState(() => _selectedCombined = offer),
-                  )),
+                    routeLabel: widget.flight.outbound,
+                    isSelected: _selectedOutbound?.id == offer.id,
+                    onSelect: () => setState(() => _selectedOutbound = offer),
+                  ))
+            else
+              _emptyMessage('Nessun volo diretto trovato.'),
           ],
 
+
           const Divider(height: 20),
+
 
           // Riepilogo Configurazione e Salva e Prosegui
           Row(
@@ -444,17 +424,43 @@ class _FlightSelectorCardState extends State<FlightSelectorCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Totale stimato a/r',
-                      style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
-                    ),
-                    Text(
-                      _totalPrice > 0 ? '$_totalPrice €' : widget.flight.priceEstimate,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.primary,
+                    if (_selectedOutbound != null && _selectedReturn != null)
+                      Text(
+                        'Andata ${_selectedOutbound!.price}€ + Ritorno ${_selectedReturn!.price}€',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.primary,
+                        ),
+                      )
+                    else
+                      Text(
+                        'Totale stimato a/r',
+                        style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
                       ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          _totalPrice > 0 ? '$_totalPrice €' : widget.flight.priceEstimate,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                        if (_totalPrice > 0) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            'a persona',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
+
                   ],
                 ),
               ),
@@ -464,7 +470,7 @@ class _FlightSelectorCardState extends State<FlightSelectorCard> {
                   widget.onOptionSaved?.call(
                     outbound: _selectedOutbound,
                     returnOffer: _selectedReturn,
-                    combined: _selectedCombined,
+                    combined: null,
                     totalPrice: _totalPrice,
                     bookingUrl: widget.flight.searchUrl,
                   );
@@ -473,6 +479,7 @@ class _FlightSelectorCardState extends State<FlightSelectorCard> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
+
                 icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
                 label: const Text('Salva opzione e prosegui', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
@@ -583,11 +590,13 @@ class _TabButton extends StatelessWidget {
 class _FlightOptionTile extends StatelessWidget {
   const _FlightOptionTile({
     required this.offer,
+    this.routeLabel,
     required this.isSelected,
     required this.onSelect,
   });
 
   final FlightRealOffer offer;
+  final String? routeLabel;
   final bool isSelected;
   final VoidCallback onSelect;
 
@@ -673,14 +682,38 @@ class _FlightOptionTile extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-
-                  Text(
-                    '${offer.departureTime} – ${offer.arrivalTime} (${offer.durationLabel})',
-                    style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                  Row(
+                    children: [
+                      Text(
+                        '${offer.departureTime} – ${offer.arrivalTime}',
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                      Text(
+                        ' (${offer.durationLabel})',
+                        style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                      ),
+                      if (routeLabel != null && routeLabel!.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '· $routeLabel',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
+
                 ],
               ),
             ),
+
             Text(
               '${offer.price} €',
               style: theme.textTheme.titleMedium?.copyWith(

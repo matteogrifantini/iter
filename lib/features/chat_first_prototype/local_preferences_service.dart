@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../app/app_config.dart';
 import 'profile_models.dart';
+
 
 /// Manages local offline persistence for traveler preferences, theme mode,
 /// and availability slots via [SharedPreferences].
@@ -89,7 +91,15 @@ class LocalPreferencesService {
   String get departureCity => _cachedDepartureCity;
   String get travelStyle => _cachedTravelStyle;
   String get budget => _cachedBudget;
-  String? get geminiApiKey => _cachedGeminiApiKey;
+  String? get geminiApiKey {
+
+    if (_cachedGeminiApiKey != null &&
+        _cachedGeminiApiKey!.trim().isNotEmpty &&
+        _cachedGeminiApiKey!.trim() != 'YOUR_GEMINI_API_KEY') {
+      return _cachedGeminiApiKey!.trim();
+    }
+    return AppConfig.geminiApiKey.isNotEmpty ? AppConfig.geminiApiKey : null;
+  }
 
   Future<void> initPreferences() async {
     try {
@@ -99,8 +109,13 @@ class LocalPreferencesService {
       _cachedTravelStyle = prefs.getString(_keyTravelStyle) ?? 'Cultura & Gastronomia';
       _cachedBudget = prefs.getString(_keyBudget) ?? 'Medio';
       _cachedGeminiApiKey = prefs.getString(_keyGeminiApiKey);
+      if (_cachedGeminiApiKey == 'YOUR_GEMINI_API_KEY') {
+        _cachedGeminiApiKey = AppConfig.geminiApiKey;
+        await prefs.setString(_keyGeminiApiKey, AppConfig.geminiApiKey);
+      }
     } catch (_) {}
   }
+
 
   Future<void> saveDepartureCity(String city) async {
     _cachedDepartureCity = city;

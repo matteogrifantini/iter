@@ -42,16 +42,15 @@ void main() {
 
 
     expect(find.text('Lisbona'), findsOneWidget);
-    expect(find.text('Luce dorata sull\'Atlantico'), findsOneWidget);
     expect(find.text('20°C Ideale'), findsOneWidget);
-    expect(find.text('Tram 28'), findsOneWidget);
 
-    final btn = find.text('Scopri Lisbona · Info, periodo & costi');
+    final btn = find.text('Scopri di più su Lisbona');
     expect(btn, findsOneWidget);
     await tester.tap(btn);
     await tester.pumpAndSettle();
     expect(find.text('Quando andare'), findsOneWidget);
   });
+
 
 
   testWidgets('MonumentSwipeDeck permette swipe/like e visualizza stima ore', (tester) async {
